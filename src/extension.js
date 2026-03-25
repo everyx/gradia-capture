@@ -468,14 +468,20 @@ export default class GradiaCompanion extends Extension {
         return Main.screenshotUI._windowButton.checked;
     }
 
+    _isRecordingMode() {
+        return Main.screenshotUI._castButton?.checked ?? false;
+    }
+
     _updateVisibilityForMode() {
         const windowMode = this._isWindowMode();
-        if (this._toolbar)
-            this._toolbar.visible = !windowMode;
-        if (this._canvas)
-            this._canvas.visible = !windowMode;
+        const recordingMode = this._isRecordingMode();
 
-        if (!windowMode)
+        if (this._toolbar)
+            this._toolbar.visible = !windowMode && !recordingMode;
+        if (this._canvas)
+            this._canvas.visible = !windowMode && !recordingMode;
+
+        if (!windowMode && !recordingMode)
             this._updateAreaSelectorVisibility();
     }
 
@@ -652,6 +658,9 @@ export default class GradiaCompanion extends Extension {
         this._screenButtonId = ui._screenButton.connect('notify::checked', () => {
             this._updateVisibilityForMode();
         });
+        this._castButtonId = ui._castButton.connect('notify::checked', () => {
+            this._updateVisibilityForMode();
+        });
 
         this._connectDragOpacity();
 
@@ -683,6 +692,10 @@ export default class GradiaCompanion extends Extension {
         if (this._screenButtonId) {
             ui._screenButton.disconnect(this._screenButtonId);
             this._screenButtonId = null;
+        }
+        if (this._castButtonId) {
+            ui._castButton.disconnect(this._castButtonId);
+            this._castButtonId = null;
         }
 
         this._disconnectDragOpacity();
