@@ -161,32 +161,33 @@ class DrawingCanvas extends St.DrawingArea {
         return { x: localX, y: localY };
     }
 
-    vfunc_button_press_event(event) {
-        if (this._dragButton)
-            return Clutter.EVENT_PROPAGATE;
-
-        const button = event.get_button();
-        if (button !== Clutter.BUTTON_PRIMARY)
-            return Clutter.EVENT_PROPAGATE;
-
-        this._dragButton = button;
-        const [stageX, stageY] = event.get_coords();
-
+    _startDrawing(stageX, stageY) {
         this._currentStroke = {
             color: this._strokeColor,
             tool: this._tool,
             stagePoints: [{ x: stageX, y: stageY }],
         };
         this._drawing = true;
-
         this._dragGrab = global.stage.grab(this);
-        return Clutter.EVENT_STOP;
     }
 
-    vfunc_button_release_event(event) {
-        if (event.get_button() !== this._dragButton)
-            return Clutter.EVENT_PROPAGATE;
+    _updateDrawing(stageX, stageY) {
+        if (!this._drawing)
+            return;
 
+        if (this._tool === Tool.FREEHAND) {
+            this._currentStroke.stagePoints.push({ x: stageX, y: stageY });
+        } else {
+            if (this._currentStroke.stagePoints.length === 1)
+                this._currentStroke.stagePoints.push({ x: stageX, y: stageY });
+            else
+                this._currentStroke.stagePoints[this._currentStroke.stagePoints.length - 1] = { x: stageX, y: stageY };
+        }
+
+        this.queue_repaint();
+    }
+
+    _endDrawing() {
         if (this._currentStroke && this._currentStroke.stagePoints.length > 1)
             this._strokes.push(this._currentStroke);
 
@@ -200,6 +201,27 @@ class DrawingCanvas extends St.DrawingArea {
         }
 
         this.queue_repaint();
+    }
+
+    vfunc_button_press_event(event) {
+        if (this._dragButton)
+            return Clutter.EVENT_PROPAGATE;
+
+        const button = event.get_button();
+        if (button !== Clutter.BUTTON_PRIMARY)
+            return Clutter.EVENT_PROPAGATE;
+
+        this._dragButton = button;
+        const [stageX, stageY] = event.get_coords();
+        this._startDrawing(stageX, stageY);
+        return Clutter.EVENT_STOP;
+    }
+
+    vfunc_button_release_event(event) {
+        if (event.get_button() !== this._dragButton)
+            return Clutter.EVENT_PROPAGATE;
+
+        this._endDrawing();
         return Clutter.EVENT_STOP;
     }
 
@@ -208,18 +230,39 @@ class DrawingCanvas extends St.DrawingArea {
             return Clutter.EVENT_PROPAGATE;
 
         const [stageX, stageY] = event.get_coords();
+        this._updateDrawing(stageX, stageY);
+        return Clutter.EVENT_STOP;
+    }
 
-        if (this._tool === Tool.FREEHAND) {
-            this._currentStroke.stagePoints.push({ x: stageX, y: stageY });
-        } else {
-            if (this._currentStroke.stagePoints.length === 1)
-                this._currentStroke.stagePoints.push({ x: stageX, y: stageY });
-            else
-                this._currentStroke.stagePoints[this._currentStroke.stagePoints.length - 1] = { x: stageX, y: stageY };
+    vfunc_touch_event(event) {
+        const eventType = event.type();
+
+        if (eventType === Clutter.EventType.TOUCH_BEGIN) {
+            if (this._dragButton)
+                return Clutter.EVENT_PROPAGATE;
+
+            this._dragButton = 1;
+            const [stageX, stageY] = event.get_coords();
+            this._startDrawing(stageX, stageY);
+            return Clutter.EVENT_STOP;
+
+        } else if (eventType === Clutter.EventType.TOUCH_UPDATE) {
+            if (!this._drawing)
+                return Clutter.EVENT_PROPAGATE;
+
+            const [stageX, stageY] = event.get_coords();
+            this._updateDrawing(stageX, stageY);
+            return Clutter.EVENT_STOP;
+
+        } else if (eventType === Clutter.EventType.TOUCH_END || eventType === Clutter.EventType.TOUCH_CANCEL) {
+            if (!this._drawing)
+                return Clutter.EVENT_PROPAGATE;
+
+            this._endDrawing();
+            return Clutter.EVENT_STOP;
         }
 
-        this.queue_repaint();
-        return Clutter.EVENT_STOP;
+        return Clutter.EVENT_PROPAGATE;
     }
 
     vfunc_repaint() {
