@@ -1,0 +1,8 @@
+{
+  "name": "Gradia Companion",
+  "description": "Companion for the Gradia app",
+  "uuid": "gradia-integration@alexandervanhee.github.io",
+  "shell-version": [
+    "49"
+  ]
+}

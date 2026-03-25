@@ -1,0 +1,43 @@
+.gradia-toolbar {
+    border-radius: 16px;
+    padding: 6px 6px;
+    spacing: 8px;
+    margin-top: 12px;
+}
+.gradia-square-button {
+    min-width: 32px;
+    max-width: 32px;
+    min-height: 32px;
+    max-height: 32px;
+    border-radius: 12px;
+    padding: 0;
+}
+.gradia-color-button {
+    border-radius: 99999px;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    max-width: 20px;
+    max-height: 20px;
+    margin: 2px;
+    padding: 0;
+    border: 2px solid transparent;
+}
+.gradia-color-button:checked {
+    border-color: transparent;
+}
+.gradia-separator {
+    background-color: rgba(255, 255, 255, 0.3);
+    width: 1px;
+    margin: 4px 4px;
+}
+.gradia-check-icon {
+    icon-size: 12px;
+    color: white;
+}
+.gradia-check-icon-dark {
+    icon-size: 12px;
+    color: rgba(0, 0, 0, 0.8);
+}
+
