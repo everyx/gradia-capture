@@ -545,6 +545,18 @@ export default class GradiaCompanion extends Extension {
 
         primaryBin.add_child(this._toolbar);
 
+        this._keyPressId = Main.screenshotUI.connect('key-press-event', (_actor, event) => {
+            const sym = event.get_key_symbol();
+            const mods = event.get_state();
+            const ctrl = mods & Clutter.ModifierType.CONTROL_MASK;
+
+            if (ctrl && sym === Clutter.KEY_z) {
+                this._toolbar.emit('undo');
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+
         this._windowButtonId = ui._windowButton.connect('notify::checked', () => {
             this._updateVisibilityForMode();
         });
@@ -566,6 +578,11 @@ export default class GradiaCompanion extends Extension {
 
     _removeUI() {
         const ui = Main.screenshotUI;
+
+        if (this._keyPressId) {
+            Main.screenshotUI.disconnect(this._keyPressId);
+            this._keyPressId = null;
+        }
 
         if (this._windowButtonId) {
             ui._windowButton.disconnect(this._windowButtonId);

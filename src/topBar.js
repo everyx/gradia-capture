@@ -148,6 +148,8 @@ export const TOOLS = [
             const { r, g, b } = hexToRgb(stroke.color);
             cr.setSourceRGBA(r, g, b, 1.0);
             cr.setLineWidth(lineWidth);
+            cr.setLineCap(Cairo.LineCap.ROUND);
+            cr.setLineJoin(Cairo.LineJoin.ROUND);
             const pts = stroke.points;
             const p0 = pts[0];
             const p1 = pts[pts.length - 1];
