@@ -1,9 +1,12 @@
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
+import Cairo from 'gi://cairo';
 import Pango from 'gi://Pango';
 import PangoCairo from 'gi://PangoCairo';
 import St from 'gi://St';
+
+import {Slider} from 'resource:///org/gnome/shell/ui/slider.js';
 
 const COLORS = [
     { name: 'White', hex: '#ffffff' },
@@ -114,6 +117,26 @@ export const TOOLS = [
         },
     },
     {
+        id: 'highlighter',
+        name: 'Highlighter',
+        icon: 'icons/marker-symbolic.svg',
+        isDrawing: true,
+        beginStroke: () => ({ points: [] }),
+        render(cr, stroke, lineWidth) {
+            if (stroke.points.length < 2)
+                return;
+            const { r, g, b } = hexToRgb(stroke.color);
+            cr.setSourceRGBA(r, g, b, 0.4);
+            cr.setLineWidth(lineWidth * 4);
+            cr.setLineCap(Cairo.LineCap.SQUARE);
+            const pts = stroke.points;
+            cr.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++)
+                cr.lineTo(pts[i].x, pts[i].y);
+            cr.stroke();
+        },
+    },
+    {
         id: 'arrow',
         name: 'Arrow',
         icon: 'icons/arrow1-top-right-symbolic.svg',
@@ -182,10 +205,14 @@ export const TOOLS = [
     },
 ];
 
+const LINE_WIDTH_MIN = 1;
+const LINE_WIDTH_MAX = 16;
+
 export const Toolbar = GObject.registerClass({
     Signals: {
         'tool-changed': { param_types: [GObject.TYPE_STRING] },
         'color-changed': { param_types: [GObject.TYPE_STRING] },
+        'line-width-changed': { param_types: [GObject.TYPE_DOUBLE] },
         'undo': {},
         'clear': {},
     },
@@ -205,12 +232,15 @@ export const Toolbar = GObject.registerClass({
 
         this._selectedColor = COLORS[1].hex;
         this._selectedTool = TOOLS[0].id;
+        this._lineWidth = 4;
         this._colorButtons = [];
         this._toolButtons = [];
 
         this._buildToolButtons();
         this._addSeparator();
         this._buildColorButtons();
+        this._addSeparator();
+        this._buildLineWidthSlider();
         this._addSeparator();
         this._buildActionButtons();
     }
@@ -262,6 +292,18 @@ export const Toolbar = GObject.registerClass({
         }
     }
 
+    _buildLineWidthSlider() {
+        const sliderValue = (this._lineWidth - LINE_WIDTH_MIN) / (LINE_WIDTH_MAX - LINE_WIDTH_MIN);
+        this._slider = new Slider(sliderValue);
+        this._slider.style = 'width: 80px;';
+        this._slider.y_align = Clutter.ActorAlign.CENTER;
+        this._slider.connect('notify::value', () => {
+            this._lineWidth = LINE_WIDTH_MIN + this._slider.value * (LINE_WIDTH_MAX - LINE_WIDTH_MIN);
+            this.emit('line-width-changed', this._lineWidth);
+        });
+        this.add_child(this._slider);
+    }
+
     _buildActionButtons() {
         this._undoBtn = new St.Button({
             child: makeIcon('edit-undo-symbolic', this._extensionPath),
@@ -310,4 +352,5 @@ export const Toolbar = GObject.registerClass({
 
     get selectedTool() { return this._selectedTool; }
     get selectedColor() { return this._selectedColor; }
+    get lineWidth() { return this._lineWidth; }
 });

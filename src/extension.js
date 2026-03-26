@@ -9,8 +9,6 @@ import St from 'gi://St';
 
 import { Toolbar, TOOLS } from './topBar.js';
 
-const STROKE_WIDTH = 3;
-
 const MAX_CANVAS_WIDTH = 1920;
 const MAX_CANVAS_HEIGHT = 1080;
 
@@ -48,6 +46,7 @@ const DrawingCanvas = GObject.registerClass(
             this._currentStroke = null;
             this._strokeColor = '#000000';
             this._toolId = 'freehand';
+            this._strokeWidth = 3;
             this._drawing = false;
             this._dragButton = 0;
             this._dragGrab = null;
@@ -63,6 +62,7 @@ const DrawingCanvas = GObject.registerClass(
 
         setColor(hex) { this._strokeColor = hex; }
         setTool(id) { this._toolId = id; }
+        setStrokeWidth(w) { this._strokeWidth = w; }
 
         clear() {
             this._strokes = [];
@@ -107,6 +107,7 @@ const DrawingCanvas = GObject.registerClass(
             this._currentStroke = {
                 color: this._strokeColor,
                 toolId: this._toolId,
+                strokeWidth: this._strokeWidth,
                 stagePoints: [{ x: stageX, y: stageY }],
                 ...extra,
             };
@@ -240,7 +241,7 @@ const DrawingCanvas = GObject.registerClass(
                     color: stroke.color,
                     points: localPoints,
                     counter: stroke.counter,
-                }, STROKE_WIDTH);
+                }, stroke.strokeWidth);
             }
 
             cr.$dispose();
@@ -326,6 +327,7 @@ export default class GradiaCompanion extends Extension {
                 color: s.color,
                 toolId: s.toolId,
                 counter: s.counter,
+                strokeWidth: s.strokeWidth,
                 stagePoints: s.stagePoints.map(p => ({ x: p.x, y: p.y })),
             }))
         );
@@ -362,8 +364,6 @@ export default class GradiaCompanion extends Extension {
         imports.gi.Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0);
         cr.paint();
 
-        const lw = STROKE_WIDTH * ((scaleX + scaleY) / 2);
-
         for (const stroke of strokes) {
             const tool = TOOLS.find(t => t.id === stroke.toolId);
             if (!tool?.render)
@@ -373,6 +373,8 @@ export default class GradiaCompanion extends Extension {
                 x: (p.x / stageScale - selX) * scaleX,
                 y: (p.y / stageScale - selY) * scaleY,
             }));
+
+            const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
 
             tool.render(cr, {
                 color: stroke.color,
@@ -516,6 +518,11 @@ export default class GradiaCompanion extends Extension {
                 canvas.setColor(hex);
         });
 
+        this._toolbar.connect('line-width-changed', (_toolbar, width) => {
+            for (const canvas of this._canvases)
+                canvas.setStrokeWidth(width);
+        });
+
         this._toolbar.connect('undo', () => {
             for (let i = this._canvases.length - 1; i >= 0; i--) {
                 if (this._canvases[i].hasStrokes()) {
@@ -533,6 +540,7 @@ export default class GradiaCompanion extends Extension {
         for (const canvas of this._canvases) {
             canvas.setColor(this._toolbar.selectedColor);
             canvas.setTool(this._toolbar.selectedTool);
+            canvas.setStrokeWidth(this._toolbar.lineWidth);
         }
 
         primaryBin.add_child(this._toolbar);
