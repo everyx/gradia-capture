@@ -1,4 +1,4 @@
-import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import Clutter from 'gi://Clutter';
 import Cairo from 'gi://cairo';
@@ -9,16 +9,20 @@ import GObject from 'gi://GObject';
 import St from 'gi://St';
 
 const COLORS = [
-    { name: 'White',  hex: '#ffffff' },
-    { name: 'Red',    hex: '#ff4444' },
+    { name: 'White', hex: '#ffffff' },
+    { name: 'Black', hex: '#000000' },
+    { name: 'Red', hex: '#ff4444' },
     { name: 'Orange', hex: '#ff8800' },
     { name: 'Yellow', hex: '#ffdd00' },
-    { name: 'Green',  hex: '#44cc44' },
-    { name: 'Blue',   hex: '#4488ff' },
+    { name: 'Green', hex: '#44cc44' },
+    { name: 'Blue', hex: '#4488ff' },
     { name: 'Purple', hex: '#aa44ff' },
 ];
 
 const STROKE_WIDTH = 3;
+
+const MAX_CANVAS_WIDTH = 1920;
+const MAX_CANVAS_HEIGHT = 1080;
 
 const Tool = {
     SELECT: 0,
@@ -108,198 +112,202 @@ function setAreaSelectorHandlesVisible(selector, visible) {
 }
 
 const DrawingCanvas = GObject.registerClass(
-class DrawingCanvas extends St.DrawingArea {
-    _init(params) {
-        super._init({
-            reactive: false,
-            x_expand: true,
-            y_expand: true,
-            ...params,
-        });
+    class DrawingCanvas extends St.DrawingArea {
+        _init(params) {
+            super._init({
+                reactive: false,
+                x_expand: true,
+                y_expand: true,
+                ...params,
+            });
 
-        this._strokes = [];
-        this._currentStroke = null;
-        this._strokeColor = '#ff4444';
-        this._tool = Tool.FREEHAND;
-        this._drawing = false;
-        this._dragButton = 0;
-        this._dragGrab = null;
-    }
+            this._strokes = [];
+            this._currentStroke = null;
+            this._strokeColor = '#ff4444';
+            this._tool = Tool.FREEHAND;
+            this._drawing = false;
+            this._dragButton = 0;
+            this._dragGrab = null;
 
-    get strokes() {
-        return this._strokes;
-    }
+            this._scaleX = 1;
+            this._scaleY = 1;
 
-    setColor(hex) {
-        this._strokeColor = hex;
-    }
+            this.connect('notify::allocation', () => this._updateScale());
+        }
 
-    setTool(tool) {
-        this._tool = tool;
-    }
+        get strokes() { return this._strokes; }
 
-    clear() {
-        this._strokes = [];
-        this._currentStroke = null;
-        this.queue_repaint();
-    }
+        setColor(hex) { this._strokeColor = hex; }
+        setTool(tool) { this._tool = tool; }
 
-    undo() {
-        if (this._strokes.length > 0) {
-            this._strokes.pop();
+        clear() {
+            this._strokes = [];
+            this._currentStroke = null;
             this.queue_repaint();
         }
-    }
 
-    hasStrokes() {
-        return this._strokes.length > 0;
-    }
+        undo() {
+            if (this._strokes.length > 0) {
+                this._strokes.pop();
+                this.queue_repaint();
+            }
+        }
 
-    _stageToLocal(stageX, stageY) {
-        const [ok, localX, localY] = this.transform_stage_point(stageX, stageY);
-        if (!ok) return null;
-        return { x: localX, y: localY };
-    }
+        hasStrokes() { return this._strokes.length > 0; }
 
-    _startDrawing(stageX, stageY) {
-        this._currentStroke = {
-            color: this._strokeColor,
-            tool: this._tool,
-            stagePoints: [{ x: stageX, y: stageY }],
-        };
-        this._drawing = true;
-        this._dragGrab = global.stage.grab(this);
-    }
+        _updateScale() {
+            const alloc = this.allocation;
+            const stageW = alloc.get_width();
+            const stageH = alloc.get_height();
 
-    _updateDrawing(stageX, stageY) {
-        if (!this._drawing)
-            return;
+            this._scaleX = stageW > 0 ? Math.max(1, stageW / MAX_CANVAS_WIDTH) : 1;
+            this._scaleY = stageH > 0 ? Math.max(1, stageH / MAX_CANVAS_HEIGHT) : 1;
+        }
 
-        if (this._tool === Tool.FREEHAND) {
-            this._currentStroke.stagePoints.push({ x: stageX, y: stageY });
-        } else {
-            if (this._currentStroke.stagePoints.length === 1)
+        _stageToLocal(stageX, stageY) {
+            const [ok, localX, localY] = this.transform_stage_point(stageX, stageY);
+            if (!ok) return null;
+            return { x: localX, y: localY };
+        }
+
+        _startDrawing(stageX, stageY) {
+            this._currentStroke = {
+                color: this._strokeColor,
+                tool: this._tool,
+                stagePoints: [{ x: stageX, y: stageY }],
+            };
+            this._drawing = true;
+            this._dragGrab = global.stage.grab(this);
+        }
+
+        _updateDrawing(stageX, stageY) {
+            if (!this._drawing)
+                return;
+
+            if (this._tool === Tool.FREEHAND) {
                 this._currentStroke.stagePoints.push({ x: stageX, y: stageY });
-            else
-                this._currentStroke.stagePoints[this._currentStroke.stagePoints.length - 1] = { x: stageX, y: stageY };
+            } else {
+                if (this._currentStroke.stagePoints.length === 1)
+                    this._currentStroke.stagePoints.push({ x: stageX, y: stageY });
+                else
+                    this._currentStroke.stagePoints[this._currentStroke.stagePoints.length - 1] = { x: stageX, y: stageY };
+            }
+
+            this.queue_repaint();
         }
 
-        this.queue_repaint();
-    }
+        _endDrawing() {
+            if (this._currentStroke && this._currentStroke.stagePoints.length > 1)
+                this._strokes.push(this._currentStroke);
 
-    _endDrawing() {
-        if (this._currentStroke && this._currentStroke.stagePoints.length > 1)
-            this._strokes.push(this._currentStroke);
+            this._currentStroke = null;
+            this._drawing = false;
+            this._dragButton = 0;
 
-        this._currentStroke = null;
-        this._drawing = false;
-        this._dragButton = 0;
+            if (this._dragGrab) {
+                this._dragGrab.dismiss();
+                this._dragGrab = null;
+            }
 
-        if (this._dragGrab) {
-            this._dragGrab.dismiss();
-            this._dragGrab = null;
+            this.queue_repaint();
         }
 
-        this.queue_repaint();
-    }
-
-    vfunc_button_press_event(event) {
-        if (this._dragButton)
-            return Clutter.EVENT_PROPAGATE;
-
-        const button = event.get_button();
-        if (button !== Clutter.BUTTON_PRIMARY)
-            return Clutter.EVENT_PROPAGATE;
-
-        this._dragButton = button;
-        const [stageX, stageY] = event.get_coords();
-        this._startDrawing(stageX, stageY);
-        return Clutter.EVENT_STOP;
-    }
-
-    vfunc_button_release_event(event) {
-        if (event.get_button() !== this._dragButton)
-            return Clutter.EVENT_PROPAGATE;
-
-        this._endDrawing();
-        return Clutter.EVENT_STOP;
-    }
-
-    vfunc_motion_event(event) {
-        if (!this._drawing)
-            return Clutter.EVENT_PROPAGATE;
-
-        const [stageX, stageY] = event.get_coords();
-        this._updateDrawing(stageX, stageY);
-        return Clutter.EVENT_STOP;
-    }
-
-    vfunc_touch_event(event) {
-        const eventType = event.type();
-
-        if (eventType === Clutter.EventType.TOUCH_BEGIN) {
+        vfunc_button_press_event(event) {
             if (this._dragButton)
                 return Clutter.EVENT_PROPAGATE;
 
-            this._dragButton = 1;
+            const button = event.get_button();
+            if (button !== Clutter.BUTTON_PRIMARY)
+                return Clutter.EVENT_PROPAGATE;
+
+            this._dragButton = button;
             const [stageX, stageY] = event.get_coords();
             this._startDrawing(stageX, stageY);
             return Clutter.EVENT_STOP;
+        }
 
-        } else if (eventType === Clutter.EventType.TOUCH_UPDATE) {
-            if (!this._drawing)
-                return Clutter.EVENT_PROPAGATE;
-
-            const [stageX, stageY] = event.get_coords();
-            this._updateDrawing(stageX, stageY);
-            return Clutter.EVENT_STOP;
-
-        } else if (eventType === Clutter.EventType.TOUCH_END || eventType === Clutter.EventType.TOUCH_CANCEL) {
-            if (!this._drawing)
+        vfunc_button_release_event(event) {
+            if (event.get_button() !== this._dragButton)
                 return Clutter.EVENT_PROPAGATE;
 
             this._endDrawing();
             return Clutter.EVENT_STOP;
         }
 
-        return Clutter.EVENT_PROPAGATE;
-    }
+        vfunc_motion_event(event) {
+            if (!this._drawing)
+                return Clutter.EVENT_PROPAGATE;
 
-    vfunc_repaint() {
-        const cr = this.get_context();
-        const allStrokes = [...this._strokes];
-        if (this._currentStroke)
-            allStrokes.push(this._currentStroke);
-
-        for (const stroke of allStrokes) {
-            const localPoints = [];
-            for (const sp of stroke.stagePoints) {
-                const lp = this._stageToLocal(sp.x, sp.y);
-                if (lp) localPoints.push(lp);
-            }
-
-            renderStroke(cr, {
-                color: stroke.color,
-                tool: stroke.tool,
-                points: localPoints,
-            }, STROKE_WIDTH);
+            const [stageX, stageY] = event.get_coords();
+            this._updateDrawing(stageX, stageY);
+            return Clutter.EVENT_STOP;
         }
 
-        cr.$dispose();
-    }
-});
+        vfunc_touch_event(event) {
+            const eventType = event.type();
+
+            if (eventType === Clutter.EventType.TOUCH_BEGIN) {
+                if (this._dragButton)
+                    return Clutter.EVENT_PROPAGATE;
+
+                this._dragButton = 1;
+                const [stageX, stageY] = event.get_coords();
+                this._startDrawing(stageX, stageY);
+                return Clutter.EVENT_STOP;
+            } else if (eventType === Clutter.EventType.TOUCH_UPDATE) {
+                if (!this._drawing)
+                    return Clutter.EVENT_PROPAGATE;
+                const [stageX, stageY] = event.get_coords();
+                this._updateDrawing(stageX, stageY);
+                return Clutter.EVENT_STOP;
+            } else if (eventType === Clutter.EventType.TOUCH_END ||
+                eventType === Clutter.EventType.TOUCH_CANCEL) {
+                if (!this._drawing)
+                    return Clutter.EVENT_PROPAGATE;
+                this._endDrawing();
+                return Clutter.EVENT_STOP;
+            }
+
+            return Clutter.EVENT_PROPAGATE;
+        }
+
+        vfunc_repaint() {
+            const cr = this.get_context();
+
+            const allStrokes = [...this._strokes];
+            if (this._currentStroke)
+                allStrokes.push(this._currentStroke);
+
+            for (const stroke of allStrokes) {
+                const localPoints = [];
+                for (const sp of stroke.stagePoints) {
+                    const lp = this._stageToLocal(sp.x, sp.y);
+                    if (lp) localPoints.push(lp);
+                }
+
+                renderStroke(cr, {
+                    color: stroke.color,
+                    tool: stroke.tool,
+                    points: localPoints,
+                }, STROKE_WIDTH);
+            }
+
+            cr.$dispose();
+        }
+    });
 
 export default class GradiaCompanion extends Extension {
     enable() {
         this._originalOpen = Main.screenshotUI.open.bind(Main.screenshotUI);
         this._toolbar = null;
-        this._canvas = null;
         this._colorButtons = [];
         this._toolButtons = [];
         this._selectedColor = COLORS[1].hex;
         this._selectedTool = Tool.SELECT;
         this._undoBtn = null;
         this._clearBtn = null;
+
+        this._canvases = [];
 
         const self = this;
 
@@ -314,7 +322,8 @@ export default class GradiaCompanion extends Extension {
         });
 
         this._screenshotTakenId = Main.screenshotUI.connect('screenshot-taken', (_ui, file) => {
-            if (self._canvas && self._canvas.hasStrokes()) {
+            const hasAny = self._canvases.some(c => c.hasStrokes());
+            if (hasAny) {
                 const strokeData = self._buildStrokeData();
                 self._compositeStrokesAsync(file, strokeData);
             }
@@ -368,11 +377,13 @@ export default class GradiaCompanion extends Extension {
             }
         }
 
-        const strokes = this._canvas.strokes.map(s => ({
-            color: s.color,
-            tool: s.tool,
-            stagePoints: s.stagePoints.map(p => ({ x: p.x, y: p.y })),
-        }));
+        const strokes = this._canvases.flatMap(c =>
+            c.strokes.map(s => ({
+                color: s.color,
+                tool: s.tool,
+                stagePoints: s.stagePoints.map(p => ({ x: p.x, y: p.y })),
+            }))
+        );
 
         return {
             selX, selY, selW, selH,
@@ -383,10 +394,9 @@ export default class GradiaCompanion extends Extension {
 
     _compositeStrokesAsync(file, data) {
         const path = file.get_path();
-
-        if (!path || data.selW <= 0 || data.selH <= 0) {
+        if (!path || data.selW <= 0 || data.selH <= 0)
             return;
-        }
+
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this._doComposite(path, data);
             return GLib.SOURCE_REMOVE;
@@ -401,9 +411,7 @@ export default class GradiaCompanion extends Extension {
         const scaleX = imgWidth / selW;
         const scaleY = imgHeight / selH;
 
-        const surface = new Cairo.ImageSurface(
-            Cairo.Format.ARGB32, imgWidth, imgHeight
-        );
+        const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, imgWidth, imgHeight);
         const cr = new Cairo.Context(surface);
 
         imports.gi.Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0);
@@ -435,18 +443,18 @@ export default class GradiaCompanion extends Extension {
 
         const drawing = this._isDrawingTool(tool);
 
-        if (this._canvas) {
-            this._canvas.reactive = drawing;
-            this._canvas.setTool(tool);
+        for (const canvas of this._canvases) {
+            canvas.reactive = drawing;
+            canvas.setTool(tool);
         }
 
         for (const btn of this._toolButtons)
             btn.checked = (btn._tool === tool);
 
-        this._updateAreaSelectorVisibility();
+        this._updateAreaSelectorState();
     }
 
-    _updateAreaSelectorVisibility() {
+    _updateAreaSelectorState() {
         const selector = Main.screenshotUI?._areaSelector;
         if (!selector)
             return;
@@ -457,8 +465,10 @@ export default class GradiaCompanion extends Extension {
         const drawing = this._isDrawingTool(this._selectedTool);
 
         if (drawing) {
+            selector.reactive = false;
             setAreaSelectorHandlesVisible(selector, false);
         } else {
+            selector.reactive = true;
             selector._areaIndicator?.show();
             setAreaSelectorHandlesVisible(selector, true);
         }
@@ -475,40 +485,37 @@ export default class GradiaCompanion extends Extension {
     _updateVisibilityForMode() {
         const windowMode = this._isWindowMode();
         const recordingMode = this._isRecordingMode();
+        const show = !windowMode && !recordingMode;
 
         if (this._toolbar)
-            this._toolbar.visible = !windowMode && !recordingMode;
-        if (this._canvas)
-            this._canvas.visible = !windowMode && !recordingMode;
+            this._toolbar.visible = show;
 
-        if (!windowMode && !recordingMode)
-            this._updateAreaSelectorVisibility();
+        for (const canvas of this._canvases)
+            canvas.visible = show;
+
+        if (show)
+            this._updateAreaSelectorState();
     }
 
     _connectDragOpacity() {
-        const ui = Main.screenshotUI;
-        const selector = ui._areaSelector;
+        const selector = Main.screenshotUI?._areaSelector;
         if (!selector)
             return;
 
         this._dragStartedId = selector.connect('drag-started', () => {
-            if (this._toolbar) {
-                this._toolbar.ease({
-                    opacity: 100,
-                    duration: 200,
-                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                });
-            }
+            this._toolbar?.ease({
+                opacity: 100,
+                duration: 200,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
         });
 
         this._dragEndedId = selector.connect('drag-ended', () => {
-            if (this._toolbar) {
-                this._toolbar.ease({
-                    opacity: 255,
-                    duration: 200,
-                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                });
-            }
+            this._toolbar?.ease({
+                opacity: 255,
+                duration: 200,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
         });
     }
 
@@ -531,17 +538,31 @@ export default class GradiaCompanion extends Extension {
         if (this._toolbar)
             return;
 
-        const primaryBin = Main.screenshotUI._primaryMonitorBin;
+        const ui = Main.screenshotUI;
+
+        this._canvases = [];
+
+        const monitorBins = ui._monitorBins ?? [];
+
+        const binsToUse = monitorBins.length > 0
+            ? monitorBins
+            : (ui._primaryMonitorBin ? [ui._primaryMonitorBin] : []);
+
+        for (const bin of binsToUse) {
+            const canvas = new DrawingCanvas({
+                style: 'background-color: transparent;',
+            });
+            canvas.setColor(this._selectedColor);
+            canvas.setTool(this._selectedTool);
+            canvas.reactive = false;
+
+            bin.insert_child_below(canvas, null);
+            this._canvases.push(canvas);
+        }
+
+        const primaryBin = ui._primaryMonitorBin;
         if (!primaryBin)
             return;
-
-        this._canvas = new DrawingCanvas({
-            style: 'background-color: transparent;',
-        });
-        this._canvas.setColor(this._selectedColor);
-        this._canvas.setTool(this._selectedTool);
-        this._canvas.reactive = false;
-        primaryBin.insert_child_below(this._canvas, null);
 
         this._toolbar = new St.BoxLayout({
             style_class: 'screenshot-ui-panel gradia-toolbar',
@@ -554,10 +575,10 @@ export default class GradiaCompanion extends Extension {
         this._toolButtons = [];
 
         const toolDefs = [
-            { tool: Tool.SELECT,    icon: 'screenshot-ui-area-symbolic' },
-            { tool: Tool.FREEHAND,  icon: 'document-edit-symbolic' },
+            { tool: Tool.SELECT, icon: 'screenshot-ui-area-symbolic' },
+            { tool: Tool.FREEHAND, icon: 'document-edit-symbolic' },
             { tool: Tool.RECTANGLE, icon: 'checkbox-symbolic' },
-            { tool: Tool.ARROW,     icon: 'go-up-symbolic' },
+            { tool: Tool.ARROW, icon: 'go-up-symbolic' },
         ];
 
         for (const def of toolDefs) {
@@ -605,11 +626,12 @@ export default class GradiaCompanion extends Extension {
             });
             btn.set_child(checkIcon);
             btn._checkIcon = checkIcon;
-
             btn._colorHex = color.hex;
+
             btn.connect('clicked', () => {
                 this._selectedColor = color.hex;
-                this._canvas.setColor(color.hex);
+                for (const canvas of this._canvases)
+                    canvas.setColor(color.hex);
                 this._updateColorSelection();
             });
 
@@ -631,7 +653,14 @@ export default class GradiaCompanion extends Extension {
             reactive: true,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this._undoBtn.connect('clicked', () => this._canvas.undo());
+        this._undoBtn.connect('clicked', () => {
+            for (let i = this._canvases.length - 1; i >= 0; i--) {
+                if (this._canvases[i].hasStrokes()) {
+                    this._canvases[i].undo();
+                    break;
+                }
+            }
+        });
         this._toolbar.add_child(this._undoBtn);
 
         this._clearBtn = new St.Button({
@@ -643,12 +672,14 @@ export default class GradiaCompanion extends Extension {
             reactive: true,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this._clearBtn.connect('clicked', () => this._canvas.clear());
+        this._clearBtn.connect('clicked', () => {
+            for (const canvas of this._canvases)
+                canvas.clear();
+        });
         this._toolbar.add_child(this._clearBtn);
 
         primaryBin.add_child(this._toolbar);
 
-        const ui = Main.screenshotUI;
         this._windowButtonId = ui._windowButton.connect('notify::checked', () => {
             this._updateVisibilityForMode();
         });
@@ -700,12 +731,15 @@ export default class GradiaCompanion extends Extension {
 
         this._disconnectDragOpacity();
 
-        setAreaSelectorHandlesVisible(ui._areaSelector, true);
-
-        if (this._canvas) {
-            this._canvas.destroy();
-            this._canvas = null;
+        const selector = ui._areaSelector;
+        if (selector) {
+            selector.reactive = true;
+            setAreaSelectorHandlesVisible(selector, true);
         }
+
+        for (const canvas of this._canvases)
+            canvas.destroy();
+        this._canvases = [];
 
         if (this._toolbar) {
             this._toolbar.destroy();
