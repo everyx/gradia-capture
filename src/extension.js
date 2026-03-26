@@ -8,23 +8,14 @@ import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
-const COLORS = [
-    { name: 'White', hex: '#ffffff' },
-    { name: 'Black', hex: '#000000' },
-    { name: 'Red', hex: '#ff4444' },
-    { name: 'Orange', hex: '#ff8800' },
-    { name: 'Yellow', hex: '#ffdd00' },
-    { name: 'Green', hex: '#44cc44' },
-    { name: 'Blue', hex: '#4488ff' },
-    { name: 'Purple', hex: '#aa44ff' },
-];
+import { Toolbar } from './topBar.js';
 
 const STROKE_WIDTH = 3;
 
 const MAX_CANVAS_WIDTH = 1920;
 const MAX_CANVAS_HEIGHT = 1080;
 
-const Tool = {
+export const Tool = {
     SELECT: 0,
     FREEHAND: 1,
     RECTANGLE: 2,
@@ -102,7 +93,7 @@ function getAreaSelectorHandles(selector) {
     ].filter(h => h != null);
 }
 
-function setAreaSelectorHandlesVisible(selector, visible) {
+export function setAreaSelectorHandlesVisible(selector, visible) {
     for (const handle of getAreaSelectorHandles(selector)) {
         if (visible)
             handle.show();
@@ -123,7 +114,7 @@ const DrawingCanvas = GObject.registerClass(
 
             this._strokes = [];
             this._currentStroke = null;
-            this._strokeColor = '#ff4444';
+            this._strokeColor = '#000000';
             this._tool = Tool.FREEHAND;
             this._drawing = false;
             this._dragButton = 0;
@@ -300,13 +291,6 @@ export default class GradiaCompanion extends Extension {
     enable() {
         this._originalOpen = Main.screenshotUI.open.bind(Main.screenshotUI);
         this._toolbar = null;
-        this._colorButtons = [];
-        this._toolButtons = [];
-        this._selectedColor = COLORS[1].hex;
-        this._selectedTool = Tool.SELECT;
-        this._undoBtn = null;
-        this._clearBtn = null;
-
         this._canvases = [];
 
         const self = this;
@@ -439,8 +423,6 @@ export default class GradiaCompanion extends Extension {
     }
 
     _setTool(tool) {
-        this._selectedTool = tool;
-
         const drawing = this._isDrawingTool(tool);
 
         for (const canvas of this._canvases) {
@@ -448,13 +430,10 @@ export default class GradiaCompanion extends Extension {
             canvas.setTool(tool);
         }
 
-        for (const btn of this._toolButtons)
-            btn.checked = (btn._tool === tool);
-
-        this._updateAreaSelectorState();
+        this._updateAreaSelectorState(tool);
     }
 
-    _updateAreaSelectorState() {
+    _updateAreaSelectorState(tool) {
         const selector = Main.screenshotUI?._areaSelector;
         if (!selector)
             return;
@@ -462,7 +441,7 @@ export default class GradiaCompanion extends Extension {
         if (!Main.screenshotUI._selectionButton.checked)
             return;
 
-        const drawing = this._isDrawingTool(this._selectedTool);
+        const drawing = this._isDrawingTool(tool);
 
         if (drawing) {
             selector.reactive = false;
@@ -494,7 +473,7 @@ export default class GradiaCompanion extends Extension {
             canvas.visible = show;
 
         if (show)
-            this._updateAreaSelectorState();
+            this._updateAreaSelectorState(this._toolbar?.selectedTool ?? Tool.SELECT);
     }
 
     _connectDragOpacity() {
@@ -543,7 +522,6 @@ export default class GradiaCompanion extends Extension {
         this._canvases = [];
 
         const monitorBins = ui._monitorBins ?? [];
-
         const binsToUse = monitorBins.length > 0
             ? monitorBins
             : (ui._primaryMonitorBin ? [ui._primaryMonitorBin] : []);
@@ -552,10 +530,7 @@ export default class GradiaCompanion extends Extension {
             const canvas = new DrawingCanvas({
                 style: 'background-color: transparent;',
             });
-            canvas.setColor(this._selectedColor);
-            canvas.setTool(this._selectedTool);
             canvas.reactive = false;
-
             bin.insert_child_below(canvas, null);
             this._canvases.push(canvas);
         }
@@ -564,96 +539,18 @@ export default class GradiaCompanion extends Extension {
         if (!primaryBin)
             return;
 
-        this._toolbar = new St.BoxLayout({
-            style_class: 'screenshot-ui-panel gradia-toolbar',
-            x_align: Clutter.ActorAlign.CENTER,
-            y_align: Clutter.ActorAlign.START,
-            y_expand: true,
-            reactive: true,
+        this._toolbar = new Toolbar();
+
+        this._toolbar.connect('tool-changed', (_toolbar, tool) => {
+            this._setTool(tool);
         });
 
-        this._toolButtons = [];
-
-        const toolDefs = [
-            { tool: Tool.SELECT, icon: 'screenshot-ui-area-symbolic' },
-            { tool: Tool.FREEHAND, icon: 'document-edit-symbolic' },
-            { tool: Tool.RECTANGLE, icon: 'checkbox-symbolic' },
-            { tool: Tool.ARROW, icon: 'go-up-symbolic' },
-        ];
-
-        for (const def of toolDefs) {
-            const btn = new St.Button({
-                child: new St.Icon({
-                    icon_name: def.icon,
-                    style: 'icon-size: 16px;',
-                }),
-                style_class: 'screenshot-ui-type-button gradia-square-button',
-                toggle_mode: true,
-                checked: def.tool === this._selectedTool,
-                y_align: Clutter.ActorAlign.CENTER,
-            });
-            btn._tool = def.tool;
-            btn.connect('clicked', () => this._setTool(def.tool));
-            this._toolbar.add_child(btn);
-            this._toolButtons.push(btn);
-        }
-
-        this._toolbar.add_child(new St.Widget({
-            style_class: 'gradia-separator',
-            y_expand: true,
-        }));
-
-        this._colorButtons = [];
-        for (const color of COLORS) {
-            const btn = new St.Button({
-                style_class: 'gradia-color-button',
-                style: `background-color: ${color.hex};`,
-                reactive: true,
-                toggle_mode: true,
-                checked: color.hex === this._selectedColor,
-                y_align: Clutter.ActorAlign.CENTER,
-            });
-
-            const isWhite = color.hex.toLowerCase() === '#ffffff';
-            const checkIcon = new St.Icon({
-                icon_name: 'object-select-symbolic',
-                style_class: isWhite ? 'gradia-check-icon-dark' : 'gradia-check-icon',
-                x_align: Clutter.ActorAlign.CENTER,
-                y_align: Clutter.ActorAlign.CENTER,
-                x_expand: true,
-                y_expand: true,
-                visible: color.hex === this._selectedColor,
-            });
-            btn.set_child(checkIcon);
-            btn._checkIcon = checkIcon;
-            btn._colorHex = color.hex;
-
-            btn.connect('clicked', () => {
-                this._selectedColor = color.hex;
-                for (const canvas of this._canvases)
-                    canvas.setColor(color.hex);
-                this._updateColorSelection();
-            });
-
-            this._toolbar.add_child(btn);
-            this._colorButtons.push(btn);
-        }
-
-        this._toolbar.add_child(new St.Widget({
-            style_class: 'gradia-separator',
-            y_expand: true,
-        }));
-
-        this._undoBtn = new St.Button({
-            child: new St.Icon({
-                icon_name: 'edit-undo-symbolic',
-                style: 'icon-size: 16px;',
-            }),
-            style_class: 'screenshot-ui-type-button gradia-square-button',
-            reactive: true,
-            y_align: Clutter.ActorAlign.CENTER,
+        this._toolbar.connect('color-changed', (_toolbar, hex) => {
+            for (const canvas of this._canvases)
+                canvas.setColor(hex);
         });
-        this._undoBtn.connect('clicked', () => {
+
+        this._toolbar.connect('undo', () => {
             for (let i = this._canvases.length - 1; i >= 0; i--) {
                 if (this._canvases[i].hasStrokes()) {
                     this._canvases[i].undo();
@@ -661,22 +558,16 @@ export default class GradiaCompanion extends Extension {
                 }
             }
         });
-        this._toolbar.add_child(this._undoBtn);
 
-        this._clearBtn = new St.Button({
-            child: new St.Icon({
-                icon_name: 'user-trash-symbolic',
-                style: 'icon-size: 16px;',
-            }),
-            style_class: 'screenshot-ui-type-button gradia-square-button',
-            reactive: true,
-            y_align: Clutter.ActorAlign.CENTER,
-        });
-        this._clearBtn.connect('clicked', () => {
+        this._toolbar.connect('clear', () => {
             for (const canvas of this._canvases)
                 canvas.clear();
         });
-        this._toolbar.add_child(this._clearBtn);
+
+        for (const canvas of this._canvases) {
+            canvas.setColor(this._toolbar.selectedColor);
+            canvas.setTool(this._toolbar.selectedTool);
+        }
 
         primaryBin.add_child(this._toolbar);
 
@@ -697,16 +588,6 @@ export default class GradiaCompanion extends Extension {
 
         this._setTool(Tool.SELECT);
         this._updateVisibilityForMode();
-    }
-
-    _updateColorSelection() {
-        for (const btn of this._colorButtons) {
-            const isSelected = btn._colorHex === this._selectedColor;
-            btn.checked = isSelected;
-            btn.style = `background-color: ${btn._colorHex};`;
-            if (btn._checkIcon)
-                btn._checkIcon.visible = isSelected;
-        }
     }
 
     _removeUI() {
@@ -745,11 +626,5 @@ export default class GradiaCompanion extends Extension {
             this._toolbar.destroy();
             this._toolbar = null;
         }
-
-        this._colorButtons = [];
-        this._toolButtons = [];
-        this._undoBtn = null;
-        this._clearBtn = null;
-        this._selectedTool = Tool.SELECT;
     }
 }

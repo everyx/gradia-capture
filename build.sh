@@ -13,7 +13,7 @@ gnome-extensions pack src \
     --force \
     --extra-source="LICENSE" \
     --extra-source="README.md" \
-    --extra-source="thicknessSlider.js" \
+    --extra-source="topBar.js" \
     --extra-source="../icons"
 echo "Packing Done!"
 
