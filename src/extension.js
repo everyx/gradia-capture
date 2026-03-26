@@ -3,103 +3,35 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import Clutter from 'gi://Clutter';
 import Cairo from 'gi://cairo';
 import GdkPixbuf from 'gi://GdkPixbuf';
-import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
-import { Toolbar } from './topBar.js';
+import { Toolbar, TOOLS } from './topBar.js';
 
 const STROKE_WIDTH = 3;
 
 const MAX_CANVAS_WIDTH = 1920;
 const MAX_CANVAS_HEIGHT = 1080;
 
-export const Tool = {
-    SELECT: 0,
-    FREEHAND: 1,
-    RECTANGLE: 2,
-    ARROW: 3,
-};
-
-function hexToRgb(hex) {
-    return {
-        r: parseInt(hex.slice(1, 3), 16) / 255,
-        g: parseInt(hex.slice(3, 5), 16) / 255,
-        b: parseInt(hex.slice(5, 7), 16) / 255,
-    };
-}
-
-function drawArrowhead(cr, fromX, fromY, toX, toY, size) {
-    const angle = Math.atan2(toY - fromY, toX - fromX);
-    const spread = Math.PI / 7;
-
-    const x1 = toX - size * Math.cos(angle - spread);
-    const y1 = toY - size * Math.sin(angle - spread);
-    const x2 = toX - size * Math.cos(angle + spread);
-    const y2 = toY - size * Math.sin(angle + spread);
-
-    cr.moveTo(toX, toY);
-    cr.lineTo(x1, y1);
-    cr.moveTo(toX, toY);
-    cr.lineTo(x2, y2);
-    cr.stroke();
-}
-
-function renderStroke(cr, stroke, lineWidth) {
-    if (stroke.points.length < 2)
-        return;
-
-    const { r, g, b } = hexToRgb(stroke.color);
-    cr.setSourceRGBA(r, g, b, 1.0);
-    cr.setLineWidth(lineWidth);
-    cr.setLineCap(Cairo.LineCap.ROUND);
-    cr.setLineJoin(Cairo.LineJoin.ROUND);
-
-    const pts = stroke.points;
-
-    if (stroke.tool === Tool.RECTANGLE) {
-        const p0 = pts[0];
-        const p1 = pts[pts.length - 1];
-        const x = Math.min(p0.x, p1.x);
-        const y = Math.min(p0.y, p1.y);
-        const w = Math.abs(p1.x - p0.x);
-        const h = Math.abs(p1.y - p0.y);
-        cr.rectangle(x, y, w, h);
-        cr.stroke();
-    } else if (stroke.tool === Tool.ARROW) {
-        const p0 = pts[0];
-        const p1 = pts[pts.length - 1];
-        cr.moveTo(p0.x, p0.y);
-        cr.lineTo(p1.x, p1.y);
-        cr.stroke();
-        drawArrowhead(cr, p0.x, p0.y, p1.x, p1.y, lineWidth * 5);
-    } else {
-        cr.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length; i++)
-            cr.lineTo(pts[i].x, pts[i].y);
-        cr.stroke();
-    }
-}
-
-function getAreaSelectorHandles(selector) {
-    if (!selector)
-        return [];
-    return [
-        selector._topLeftHandle,
-        selector._topRightHandle,
-        selector._bottomLeftHandle,
-        selector._bottomRightHandle,
-    ].filter(h => h != null);
-}
-
 export function setAreaSelectorHandlesVisible(selector, visible) {
-    for (const handle of getAreaSelectorHandles(selector)) {
+    const handles = [
+        selector?._topLeftHandle,
+        selector?._topRightHandle,
+        selector?._bottomLeftHandle,
+        selector?._bottomRightHandle,
+    ].filter(h => h != null);
+
+    for (const handle of handles) {
         if (visible)
             handle.show();
         else
             handle.hide();
     }
+}
+
+function getToolDef(id) {
+    return TOOLS.find(t => t.id === id) ?? null;
 }
 
 const DrawingCanvas = GObject.registerClass(
@@ -115,10 +47,11 @@ const DrawingCanvas = GObject.registerClass(
             this._strokes = [];
             this._currentStroke = null;
             this._strokeColor = '#000000';
-            this._tool = Tool.FREEHAND;
+            this._toolId = 'freehand';
             this._drawing = false;
             this._dragButton = 0;
             this._dragGrab = null;
+            this._stampCounter = 1;
 
             this._scaleX = 1;
             this._scaleY = 1;
@@ -129,17 +62,21 @@ const DrawingCanvas = GObject.registerClass(
         get strokes() { return this._strokes; }
 
         setColor(hex) { this._strokeColor = hex; }
-        setTool(tool) { this._tool = tool; }
+        setTool(id) { this._toolId = id; }
 
         clear() {
             this._strokes = [];
             this._currentStroke = null;
+            this._stampCounter = 1;
             this.queue_repaint();
         }
 
         undo() {
             if (this._strokes.length > 0) {
-                this._strokes.pop();
+                const removed = this._strokes.pop();
+                const tool = getToolDef(removed.toolId);
+                if (tool?.isStamp)
+                    this._stampCounter = Math.max(1, this._stampCounter - 1);
                 this.queue_repaint();
             }
         }
@@ -162,20 +99,43 @@ const DrawingCanvas = GObject.registerClass(
         }
 
         _startDrawing(stageX, stageY) {
+            const tool = getToolDef(this._toolId);
+            if (!tool?.isDrawing)
+                return;
+
+            const extra = tool.beginStroke?.() ?? {};
             this._currentStroke = {
                 color: this._strokeColor,
-                tool: this._tool,
+                toolId: this._toolId,
                 stagePoints: [{ x: stageX, y: stageY }],
+                ...extra,
             };
+
+            if (tool.isStamp) {
+                this._currentStroke.counter = this._stampCounter;
+                this._finishStamp();
+                return;
+            }
+
             this._drawing = true;
             this._dragGrab = global.stage.grab(this);
+        }
+
+        _finishStamp() {
+            if (this._currentStroke)
+                this._strokes.push(this._currentStroke);
+            this._stampCounter++;
+            this._currentStroke = null;
+            this.queue_repaint();
         }
 
         _updateDrawing(stageX, stageY) {
             if (!this._drawing)
                 return;
 
-            if (this._tool === Tool.FREEHAND) {
+            const tool = getToolDef(this._toolId);
+
+            if (tool?.id === 'freehand') {
                 this._currentStroke.stagePoints.push({ x: stageX, y: stageY });
             } else {
                 if (this._currentStroke.stagePoints.length === 1)
@@ -270,16 +230,16 @@ const DrawingCanvas = GObject.registerClass(
                 allStrokes.push(this._currentStroke);
 
             for (const stroke of allStrokes) {
-                const localPoints = [];
-                for (const sp of stroke.stagePoints) {
-                    const lp = this._stageToLocal(sp.x, sp.y);
-                    if (lp) localPoints.push(lp);
-                }
+                const tool = getToolDef(stroke.toolId);
+                if (!tool?.render)
+                    continue;
 
-                renderStroke(cr, {
+                const localPoints = stroke.stagePoints.map(sp => this._stageToLocal(sp.x, sp.y)).filter(p => p !== null);
+
+                tool.render(cr, {
                     color: stroke.color,
-                    tool: stroke.tool,
                     points: localPoints,
+                    counter: stroke.counter,
                 }, STROKE_WIDTH);
             }
 
@@ -364,7 +324,8 @@ export default class GradiaCompanion extends Extension {
         const strokes = this._canvases.flatMap(c =>
             c.strokes.map(s => ({
                 color: s.color,
-                tool: s.tool,
+                toolId: s.toolId,
+                counter: s.counter,
                 stagePoints: s.stagePoints.map(p => ({ x: p.x, y: p.y })),
             }))
         );
@@ -404,36 +365,41 @@ export default class GradiaCompanion extends Extension {
         const lw = STROKE_WIDTH * ((scaleX + scaleY) / 2);
 
         for (const stroke of strokes) {
+            const tool = TOOLS.find(t => t.id === stroke.toolId);
+            if (!tool?.render)
+                continue;
+
             const converted = stroke.stagePoints.map(p => ({
                 x: (p.x / stageScale - selX) * scaleX,
                 y: (p.y / stageScale - selY) * scaleY,
             }));
-            renderStroke(cr, {
+
+            tool.render(cr, {
                 color: stroke.color,
-                tool: stroke.tool,
                 points: converted,
+                counter: stroke.counter,
             }, lw);
         }
 
         surface.writeToPNG(path);
     }
 
-    _isDrawingTool(tool) {
-        return tool !== Tool.SELECT;
+    _isDrawingTool(id) {
+        return getToolDef(id)?.isDrawing ?? false;
     }
 
-    _setTool(tool) {
-        const drawing = this._isDrawingTool(tool);
+    _setTool(id) {
+        const drawing = this._isDrawingTool(id);
 
         for (const canvas of this._canvases) {
             canvas.reactive = drawing;
-            canvas.setTool(tool);
+            canvas.setTool(id);
         }
 
-        this._updateAreaSelectorState(tool);
+        this._updateAreaSelectorState(id);
     }
 
-    _updateAreaSelectorState(tool) {
+    _updateAreaSelectorState(id) {
         const selector = Main.screenshotUI?._areaSelector;
         if (!selector)
             return;
@@ -441,7 +407,7 @@ export default class GradiaCompanion extends Extension {
         if (!Main.screenshotUI._selectionButton.checked)
             return;
 
-        const drawing = this._isDrawingTool(tool);
+        const drawing = this._isDrawingTool(id);
 
         if (drawing) {
             selector.reactive = false;
@@ -473,7 +439,7 @@ export default class GradiaCompanion extends Extension {
             canvas.visible = show;
 
         if (show)
-            this._updateAreaSelectorState(this._toolbar?.selectedTool ?? Tool.SELECT);
+            this._updateAreaSelectorState(this._toolbar?.selectedTool ?? 'select');
     }
 
     _connectDragOpacity() {
@@ -539,10 +505,10 @@ export default class GradiaCompanion extends Extension {
         if (!primaryBin)
             return;
 
-        this._toolbar = new Toolbar();
+        this._toolbar = new Toolbar({ extensionPath: this.path });
 
-        this._toolbar.connect('tool-changed', (_toolbar, tool) => {
-            this._setTool(tool);
+        this._toolbar.connect('tool-changed', (_toolbar, id) => {
+            this._setTool(id);
         });
 
         this._toolbar.connect('color-changed', (_toolbar, hex) => {
@@ -586,7 +552,7 @@ export default class GradiaCompanion extends Extension {
 
         this._connectDragOpacity();
 
-        this._setTool(Tool.SELECT);
+        this._setTool('select');
         this._updateVisibilityForMode();
     }
 
