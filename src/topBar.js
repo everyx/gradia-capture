@@ -182,7 +182,7 @@ export const TOOLS = [
             const { r, g, b } = hexToRgb(stroke.color);
             const fontSize = Math.max(8, Math.round(lineWidth * 3));
 
-            cr.selectFontFace('Adwaita Sans', Cairo.FontSlant.NORMAL, Cairo.FontWeight.NORMAL);
+            cr.selectFontFace('Sans', Cairo.FontSlant.NORMAL, Cairo.FontWeight.NORMAL);
             cr.setFontSize(fontSize);
 
             const extents = cr.textExtents(stroke.text);

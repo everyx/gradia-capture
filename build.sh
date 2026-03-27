@@ -15,6 +15,7 @@ gnome-extensions pack src \
     --extra-source="README.md" \
     --extra-source="topBar.js" \
     --extra-source="settings.js" \
+    --extra-source="screenshotStore.js" \
     --extra-source="../icons" \
     --schema="../schemas/org.gnome.shell.extensions.gradia-companion.gschema.xml"
 echo "Packing Done!"

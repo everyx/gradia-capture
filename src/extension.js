@@ -5,10 +5,13 @@ import Cairo from 'gi://cairo';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
+import Shell from 'gi://Shell';
 import St from 'gi://St';
+import Gio from 'gi://Gio';
 
 import { Toolbar, TOOLS } from './topBar.js';
 import { GradiaSettings } from './settings.js';
+import { captureAndStoreScreenshot } from './screenshotStore.js';
 
 const MAX_CANVAS_WIDTH = 1920;
 const MAX_CANVAS_HEIGHT = 1080;
@@ -285,6 +288,7 @@ const DrawingInputOverlay = GObject.registerClass(
 export default class GradiaCompanion extends Extension {
     enable() {
         this._originalOpen = Main.screenshotUI.open.bind(Main.screenshotUI);
+        this._originalSaveScreenshot = Main.screenshotUI._saveScreenshot.bind(Main.screenshotUI);
         this._gradiaSettings = new GradiaSettings(this);
         this._toolbar = null;
         this._canvases = [];
@@ -300,18 +304,53 @@ export default class GradiaCompanion extends Extension {
             return result;
         };
 
+        Main.screenshotUI._saveScreenshot = async function () {
+          const ui = Main.screenshotUI;
+          self._commitTextEntry();
+          const hasStrokes = self._canvases.some(c => c.hasStrokes());
+          if (!hasStrokes)
+              return self._originalSaveScreenshot();
+
+          const strokeData = self._buildStrokeData();
+          let file = null;
+
+          if (ui._selectionButton.checked || ui._screenButton.checked) {
+              const content = ui._stageScreenshot.get_content();
+              if (!content)
+                  return;
+
+              const texture = content.get_texture();
+              const geometry = ui._getSelectedGeometry(true);
+              let cursorTexture = ui._cursor.content?.get_texture();
+              if (!ui._cursor.visible)
+                  cursorTexture = null;
+
+              const cursor = {
+                  texture: cursorTexture ?? null,
+                  x: ui._cursor.x * ui._scale,
+                  y: ui._cursor.y * ui._scale,
+                  scale: ui._cursorScale,
+              };
+
+              try {
+                  file = await captureAndStoreScreenshot(
+                      texture,
+                      geometry,
+                      ui._scale,
+                      cursor,
+                      (bytes, pixbuf) => self._compositeStrokesOntoPixbuf(bytes, pixbuf, strokeData)
+                  );
+              } catch (_e) {}
+          } else if (ui._windowButton.checked) {
+              return self._originalSaveScreenshot();
+          }
+
+          if (file)
+              ui.emit('screenshot-taken', file);
+      };
+
         this._closedId = Main.screenshotUI.connect('closed', () => {
             self._removeUI();
-        });
-
-        this._screenshotTakenId = Main.screenshotUI.connect('screenshot-taken', (_ui, file) => {
-            self._commitTextEntry();
-
-            const hasAny = self._canvases.some(c => c.hasStrokes());
-            if (hasAny) {
-                const strokeData = self._buildStrokeData();
-                self._compositeStrokesAsync(file, strokeData);
-            }
         });
     }
 
@@ -321,20 +360,68 @@ export default class GradiaCompanion extends Extension {
             this._originalOpen = null;
         }
 
+        if (this._originalSaveScreenshot) {
+            Main.screenshotUI._saveScreenshot = this._originalSaveScreenshot;
+            this._originalSaveScreenshot = null;
+        }
+
         if (this._closedId) {
             Main.screenshotUI.disconnect(this._closedId);
             this._closedId = null;
-        }
-
-        if (this._screenshotTakenId) {
-            Main.screenshotUI.disconnect(this._screenshotTakenId);
-            this._screenshotTakenId = null;
         }
 
         this._gradiaSettings.destroy();
         this._gradiaSettings = null;
 
         this._removeUI();
+    }
+
+    _compositeStrokesOntoPixbuf(bytes, pixbuf, data) {
+        const { selX, selY, selW, selH, strokes, stageScale } = data;
+        if (selW <= 0 || selH <= 0)
+            return null;
+
+        const imgWidth = pixbuf.get_width();
+        const imgHeight = pixbuf.get_height();
+        const scaleX = imgWidth / selW;
+        const scaleY = imgHeight / selH;
+
+        const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, imgWidth, imgHeight);
+        const cr = new Cairo.Context(surface);
+        imports.gi.Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0);
+        cr.paint();
+
+        for (const stroke of strokes) {
+            const tool = TOOLS.find(t => t.id === stroke.toolId);
+            if (!tool?.render)
+                continue;
+
+            const converted = stroke.stagePoints.map(p => ({
+                x: (p.x / stageScale - selX) * scaleX,
+                y: (p.y / stageScale - selY) * scaleY,
+            }));
+
+            const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
+
+            tool.render(cr, {
+                color: stroke.color,
+                points: converted,
+                counter: stroke.counter,
+                text: stroke.text,
+            }, lw);
+        }
+
+        cr.$dispose();
+
+        const newPixbuf = imports.gi.Gdk.pixbuf_get_from_surface(surface, 0, 0, imgWidth, imgHeight);
+        if (!newPixbuf)
+            return null;
+
+        const pngStream = Gio.MemoryOutputStream.new_resizable();
+        newPixbuf.save_to_streamv(pngStream, 'png', [], [], null);
+        pngStream.close(null);
+
+        return { bytes: pngStream.steal_as_bytes(), pixbuf: newPixbuf };
     }
 
     _spawnTextEntry(stageX, stageY) {
@@ -389,7 +476,7 @@ export default class GradiaCompanion extends Extension {
             color: ${this._toolbar.selectedColor};
             caret-color: ${this._toolbar.selectedColor};
             font-size: ${fontSize}px;
-            font-family: "Adwaita Sans";
+            font-family: "Sans";
         `;
 
         entry.set_x_expand(false);
@@ -517,54 +604,6 @@ export default class GradiaCompanion extends Extension {
             strokes,
             stageScale: global.stage.scale_factor || 1,
         };
-    }
-
-    _compositeStrokesAsync(file, data) {
-        const path = file.get_path();
-        if (!path || data.selW <= 0 || data.selH <= 0)
-            return;
-
-        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            this._doComposite(path, data);
-            return GLib.SOURCE_REMOVE;
-        });
-    }
-
-    _doComposite(path, data) {
-        const { selX, selY, selW, selH, strokes, stageScale } = data;
-        const pixbuf = GdkPixbuf.Pixbuf.new_from_file(path);
-        const imgWidth = pixbuf.get_width();
-        const imgHeight = pixbuf.get_height();
-        const scaleX = imgWidth / selW;
-        const scaleY = imgHeight / selH;
-
-        const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, imgWidth, imgHeight);
-        const cr = new Cairo.Context(surface);
-
-        imports.gi.Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0);
-        cr.paint();
-
-        for (const stroke of strokes) {
-            const tool = TOOLS.find(t => t.id === stroke.toolId);
-            if (!tool?.render)
-                continue;
-
-            const converted = stroke.stagePoints.map(p => ({
-                x: (p.x / stageScale - selX) * scaleX,
-                y: (p.y / stageScale - selY) * scaleY,
-            }));
-
-            const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
-
-            tool.render(cr, {
-                color: stroke.color,
-                points: converted,
-                counter: stroke.counter,
-                text: stroke.text,
-            }, lw);
-        }
-
-        surface.writeToPNG(path);
     }
 
     _isDrawingTool(id) {
