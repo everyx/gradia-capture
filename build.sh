@@ -14,7 +14,9 @@ gnome-extensions pack src \
     --extra-source="LICENSE" \
     --extra-source="README.md" \
     --extra-source="topBar.js" \
-    --extra-source="../icons"
+    --extra-source="settings.js" \
+    --extra-source="../icons" \
+    --schema="../schemas/org.gnome.shell.extensions.gradia-companion.gschema.xml"
 echo "Packing Done!"
 
 while getopts i flag; do

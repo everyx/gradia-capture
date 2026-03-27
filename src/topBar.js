@@ -220,8 +220,9 @@ export const Toolbar = GObject.registerClass({
     },
 }, class Toolbar extends St.BoxLayout {
     _init(params = {}) {
-        const { extensionPath = '', ...rest } = params;
+        const { extensionPath = '', gradiaSettings = null, ...rest } = params;
         this._extensionPath = extensionPath;
+        this._settings = gradiaSettings;
 
         super._init({
             style_class: 'screenshot-ui-panel gradia-toolbar',
@@ -245,6 +246,54 @@ export const Toolbar = GObject.registerClass({
         this._buildLineWidthSlider();
         this._addSeparator();
         this._buildActionButtons();
+
+        this._restoreToolEntry(this._selectedTool);
+        this._updateDrawingControlsSensitivity();
+    }
+
+    _currentToolIsDrawing() {
+        return TOOLS.find(t => t.id === this._selectedTool)?.isDrawing ?? false;
+    }
+
+    _updateDrawingControlsSensitivity() {
+        const drawing = this._currentToolIsDrawing();
+        for (const btn of this._colorButtons) {
+            btn.reactive = drawing;
+            btn.opacity = drawing ? 255 : 80;
+        }
+        this._slider.reactive = drawing;
+        this._slider.opacity = drawing ? 255 : 80;
+    }
+
+    _saveCurrentToolEntry() {
+        this._settings?.saveToolEntry(this._selectedTool, this._selectedColor, this._lineWidth);
+    }
+
+    _restoreToolEntry(toolId) {
+        if (!this._settings)
+            return;
+        const { color, lineWidth } = this._settings.getToolEntry(toolId, this._selectedColor, this._lineWidth);
+        this._applyColor(color);
+        this._applyLineWidth(lineWidth);
+    }
+
+    _applyColor(hex) {
+        this._selectedColor = hex;
+        for (const btn of this._colorButtons) {
+            const isSelected = btn._colorHex === hex;
+            btn.checked = isSelected;
+            btn.style = `background-color: ${btn._colorHex};`;
+            if (btn._checkIcon)
+                btn._checkIcon.visible = isSelected;
+        }
+        this.emit('color-changed', hex);
+    }
+
+    _applyLineWidth(width) {
+        this._lineWidth = width;
+        const sliderValue = (width - LINE_WIDTH_MIN) / (LINE_WIDTH_MAX - LINE_WIDTH_MIN);
+        this._slider.value = sliderValue;
+        this.emit('line-width-changed', width);
     }
 
     _buildToolButtons() {
@@ -302,6 +351,7 @@ export const Toolbar = GObject.registerClass({
         this._slider.connect('notify::value', () => {
             this._lineWidth = LINE_WIDTH_MIN + this._slider.value * (LINE_WIDTH_MAX - LINE_WIDTH_MIN);
             this.emit('line-width-changed', this._lineWidth);
+            this._saveCurrentToolEntry();
         });
         this.add_child(this._slider);
     }
@@ -334,22 +384,18 @@ export const Toolbar = GObject.registerClass({
     }
 
     _onToolClicked(id) {
+        this._saveCurrentToolEntry();
         this._selectedTool = id;
         for (const btn of this._toolButtons)
             btn.checked = (btn._toolId === id);
         this.emit('tool-changed', id);
+        this._restoreToolEntry(id);
+        this._updateDrawingControlsSensitivity();
     }
 
     _onColorClicked(hex) {
-        this._selectedColor = hex;
-        for (const btn of this._colorButtons) {
-            const isSelected = btn._colorHex === hex;
-            btn.checked = isSelected;
-            btn.style = `background-color: ${btn._colorHex};`;
-            if (btn._checkIcon)
-                btn._checkIcon.visible = isSelected;
-        }
-        this.emit('color-changed', hex);
+        this._applyColor(hex);
+        this._saveCurrentToolEntry();
     }
 
     get selectedTool() { return this._selectedTool; }

@@ -8,6 +8,7 @@ import GObject from 'gi://GObject';
 import St from 'gi://St';
 
 import { Toolbar, TOOLS } from './topBar.js';
+import { GradiaSettings } from './settings.js';
 
 const MAX_CANVAS_WIDTH = 1920;
 const MAX_CANVAS_HEIGHT = 1080;
@@ -251,6 +252,7 @@ const DrawingCanvas = GObject.registerClass(
 export default class GradiaCompanion extends Extension {
     enable() {
         this._originalOpen = Main.screenshotUI.open.bind(Main.screenshotUI);
+        this._gradiaSettings = new GradiaSettings(this);
         this._toolbar = null;
         this._canvases = [];
 
@@ -290,6 +292,9 @@ export default class GradiaCompanion extends Extension {
             Main.screenshotUI.disconnect(this._screenshotTakenId);
             this._screenshotTakenId = null;
         }
+
+        this._gradiaSettings.destroy();
+        this._gradiaSettings = null;
 
         this._removeUI();
     }
@@ -507,7 +512,7 @@ export default class GradiaCompanion extends Extension {
         if (!primaryBin)
             return;
 
-        this._toolbar = new Toolbar({ extensionPath: this.path });
+        this._toolbar = new Toolbar({ extensionPath: this.path, gradiaSettings: this._gradiaSettings });
 
         this._toolbar.connect('tool-changed', (_toolbar, id) => {
             this._setTool(id);
