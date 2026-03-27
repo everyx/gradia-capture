@@ -249,12 +249,42 @@ const DrawingCanvas = GObject.registerClass(
         }
     });
 
+const DrawingInputOverlay = GObject.registerClass(
+    class DrawingInputOverlay extends St.Widget {
+        _init(canvas, params) {
+            super._init({
+                reactive: false,
+                x_expand: true,
+                y_expand: true,
+                ...params,
+            });
+            this._canvas = canvas;
+        }
+
+        vfunc_button_press_event(event) {
+            return this._canvas.vfunc_button_press_event(event);
+        }
+
+        vfunc_button_release_event(event) {
+            return this._canvas.vfunc_button_release_event(event);
+        }
+
+        vfunc_motion_event(event) {
+            return this._canvas.vfunc_motion_event(event);
+        }
+
+        vfunc_touch_event(event) {
+            return this._canvas.vfunc_touch_event(event);
+        }
+    });
+
 export default class GradiaCompanion extends Extension {
     enable() {
         this._originalOpen = Main.screenshotUI.open.bind(Main.screenshotUI);
         this._gradiaSettings = new GradiaSettings(this);
         this._toolbar = null;
         this._canvases = [];
+        this._overlays = [];
 
         const self = this;
 
@@ -398,10 +428,11 @@ export default class GradiaCompanion extends Extension {
     _setTool(id) {
         const drawing = this._isDrawingTool(id);
 
-        for (const canvas of this._canvases) {
-            canvas.reactive = drawing;
+        for (const canvas of this._canvases)
             canvas.setTool(id);
-        }
+
+        for (const overlay of this._overlays)
+            overlay.reactive = drawing;
 
         this._updateAreaSelectorState(id);
     }
@@ -444,6 +475,9 @@ export default class GradiaCompanion extends Extension {
 
         for (const canvas of this._canvases)
             canvas.visible = show;
+
+        for (const overlay of this._overlays)
+            overlay.visible = show;
 
         if (show)
             this._updateAreaSelectorState(this._toolbar?.selectedTool ?? 'select');
@@ -493,6 +527,7 @@ export default class GradiaCompanion extends Extension {
         const ui = Main.screenshotUI;
 
         this._canvases = [];
+        this._overlays = [];
 
         const monitorBins = ui._monitorBins ?? [];
         const binsToUse = monitorBins.length > 0
@@ -503,9 +538,17 @@ export default class GradiaCompanion extends Extension {
             const canvas = new DrawingCanvas({
                 style: 'background-color: transparent;',
             });
-            canvas.reactive = false;
-            bin.insert_child_below(canvas, null);
+            canvas.add_constraint(new Clutter.BindConstraint({
+                source: bin,
+                coordinate: Clutter.BindCoordinate.ALL,
+            }));
+            ui.insert_child_below(canvas, ui._areaSelector);
             this._canvases.push(canvas);
+            const overlay = new DrawingInputOverlay(canvas, {
+                style: 'background-color: transparent;',
+            });
+            bin.add_child(overlay);
+            this._overlays.push(overlay);
         }
 
         const primaryBin = ui._primaryMonitorBin;
@@ -613,6 +656,10 @@ export default class GradiaCompanion extends Extension {
             selector.reactive = true;
             setAreaSelectorHandlesVisible(selector, true);
         }
+
+        for (const overlay of this._overlays)
+            overlay.destroy();
+        this._overlays = [];
 
         for (const canvas of this._canvases)
             canvas.destroy();
