@@ -74,10 +74,7 @@ const DrawingCanvas = GObject.registerClass(
 
         undo() {
             if (this._strokes.length > 0) {
-                const removed = this._strokes.pop();
-                const tool = getToolDef(removed.toolId);
-                if (tool?.isStamp)
-                    this._stampCounter = Math.max(1, this._stampCounter - 1);
+                this._strokes.pop();
                 this.queue_repaint();
             }
         }
@@ -165,6 +162,12 @@ const DrawingCanvas = GObject.registerClass(
             this.queue_repaint();
         }
 
+        commitTextStroke(stroke) {
+            if (stroke)
+                this._strokes.push(stroke);
+            this.queue_repaint();
+        }
+
         vfunc_button_press_event(event) {
             if (this._dragButton)
                 return Clutter.EVENT_PROPAGATE;
@@ -242,6 +245,7 @@ const DrawingCanvas = GObject.registerClass(
                     color: stroke.color,
                     points: localPoints,
                     counter: stroke.counter,
+                    text: stroke.text,
                 }, stroke.strokeWidth);
             }
 
@@ -285,6 +289,8 @@ export default class GradiaCompanion extends Extension {
         this._toolbar = null;
         this._canvases = [];
         this._overlays = [];
+        this._textEntry = null;
+        this._pendingTextStroke = null;
 
         const self = this;
 
@@ -299,6 +305,8 @@ export default class GradiaCompanion extends Extension {
         });
 
         this._screenshotTakenId = Main.screenshotUI.connect('screenshot-taken', (_ui, file) => {
+            self._commitTextEntry();
+
             const hasAny = self._canvases.some(c => c.hasStrokes());
             if (hasAny) {
                 const strokeData = self._buildStrokeData();
@@ -327,6 +335,134 @@ export default class GradiaCompanion extends Extension {
         this._gradiaSettings = null;
 
         this._removeUI();
+    }
+
+    _spawnTextEntry(stageX, stageY) {
+        if (this._textEntry) {
+            this._commitTextEntry();
+            return;
+        }
+
+        const ui = Main.screenshotUI;
+        const primaryBin = ui._primaryMonitorBin;
+        if (!primaryBin)
+            return;
+
+        const [ok, localX, localY] = primaryBin.transform_stage_point(stageX, stageY);
+        if (!ok)
+            return;
+
+        this._textTargetCanvas = this._canvases[0] ?? null;
+        for (const canvas of this._canvases) {
+            const [hit] = canvas.transform_stage_point(stageX, stageY);
+            if (hit) {
+                this._textTargetCanvas = canvas;
+                break;
+            }
+        }
+
+        this._pendingTextStroke = {
+            color: this._toolbar.selectedColor,
+            toolId: 'text',
+            strokeWidth: this._toolbar.lineWidth,
+            stagePoints: [{ x: stageX, y: stageY }],
+            text: '',
+        };
+
+        const fontSize = Math.max(8, Math.round(this._toolbar.lineWidth * 3));
+
+        const entry = new St.Entry({
+            style_class: 'gradia-text-entry',
+            reactive: true,
+            can_focus: true,
+        });
+
+        entry.style = `
+            color: ${this._toolbar.selectedColor};
+            caret-color: ${this._toolbar.selectedColor};
+            font-size: ${fontSize}px;
+            font-family: "Adwaita Sans";
+        `;
+
+        entry.set_x_expand(false);
+        entry.set_width(fontSize * 4);
+        primaryBin.add_child(entry);
+
+        const allocId = entry.connect('notify::allocation', () => {
+            entry.disconnect(allocId);
+
+            const node = entry.get_theme_node();
+            const paddingTop = node.get_padding(St.Side.TOP);
+            const paddingLeft = node.get_padding(St.Side.LEFT);
+
+            entry.set_position(
+                Math.round(localX - paddingLeft),
+                Math.round(localY - paddingTop)
+            );
+        });
+
+        const clutterText = entry.get_clutter_text();
+
+        clutterText.connect('text-changed', () => {
+            const [, naturalWidth] = clutterText.get_preferred_width(-1);
+            entry.set_width(Math.max(fontSize * 4, naturalWidth + fontSize));
+        });
+
+        clutterText.connect('key-press-event', (_actor, event) => {
+            const sym = event.get_key_symbol();
+            if (sym === Clutter.KEY_Return || sym === Clutter.KEY_KP_Enter)
+                return this._commitTextEntry(), Clutter.EVENT_STOP;
+            if (sym === Clutter.KEY_Escape)
+                return this._cancelTextEntry(), Clutter.EVENT_STOP;
+            return Clutter.EVENT_PROPAGATE;
+        });
+
+        this._committingText = false;
+        clutterText.connect('notify::has-key-focus', () => {
+            if (!clutterText.has_key_focus() && !this._committingText)
+                this._commitTextEntry();
+        });
+
+        entry.grab_key_focus();
+        this._textEntry = entry;
+    }
+
+    _commitTextEntry() {
+        if (!this._textEntry)
+            return;
+
+        this._committingText = true;
+        const text = this._textEntry.get_text()?.trim() ?? '';
+        if (text.length > 0 && this._pendingTextStroke) {
+            this._pendingTextStroke.text = text;
+            this._textTargetCanvas?.commitTextStroke(this._pendingTextStroke);
+        }
+
+        this._textEntry.destroy();
+        this._textEntry = null;
+        this._pendingTextStroke = null;
+        this._textTargetCanvas = null;
+
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._committingText = false;
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _cancelTextEntry() {
+        if (!this._textEntry)
+            return;
+
+        this._committingText = true;
+        this._textEntry.destroy();
+        this._textEntry = null;
+        this._pendingTextStroke = null;
+        this._textTargetCanvas = null;
+
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._committingText = false;
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _buildStrokeData() {
@@ -363,6 +499,7 @@ export default class GradiaCompanion extends Extension {
                 toolId: s.toolId,
                 counter: s.counter,
                 strokeWidth: s.strokeWidth,
+                text: s.text,
                 stagePoints: s.stagePoints.map(p => ({ x: p.x, y: p.y })),
             }))
         );
@@ -415,6 +552,7 @@ export default class GradiaCompanion extends Extension {
                 color: stroke.color,
                 points: converted,
                 counter: stroke.counter,
+                text: stroke.text,
             }, lw);
         }
 
@@ -426,6 +564,9 @@ export default class GradiaCompanion extends Extension {
     }
 
     _setTool(id) {
+        if (id !== 'text')
+            this._commitTextEntry();
+
         const drawing = this._isDrawingTool(id);
 
         for (const canvas of this._canvases)
@@ -547,6 +688,16 @@ export default class GradiaCompanion extends Extension {
             const overlay = new DrawingInputOverlay(canvas, {
                 style: 'background-color: transparent;',
             });
+
+            overlay.connect('button-press-event', (_actor, event) => {
+                if (this._toolbar?.selectedTool !== 'text')
+                    return Clutter.EVENT_PROPAGATE;
+
+                const [stageX, stageY] = event.get_coords();
+                this._spawnTextEntry(stageX, stageY);
+                return Clutter.EVENT_STOP;
+            });
+
             bin.add_child(overlay);
             this._overlays.push(overlay);
         }
@@ -572,6 +723,10 @@ export default class GradiaCompanion extends Extension {
         });
 
         this._toolbar.connect('undo', () => {
+            if (this._textEntry) {
+                this._cancelTextEntry();
+                return;
+            }
             for (let i = this._canvases.length - 1; i >= 0; i--) {
                 if (this._canvases[i].hasStrokes()) {
                     this._canvases[i].undo();
@@ -581,6 +736,7 @@ export default class GradiaCompanion extends Extension {
         });
 
         this._toolbar.connect('clear', () => {
+            this._cancelTextEntry();
             for (const canvas of this._canvases)
                 canvas.clear();
         });
@@ -625,6 +781,8 @@ export default class GradiaCompanion extends Extension {
     }
 
     _removeUI() {
+        this._cancelTextEntry();
+
         const ui = Main.screenshotUI;
 
         if (this._keyPressId) {

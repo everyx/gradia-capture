@@ -168,6 +168,30 @@ export const TOOLS = [
         },
     },
     {
+        id: 'text',
+        name: 'Text',
+        icon: 'icons/text-insert2-symbolic.svg',
+        isDrawing: true,
+        isText: true,
+        beginStroke: () => ({ points: [], text: '' }),
+        render(cr, stroke, lineWidth) {
+            if (!stroke.text || stroke.points.length < 1)
+                return;
+
+            const pt = stroke.points[0];
+            const { r, g, b } = hexToRgb(stroke.color);
+            const fontSize = Math.max(8, Math.round(lineWidth * 3));
+
+            cr.selectFontFace('Adwaita Sans', Cairo.FontSlant.NORMAL, Cairo.FontWeight.NORMAL);
+            cr.setFontSize(fontSize);
+
+            const extents = cr.textExtents(stroke.text);
+            cr.setSourceRGBA(r, g, b, 1.0);
+            cr.moveTo(pt.x - extents.xBearing, pt.y - extents.yBearing);
+            cr.showText(stroke.text);
+        },
+    },
+    {
         id: 'stamp',
         name: 'Number Stamp',
         icon: 'icons/one-circle-symbolic.svg',
