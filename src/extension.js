@@ -352,11 +352,19 @@ export default class GradiaCompanion extends Extension {
         if (!ok)
             return;
 
+        const bins = ui._monitorBins?.length > 0
+            ? ui._monitorBins
+            : (primaryBin ? [primaryBin] : []);
+
         this._textTargetCanvas = this._canvases[0] ?? null;
-        for (const canvas of this._canvases) {
-            const [hit] = canvas.transform_stage_point(stageX, stageY);
-            if (hit) {
-                this._textTargetCanvas = canvas;
+        for (let i = 0; i < bins.length; i++) {
+            const [binOk, bx, by] = bins[i].transform_stage_point(stageX, stageY);
+            if (!binOk) continue;
+            const alloc = bins[i].allocation;
+            const w = alloc.get_width();
+            const h = alloc.get_height();
+            if (bx >= 0 && bx < w && by >= 0 && by < h) {
+                this._textTargetCanvas = this._canvases[i];
                 break;
             }
         }
