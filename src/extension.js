@@ -530,7 +530,7 @@ export default class GradiaCompanion extends Extension {
                 style_class: 'gradia-selection-trash',
                 child: new St.Icon({
                     icon_name: 'user-trash-symbolic',
-                    style: 'icon-size: 14px;',
+                    style: 'icon-size: 16px;',
                 }),
                 reactive: true,
             });
@@ -541,7 +541,7 @@ export default class GradiaCompanion extends Extension {
                     this._hideTrashButton();
                 }
             });
-            primaryBin.add_child(this._trashButton);
+            primaryBin.insert_child_below(this._trashButton, Main.screenshotUI._panel);
         }
 
         const btnX = Math.round(localTRX - TRASH_BUTTON_RADIUS);

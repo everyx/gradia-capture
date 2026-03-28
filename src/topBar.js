@@ -9,7 +9,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import { TOOLS, SELECTION_PADDING } from './tools.js';
 
-export const TRASH_BUTTON_RADIUS = 14;
+export const TRASH_BUTTON_RADIUS = 16;
 
 const COLORS = [
     { name: 'White', hex: '#ffffff' },
@@ -189,7 +189,7 @@ export const Toolbar = GObject.registerClass({
             const tooltip = new ToolbarTooltip(btn, tool.name);
             Main.uiGroup.add_child(tooltip);
 
-            if (i === 0)
+            if (i === 1)
                 this._addSeparator();
         }
     }

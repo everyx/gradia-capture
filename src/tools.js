@@ -173,13 +173,28 @@ export const TOOLS = [
         bounds(stroke) {
             const pt = stroke.stagePoints[0];
             const fontSize = Math.max(8, Math.round((stroke.strokeWidth ?? 4) * 3));
-            const approxW = (stroke.text?.length ?? 0) * fontSize * 0.6;
-            const approxH = fontSize * 1.2;
+
+            if (!stroke.text)
+                return {
+                    minX: pt.x - SELECTION_PADDING,
+                    minY: pt.y - SELECTION_PADDING,
+                    maxX: pt.x + SELECTION_PADDING,
+                    maxY: pt.y + SELECTION_PADDING,
+                };
+
+            const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, 1, 1);
+            const cr = new Cairo.Context(surface);
+            cr.selectFontFace('Sans', Cairo.FontSlant.NORMAL, Cairo.FontWeight.NORMAL);
+            cr.setFontSize(fontSize);
+            const extents = cr.textExtents(stroke.text);
+            cr.$dispose();
+            surface.finish();
+
             return {
                 minX: pt.x - SELECTION_PADDING,
-                minY: pt.y - approxH - SELECTION_PADDING,
-                maxX: pt.x + approxW + SELECTION_PADDING,
-                maxY: pt.y + SELECTION_PADDING,
+                minY: pt.y - SELECTION_PADDING,
+                maxX: pt.x + extents.width + SELECTION_PADDING,
+                maxY: pt.y + extents.height + SELECTION_PADDING,
             };
         },
         hitTest(stroke, sx, sy) {
