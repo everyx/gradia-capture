@@ -41,6 +41,21 @@ function makeIcon(spec, extensionPath = '') {
     });
 }
 
+function rectBounds(pts, pad) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of pts) {
+        if (p.x < minX) minX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y > maxY) maxY = p.y;
+    }
+    return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+}
+
+function rectHit(bounds, sx, sy) {
+    return sx >= bounds.minX && sx <= bounds.maxX && sy >= bounds.minY && sy <= bounds.maxY;
+}
+
 export const TOOLS = [
     {
         id: 'select',
@@ -49,23 +64,40 @@ export const TOOLS = [
         isDrawing: false,
         render: null,
         beginStroke: null,
+        bounds: null,
+        hitTest: null,
+    },
+    {
+        id: 'drag',
+        name: 'Drag',
+        icon: 'input-mouse-symbolic',
+        isDrawing: false,
+        isDrag: true,
+        render: null,
+        beginStroke: null,
+        bounds: null,
+        hitTest: null,
     },
     {
         id: 'freehand',
         name: 'Freehand',
         icon: 'document-edit-symbolic',
         isDrawing: true,
-        beginStroke: () => ({ points: [] }),
+        beginStroke: () => ({}),
+        bounds(stroke) {
+            return rectBounds(stroke.stagePoints, SELECTION_PADDING + (stroke.strokeWidth ?? 4));
+        },
+        hitTest(stroke, sx, sy) {
+            return rectHit(this.bounds(stroke), sx, sy);
+        },
         render(cr, stroke, lineWidth) {
-            if (stroke.points.length < 2)
-                return;
+            if (stroke.points.length < 2) return;
             const { r, g, b } = hexToRgb(stroke.color);
             cr.setSourceRGBA(r, g, b, 1.0);
             cr.setLineWidth(lineWidth);
-            const pts = stroke.points;
-            cr.moveTo(pts[0].x, pts[0].y);
-            for (let i = 1; i < pts.length; i++)
-                cr.lineTo(pts[i].x, pts[i].y);
+            cr.moveTo(stroke.points[0].x, stroke.points[0].y);
+            for (let i = 1; i < stroke.points.length; i++)
+                cr.lineTo(stroke.points[i].x, stroke.points[i].y);
             cr.stroke();
         },
     },
@@ -74,22 +106,20 @@ export const TOOLS = [
         name: 'Rectangle',
         icon: 'icons/square-outline-thick-symbolic.svg',
         isDrawing: true,
-        beginStroke: () => ({ points: [] }),
+        beginStroke: () => ({}),
+        bounds(stroke) {
+            return rectBounds(stroke.stagePoints, SELECTION_PADDING + (stroke.strokeWidth ?? 4));
+        },
+        hitTest(stroke, sx, sy) {
+            return rectHit(this.bounds(stroke), sx, sy);
+        },
         render(cr, stroke, lineWidth) {
-            if (stroke.points.length < 2)
-                return;
+            if (stroke.points.length < 2) return;
             const { r, g, b } = hexToRgb(stroke.color);
             cr.setSourceRGBA(r, g, b, 1.0);
             cr.setLineWidth(lineWidth);
-            const pts = stroke.points;
-            const p0 = pts[0];
-            const p1 = pts[pts.length - 1];
-            cr.rectangle(
-                Math.min(p0.x, p1.x),
-                Math.min(p0.y, p1.y),
-                Math.abs(p1.x - p0.x),
-                Math.abs(p1.y - p0.y)
-            );
+            const p0 = stroke.points[0], p1 = stroke.points[stroke.points.length - 1];
+            cr.rectangle(Math.min(p0.x, p1.x), Math.min(p0.y, p1.y), Math.abs(p1.x - p0.x), Math.abs(p1.y - p0.y));
             cr.stroke();
         },
     },
@@ -98,21 +128,19 @@ export const TOOLS = [
         name: 'Solid Rectangle',
         icon: 'icons/square-filled-symbolic.svg',
         isDrawing: true,
-        beginStroke: () => ({ points: [] }),
+        beginStroke: () => ({}),
+        bounds(stroke) {
+            return rectBounds(stroke.stagePoints, SELECTION_PADDING);
+        },
+        hitTest(stroke, sx, sy) {
+            return rectHit(this.bounds(stroke), sx, sy);
+        },
         render(cr, stroke, lineWidth) {
-            if (stroke.points.length < 2)
-                return;
+            if (stroke.points.length < 2) return;
             const { r, g, b } = hexToRgb(stroke.color);
             cr.setSourceRGBA(r, g, b, 1.0);
-            const pts = stroke.points;
-            const p0 = pts[0];
-            const p1 = pts[pts.length - 1];
-            cr.rectangle(
-                Math.min(p0.x, p1.x),
-                Math.min(p0.y, p1.y),
-                Math.abs(p1.x - p0.x),
-                Math.abs(p1.y - p0.y)
-            );
+            const p0 = stroke.points[0], p1 = stroke.points[stroke.points.length - 1];
+            cr.rectangle(Math.min(p0.x, p1.x), Math.min(p0.y, p1.y), Math.abs(p1.x - p0.x), Math.abs(p1.y - p0.y));
             cr.fill();
         },
     },
@@ -121,18 +149,22 @@ export const TOOLS = [
         name: 'Highlighter',
         icon: 'icons/marker-symbolic.svg',
         isDrawing: true,
-        beginStroke: () => ({ points: [] }),
+        beginStroke: () => ({}),
+        bounds(stroke) {
+            return rectBounds(stroke.stagePoints, SELECTION_PADDING + (stroke.strokeWidth ?? 4) * 4);
+        },
+        hitTest(stroke, sx, sy) {
+            return rectHit(this.bounds(stroke), sx, sy);
+        },
         render(cr, stroke, lineWidth) {
-            if (stroke.points.length < 2)
-                return;
+            if (stroke.points.length < 2) return;
             const { r, g, b } = hexToRgb(stroke.color);
             cr.setSourceRGBA(r, g, b, 0.4);
             cr.setLineWidth(lineWidth * 4);
             cr.setLineCap(Cairo.LineCap.SQUARE);
-            const pts = stroke.points;
-            cr.moveTo(pts[0].x, pts[0].y);
-            for (let i = 1; i < pts.length; i++)
-                cr.lineTo(pts[i].x, pts[i].y);
+            cr.moveTo(stroke.points[0].x, stroke.points[0].y);
+            for (let i = 1; i < stroke.points.length; i++)
+                cr.lineTo(stroke.points[i].x, stroke.points[i].y);
             cr.stroke();
         },
     },
@@ -141,18 +173,21 @@ export const TOOLS = [
         name: 'Arrow',
         icon: 'icons/arrow1-top-right-symbolic.svg',
         isDrawing: true,
-        beginStroke: () => ({ points: [] }),
+        beginStroke: () => ({}),
+        bounds(stroke) {
+            return rectBounds(stroke.stagePoints, SELECTION_PADDING + (stroke.strokeWidth ?? 4) * 2);
+        },
+        hitTest(stroke, sx, sy) {
+            return rectHit(this.bounds(stroke), sx, sy);
+        },
         render(cr, stroke, lineWidth) {
-            if (stroke.points.length < 2)
-                return;
+            if (stroke.points.length < 2) return;
             const { r, g, b } = hexToRgb(stroke.color);
             cr.setSourceRGBA(r, g, b, 1.0);
             cr.setLineWidth(lineWidth);
             cr.setLineCap(Cairo.LineCap.ROUND);
             cr.setLineJoin(Cairo.LineJoin.ROUND);
-            const pts = stroke.points;
-            const p0 = pts[0];
-            const p1 = pts[pts.length - 1];
+            const p0 = stroke.points[0], p1 = stroke.points[stroke.points.length - 1];
             cr.moveTo(p0.x, p0.y);
             cr.lineTo(p1.x, p1.y);
             cr.stroke();
@@ -173,11 +208,20 @@ export const TOOLS = [
         icon: 'icons/text-insert2-symbolic.svg',
         isDrawing: true,
         isText: true,
-        beginStroke: () => ({ points: [], text: '' }),
+        beginStroke: () => ({ text: '' }),
+        bounds(stroke) {
+            const pt = stroke.stagePoints[0];
+            const fontSize = Math.max(8, Math.round((stroke.strokeWidth ?? 4) * 3));
+            const approxW = (stroke.text?.length ?? 0) * fontSize * 0.6;
+            const approxH = fontSize * 1.2;
+            return { minX: pt.x - SELECTION_PADDING, minY: pt.y - approxH - SELECTION_PADDING, maxX: pt.x + approxW + SELECTION_PADDING, maxY: pt.y + SELECTION_PADDING };
+        },
+        hitTest(stroke, sx, sy) {
+            if (!stroke.text || stroke.stagePoints.length < 1) return false;
+            return rectHit(this.bounds(stroke), sx, sy);
+        },
         render(cr, stroke, lineWidth) {
-            if (!stroke.text || stroke.points.length < 1)
-                return;
-
+            if (!stroke.text || stroke.points.length < 1) return;
             const pt = stroke.points[0];
             const { r, g, b } = hexToRgb(stroke.color);
             const fontSize = Math.max(8, Math.round(lineWidth * 3));
@@ -197,11 +241,18 @@ export const TOOLS = [
         icon: 'icons/one-circle-symbolic.svg',
         isDrawing: true,
         isStamp: true,
-        beginStroke: () => ({ points: [], counter: 1 }),
+        beginStroke: () => ({ counter: 1 }),
+        bounds(stroke) {
+            const pt = stroke.stagePoints[0];
+            const r = (stroke.strokeWidth ?? 4) * 5 + SELECTION_PADDING;
+            return { minX: pt.x - r, minY: pt.y - r, maxX: pt.x + r, maxY: pt.y + r };
+        },
+        hitTest(stroke, sx, sy) {
+            if (stroke.stagePoints.length < 1) return false;
+            return rectHit(this.bounds(stroke), sx, sy);
+        },
         render(cr, stroke, lineWidth) {
-            if (stroke.points.length < 1)
-                return;
-
+            if (stroke.points.length < 1) return;
             const pt = stroke.points[0];
             const radius = lineWidth * 5;
             const rgb = hexToRgb(stroke.color);
@@ -221,11 +272,9 @@ export const TOOLS = [
             layout.set_text(label, -1);
 
             const [, extents] = layout.get_pixel_extents();
-            const tx = pt.x - extents.width / 2 - extents.x;
-            const ty = pt.y - extents.height / 2 - extents.y;
 
             cr.setSourceRGBA(textColor.r, textColor.g, textColor.b, 1.0);
-            cr.moveTo(tx, ty);
+            cr.moveTo(pt.x - extents.width / 2 - extents.x, pt.y - extents.height / 2 - extents.y);
             PangoCairo.show_layout(cr, layout);
         },
     },
@@ -294,8 +343,7 @@ export const Toolbar = GObject.registerClass({
     }
 
     _restoreToolEntry(toolId) {
-        if (!this._settings)
-            return;
+        if (!this._settings) return;
         const { color, lineWidth } = this._settings.getToolEntry(toolId, this._selectedColor, this._lineWidth);
         this._applyColor(color);
         this._applyLineWidth(lineWidth);
@@ -307,16 +355,14 @@ export const Toolbar = GObject.registerClass({
             const isSelected = btn._colorHex === hex;
             btn.checked = isSelected;
             btn.style = `background-color: ${btn._colorHex};`;
-            if (btn._checkIcon)
-                btn._checkIcon.visible = isSelected;
+            if (btn._checkIcon) btn._checkIcon.visible = isSelected;
         }
         this.emit('color-changed', hex);
     }
 
     _applyLineWidth(width) {
         this._lineWidth = width;
-        const sliderValue = (width - LINE_WIDTH_MIN) / (LINE_WIDTH_MAX - LINE_WIDTH_MIN);
-        this._slider.value = sliderValue;
+        this._slider.value = (width - LINE_WIDTH_MIN) / (LINE_WIDTH_MAX - LINE_WIDTH_MIN);
         this.emit('line-width-changed', width);
     }
 
@@ -368,8 +414,7 @@ export const Toolbar = GObject.registerClass({
     }
 
     _buildLineWidthSlider() {
-        const sliderValue = (this._lineWidth - LINE_WIDTH_MIN) / (LINE_WIDTH_MAX - LINE_WIDTH_MIN);
-        this._slider = new Slider(sliderValue);
+        this._slider = new Slider((this._lineWidth - LINE_WIDTH_MIN) / (LINE_WIDTH_MAX - LINE_WIDTH_MIN));
         this._slider.style = 'width: 80px;';
         this._slider.y_align = Clutter.ActorAlign.CENTER;
         this._slider.connect('notify::value', () => {
@@ -401,10 +446,7 @@ export const Toolbar = GObject.registerClass({
     }
 
     _addSeparator() {
-        this.add_child(new St.Widget({
-            style_class: 'gradia-separator',
-            y_expand: true,
-        }));
+        this.add_child(new St.Widget({ style_class: 'gradia-separator', y_expand: true }));
     }
 
     _onToolClicked(id) {

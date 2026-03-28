@@ -66,3 +66,22 @@
 .gradia-text-entry:focus {
     background-color: transparent;
 }
+
+.gradia-selection-trash {
+    min-width: 28px;
+    max-width: 28px;
+    min-height: 28px;
+    max-height: 28px;
+    border-radius: 9999px;
+    padding: 0;
+    background-color: #3a3a3d;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.gradia-selection-trash:hover {
+    background-color: #c0392b;
+}
+
+.gradia-selection-trash:active {
+    background-color: #922b21;
+}
