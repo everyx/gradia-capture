@@ -2,6 +2,10 @@
   "name": "Gradia Companion",
   "description": "Companion for the Gradia app",
   "uuid": "gradia-integration@alexandervanhee.github.io",
+  "url": "https://github.com/AlexanderVanhee/gradia-companion",
+  "donations": {
+     "kofi": "alexandervanhee"
+  },
   "shell-version": [
     "49","50"
   ]
