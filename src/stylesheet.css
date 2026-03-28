@@ -11,7 +11,21 @@
     max-height: 32px;
     border-radius: 12px;
     padding: 0;
+    background-color: transparent;
 }
+
+.gradia-square-button:checked {
+    background-color: #48484b;
+}
+
+.gradia-square-button:hover {
+    background-color: #515155;
+}
+
+.gradia-square-button:active {
+    background-color: #67676c;
+}
+
 .gradia-color-button {
     border-radius: 99999px;
     width: 20px;
@@ -24,9 +38,7 @@
     padding: 0;
     border: 2px solid transparent;
 }
-.gradia-color-button:checked {
-    border-color: transparent;
-}
+
 .gradia-separator {
     background-color: rgba(255, 255, 255, 0.3);
     width: 1px;
@@ -43,16 +55,14 @@
 
 .gradia-text-entry {
     background-color: transparent;
-    border: 1.5px dashed rgba(255, 255, 255, 0.6);
+    border: 1.5px solid -st-accent-color;
     border-radius: 3px;
     padding: 2px 4px;
-    min-width: 80px;
+    min-width: 40px;
     selection-background-color: rgba(255, 255, 255, 0.25);
     box-shadow: none;
 }
 
 .gradia-text-entry:focus {
     background-color: transparent;
-    border-color: rgba(255, 255, 255, 0.9);
-    box-shadow: none;
 }

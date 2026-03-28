@@ -332,15 +332,13 @@ export default class GradiaCompanion extends Extension {
                   scale: ui._cursorScale,
               };
 
-              try {
-                  file = await captureAndStoreScreenshot(
-                      texture,
-                      geometry,
-                      ui._scale,
-                      cursor,
-                      (bytes, pixbuf) => self._compositeStrokesOntoPixbuf(bytes, pixbuf, strokeData)
-                  );
-              } catch (_e) {}
+              file = await captureAndStoreScreenshot(
+                  texture,
+                  geometry,
+                  ui._scale,
+                  cursor,
+                  (bytes, pixbuf) => self._compositeStrokesOntoPixbuf(bytes, pixbuf, strokeData)
+              );
           } else if (ui._windowButton.checked) {
               return self._originalSaveScreenshot();
           }
@@ -540,6 +538,7 @@ export default class GradiaCompanion extends Extension {
 
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this._committingText = false;
+             Main.screenshotUI.grab_key_focus();
             return GLib.SOURCE_REMOVE;
         });
     }
@@ -556,6 +555,7 @@ export default class GradiaCompanion extends Extension {
 
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this._committingText = false;
+            Main.screenshotUI.grab_key_focus();
             return GLib.SOURCE_REMOVE;
         });
     }
