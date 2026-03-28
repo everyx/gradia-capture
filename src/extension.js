@@ -7,15 +7,20 @@ import GObject from 'gi://GObject';
 import St from 'gi://St';
 import Gio from 'gi://Gio';
 
-import { Toolbar, TOOLS} from './topBar.js';
+import { Toolbar, TRASH_BUTTON_RADIUS } from './topBar.js';
+import { TOOLS, SELECTION_PADDING } from './tools.js';
 import { GradiaSettings } from './settings.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
 
 const MAX_CANVAS_WIDTH = 1920;
 const MAX_CANVAS_HEIGHT = 1080;
 
-export const SELECTION_PADDING = 8;
-export const TRASH_BUTTON_RADIUS = 14;
+const MODE_BUTTONS = [
+    ['_windowButton',    '_windowButtonId'],
+    ['_selectionButton', '_selectionButtonId'],
+    ['_screenButton',    '_screenButtonId'],
+    ['_castButton',      '_castButtonId'],
+];
 
 export function setAreaSelectorHandlesVisible(selector, visible) {
     const handles = [
@@ -328,7 +333,7 @@ const DrawingCanvas = GObject.registerClass(
                     const tl = this._stageToLocal(bounds.minX, bounds.minY);
                     const br = this._stageToLocal(bounds.maxX, bounds.maxY);
                     if (tl && br) {
-                        cr.setSourceRGBA(0.2, 0.6, 1.0, 0.9);
+                        cr.setSourceRGBA(1.0, 1.0, 1.0, 0.9);
                         cr.setLineWidth(1.5);
                         cr.setDash([5, 4], 0);
                         cr.rectangle(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
@@ -627,7 +632,7 @@ export default class GradiaCompanion extends Extension {
         cr.paint();
 
         for (const stroke of strokes) {
-            const tool = TOOLS.find(t => t.id === stroke.toolId);
+            const tool = getToolDef(stroke.toolId);
             if (!tool?.render)
                 continue;
 
@@ -742,17 +747,8 @@ export default class GradiaCompanion extends Extension {
         this._textEntry = entry;
     }
 
-    _commitTextEntry() {
-        if (!this._textEntry)
-            return;
-
+    _teardownTextEntry() {
         this._committingText = true;
-        const text = this._textEntry.get_text()?.trim() ?? '';
-        if (text.length > 0 && this._pendingTextStroke) {
-            this._pendingTextStroke.text = text;
-            this._textTargetCanvas?.commitTextStroke(this._pendingTextStroke);
-        }
-
         this._textEntry.destroy();
         this._textEntry = null;
         this._pendingTextStroke = null;
@@ -765,21 +761,24 @@ export default class GradiaCompanion extends Extension {
         });
     }
 
+    _commitTextEntry() {
+        if (!this._textEntry)
+            return;
+
+        const text = this._textEntry.get_text()?.trim() ?? '';
+        if (text.length > 0 && this._pendingTextStroke) {
+            this._pendingTextStroke.text = text;
+            this._textTargetCanvas?.commitTextStroke(this._pendingTextStroke);
+        }
+
+        this._teardownTextEntry();
+    }
+
     _cancelTextEntry() {
         if (!this._textEntry)
             return;
 
-        this._committingText = true;
-        this._textEntry.destroy();
-        this._textEntry = null;
-        this._pendingTextStroke = null;
-        this._textTargetCanvas = null;
-
-        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            this._committingText = false;
-            Main.screenshotUI.grab_key_focus();
-            return GLib.SOURCE_REMOVE;
-        });
+        this._teardownTextEntry();
     }
 
     _buildStrokeData() {
@@ -930,13 +929,11 @@ export default class GradiaCompanion extends Extension {
         if (!selector)
             return;
 
-        if (this._dragStartedId) {
-            selector.disconnect(this._dragStartedId);
-            this._dragStartedId = null;
-        }
-        if (this._dragEndedId) {
-            selector.disconnect(this._dragEndedId);
-            this._dragEndedId = null;
+        for (const id of ['_dragStartedId', '_dragEndedId']) {
+            if (this[id]) {
+                selector.disconnect(this[id]);
+                this[id] = null;
+            }
         }
     }
 
@@ -1091,18 +1088,9 @@ export default class GradiaCompanion extends Extension {
             return Clutter.EVENT_PROPAGATE;
         });
 
-        this._windowButtonId = ui._windowButton.connect('notify::checked', () => {
-            this._updateVisibilityForMode();
-        });
-        this._selectionButtonId = ui._selectionButton.connect('notify::checked', () => {
-            this._updateVisibilityForMode();
-        });
-        this._screenButtonId = ui._screenButton.connect('notify::checked', () => {
-            this._updateVisibilityForMode();
-        });
-        this._castButtonId = ui._castButton.connect('notify::checked', () => {
-            this._updateVisibilityForMode();
-        });
+        for (const [prop, id] of MODE_BUTTONS) {
+            this[id] = ui[prop].connect('notify::checked', () => this._updateVisibilityForMode());
+        }
 
         this._connectDragOpacity();
 
@@ -1126,21 +1114,11 @@ export default class GradiaCompanion extends Extension {
             this._keyPressId = null;
         }
 
-        if (this._windowButtonId) {
-            ui._windowButton.disconnect(this._windowButtonId);
-            this._windowButtonId = null;
-        }
-        if (this._selectionButtonId) {
-            ui._selectionButton.disconnect(this._selectionButtonId);
-            this._selectionButtonId = null;
-        }
-        if (this._screenButtonId) {
-            ui._screenButton.disconnect(this._screenButtonId);
-            this._screenButtonId = null;
-        }
-        if (this._castButtonId) {
-            ui._castButton.disconnect(this._castButtonId);
-            this._castButtonId = null;
+        for (const [prop, id] of MODE_BUTTONS) {
+            if (this[id]) {
+                ui[prop].disconnect(this[id]);
+                this[id] = null;
+            }
         }
 
         this._disconnectDragOpacity();
