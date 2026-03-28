@@ -2,19 +2,20 @@ import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import Clutter from 'gi://Clutter';
 import Cairo from 'gi://cairo';
-import GdkPixbuf from 'gi://GdkPixbuf';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
-import Shell from 'gi://Shell';
 import St from 'gi://St';
 import Gio from 'gi://Gio';
 
-import { Toolbar, TOOLS } from './topBar.js';
+import { Toolbar, TOOLS} from './topBar.js';
 import { GradiaSettings } from './settings.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
 
 const MAX_CANVAS_WIDTH = 1920;
 const MAX_CANVAS_HEIGHT = 1080;
+
+export const SELECTION_PADDING = 8;
+export const TRASH_BUTTON_RADIUS = 14;
 
 export function setAreaSelectorHandlesVisible(selector, visible) {
     const handles = [
@@ -55,6 +56,7 @@ const DrawingCanvas = GObject.registerClass(
             this._dragButton = 0;
             this._dragGrab = null;
             this._stampCounter = 1;
+            this._selectedStroke = null;
 
             this._scaleX = 1;
             this._scaleY = 1;
@@ -63,26 +65,91 @@ const DrawingCanvas = GObject.registerClass(
         }
 
         get strokes() { return this._strokes; }
+        get selectedStroke() { return this._selectedStroke; }
 
         setColor(hex) { this._strokeColor = hex; }
-        setTool(id) { this._toolId = id; }
+        setTool(id) {
+            this._toolId = id;
+            if (id !== 'drag')
+                this._selectedStroke = null;
+        }
         setStrokeWidth(w) { this._strokeWidth = w; }
 
         clear() {
             this._strokes = [];
             this._currentStroke = null;
             this._stampCounter = 1;
+            this._selectedStroke = null;
             this.queue_repaint();
         }
 
         undo() {
             if (this._strokes.length > 0) {
                 this._strokes.pop();
+                this._selectedStroke = null;
                 this.queue_repaint();
             }
         }
 
         hasStrokes() { return this._strokes.length > 0; }
+
+        deleteSelectedStroke() {
+            if (!this._selectedStroke)
+                return false;
+            const idx = this._strokes.indexOf(this._selectedStroke);
+            if (idx !== -1)
+                this._strokes.splice(idx, 1);
+            this._selectedStroke = null;
+            this.queue_repaint();
+            return true;
+        }
+
+        selectStrokeAt(stageX, stageY) {
+            for (let i = this._strokes.length - 1; i >= 0; i--) {
+                const stroke = this._strokes[i];
+                const tool = getToolDef(stroke.toolId);
+                if (tool?.hitTest?.(stroke, stageX, stageY)) {
+                    this._selectedStroke = stroke;
+                    this.queue_repaint();
+                    return stroke;
+                }
+            }
+            this._selectedStroke = null;
+            this.queue_repaint();
+            return null;
+        }
+
+        clearSelection() {
+            if (this._selectedStroke) {
+                this._selectedStroke = null;
+                this.queue_repaint();
+            }
+        }
+
+        moveSelectedStroke(dx, dy) {
+            if (!this._selectedStroke)
+                return;
+            for (const p of this._selectedStroke.stagePoints) {
+                p.x += dx;
+                p.y += dy;
+            }
+            this.queue_repaint();
+        }
+
+        adoptStroke(stroke) {
+            this._strokes.push(stroke);
+            this._selectedStroke = stroke;
+            this.queue_repaint();
+        }
+
+        evictStroke(stroke) {
+            const idx = this._strokes.indexOf(stroke);
+            if (idx !== -1)
+                this._strokes.splice(idx, 1);
+            if (this._selectedStroke === stroke)
+                this._selectedStroke = null;
+            this.queue_repaint();
+        }
 
         _updateScale() {
             const alloc = this.allocation;
@@ -242,7 +309,9 @@ const DrawingCanvas = GObject.registerClass(
                 if (!tool?.render)
                     continue;
 
-                const localPoints = stroke.stagePoints.map(sp => this._stageToLocal(sp.x, sp.y)).filter(p => p !== null);
+                const localPoints = stroke.stagePoints
+                    .map(sp => this._stageToLocal(sp.x, sp.y))
+                    .filter(p => p !== null);
 
                 tool.render(cr, {
                     color: stroke.color,
@@ -252,6 +321,21 @@ const DrawingCanvas = GObject.registerClass(
                 }, stroke.strokeWidth);
             }
 
+            if (this._selectedStroke) {
+                const tool = getToolDef(this._selectedStroke.toolId);
+                const bounds = tool?.bounds?.(this._selectedStroke);
+                if (bounds) {
+                    const tl = this._stageToLocal(bounds.minX, bounds.minY);
+                    const br = this._stageToLocal(bounds.maxX, bounds.maxY);
+                    if (tl && br) {
+                        cr.setSourceRGBA(0.2, 0.6, 1.0, 0.9);
+                        cr.setLineWidth(1.5);
+                        cr.setDash([5, 4], 0);
+                        cr.rectangle(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+                        cr.stroke();
+                    }
+                }
+            }
             cr.$dispose();
         }
     });
@@ -293,8 +377,16 @@ export default class GradiaCompanion extends Extension {
         this._toolbar = null;
         this._canvases = [];
         this._overlays = [];
+        this._bins = [];
         this._textEntry = null;
         this._pendingTextStroke = null;
+
+        this._dragToolActive = false;
+        this._dragToolStartX = 0;
+        this._dragToolStartY = 0;
+        this._dragToolCanvas = null;
+        this._dragToolGrab = null;
+        this._trashButton = null;
 
         const self = this;
 
@@ -305,47 +397,47 @@ export default class GradiaCompanion extends Extension {
         };
 
         Main.screenshotUI._saveScreenshot = async function () {
-          const ui = Main.screenshotUI;
-          self._commitTextEntry();
-          const hasStrokes = self._canvases.some(c => c.hasStrokes());
-          if (!hasStrokes)
-              return self._originalSaveScreenshot();
+            const ui = Main.screenshotUI;
+            self._commitTextEntry();
+            const hasStrokes = self._canvases.some(c => c.hasStrokes());
+            if (!hasStrokes)
+                return self._originalSaveScreenshot();
 
-          const strokeData = self._buildStrokeData();
-          let file = null;
+            const strokeData = self._buildStrokeData();
+            let file = null;
 
-          if (ui._selectionButton.checked || ui._screenButton.checked) {
-              const content = ui._stageScreenshot.get_content();
-              if (!content)
-                  return;
+            if (ui._selectionButton.checked || ui._screenButton.checked) {
+                const content = ui._stageScreenshot.get_content();
+                if (!content)
+                    return;
 
-              const texture = content.get_texture();
-              const geometry = ui._getSelectedGeometry(true);
-              let cursorTexture = ui._cursor.content?.get_texture();
-              if (!ui._cursor.visible)
-                  cursorTexture = null;
+                const texture = content.get_texture();
+                const geometry = ui._getSelectedGeometry(true);
+                let cursorTexture = ui._cursor.content?.get_texture();
+                if (!ui._cursor.visible)
+                    cursorTexture = null;
 
-              const cursor = {
-                  texture: cursorTexture ?? null,
-                  x: ui._cursor.x * ui._scale,
-                  y: ui._cursor.y * ui._scale,
-                  scale: ui._cursorScale,
-              };
+                const cursor = {
+                    texture: cursorTexture ?? null,
+                    x: ui._cursor.x * ui._scale,
+                    y: ui._cursor.y * ui._scale,
+                    scale: ui._cursorScale,
+                };
 
-              file = await captureAndStoreScreenshot(
-                  texture,
-                  geometry,
-                  ui._scale,
-                  cursor,
-                  (bytes, pixbuf) => self._compositeStrokesOntoPixbuf(bytes, pixbuf, strokeData)
-              );
-          } else if (ui._windowButton.checked) {
-              return self._originalSaveScreenshot();
-          }
+                file = await captureAndStoreScreenshot(
+                    texture,
+                    geometry,
+                    ui._scale,
+                    cursor,
+                    (bytes, pixbuf) => self._compositeStrokesOntoPixbuf(bytes, pixbuf, strokeData)
+                );
+            } else if (ui._windowButton.checked) {
+                return self._originalSaveScreenshot();
+            }
 
-          if (file)
-              ui.emit('screenshot-taken', file);
-      };
+            if (file)
+                ui.emit('screenshot-taken', file);
+        };
 
         this._closedId = Main.screenshotUI.connect('closed', () => {
             self._removeUI();
@@ -372,6 +464,151 @@ export default class GradiaCompanion extends Extension {
         this._gradiaSettings = null;
 
         this._removeUI();
+    }
+
+    _binContainsStagePoint(bin, stageX, stageY) {
+        const [ok, lx, ly] = bin.transform_stage_point(stageX, stageY);
+        if (!ok) return false;
+        const alloc = bin.allocation;
+        return lx >= 0 && lx < alloc.get_width() && ly >= 0 && ly < alloc.get_height();
+    }
+
+    _canvasForStagePoint(stageX, stageY) {
+        for (let i = 0; i < this._bins.length; i++) {
+            if (this._binContainsStagePoint(this._bins[i], stageX, stageY))
+                return this._canvases[i];
+        }
+        return this._canvases[0] ?? null;
+    }
+
+    _getSelectedCanvasAndStroke() {
+        for (const canvas of this._canvases) {
+            if (canvas.selectedStroke)
+                return { canvas, stroke: canvas.selectedStroke };
+        }
+        return null;
+    }
+
+    _clearAllSelections(exceptCanvas = null) {
+        for (const canvas of this._canvases) {
+            if (canvas !== exceptCanvas)
+                canvas.clearSelection();
+        }
+    }
+
+    _updateTrashButton() {
+        const sel = this._getSelectedCanvasAndStroke();
+        if (!sel) {
+            this._hideTrashButton();
+            return;
+        }
+
+        const tool = getToolDef(sel.stroke.toolId);
+        const bounds = tool?.bounds?.(sel.stroke);
+        if (!bounds) {
+            this._hideTrashButton();
+            return;
+        }
+
+        const primaryBin = Main.screenshotUI._primaryMonitorBin;
+        if (!primaryBin)
+            return;
+
+        const [okTR, localTRX, localTRY] = primaryBin.transform_stage_point(bounds.maxX, bounds.minY);
+        if (!okTR) {
+            this._hideTrashButton();
+            return;
+        }
+
+        if (!this._trashButton) {
+            this._trashButton = new St.Button({
+                style_class: 'gradia-selection-trash',
+                child: new St.Icon({
+                    icon_name: 'user-trash-symbolic',
+                    style: 'icon-size: 14px;',
+                }),
+                reactive: true,
+            });
+            this._trashButton.connect('clicked', () => {
+                const s = this._getSelectedCanvasAndStroke();
+                if (s) {
+                    s.canvas.deleteSelectedStroke();
+                    this._hideTrashButton();
+                }
+            });
+            primaryBin.add_child(this._trashButton);
+        }
+
+        const btnX = Math.round(localTRX - TRASH_BUTTON_RADIUS);
+        const btnY = Math.round(localTRY - TRASH_BUTTON_RADIUS);
+        this._trashButton.set_position(btnX, btnY);
+        this._trashButton.show();
+    }
+
+    _hideTrashButton() {
+        this._trashButton?.hide();
+    }
+
+    _destroyTrashButton() {
+        if (this._trashButton) {
+            this._trashButton.destroy();
+            this._trashButton = null;
+        }
+    }
+
+    _onDragToolPress(stageX, stageY) {
+        for (let i = this._canvases.length - 1; i >= 0; i--) {
+            const stroke = this._canvases[i].selectStrokeAt(stageX, stageY);
+            if (stroke) {
+                this._clearAllSelections(this._canvases[i]);
+                this._updateTrashButton();
+
+                this._dragToolActive = true;
+                this._dragToolStartX = stageX;
+                this._dragToolStartY = stageY;
+                this._dragToolCanvas = this._canvases[i];
+                this._dragToolGrab = global.stage.grab(this._overlays[i] ?? this._overlays[0]);
+                return;
+            }
+        }
+
+        this._clearAllSelections();
+        this._hideTrashButton();
+        this._dragToolActive = false;
+    }
+
+    _onDragToolMotion(stageX, stageY) {
+        if (!this._dragToolActive || !this._dragToolCanvas)
+            return;
+
+        const dx = stageX - this._dragToolStartX;
+        const dy = stageY - this._dragToolStartY;
+
+        const stroke = this._dragToolCanvas.selectedStroke;
+        const targetCanvas = this._canvasForStagePoint(stageX, stageY);
+
+        if (targetCanvas && targetCanvas !== this._dragToolCanvas && stroke) {
+            this._dragToolCanvas.evictStroke(stroke);
+            targetCanvas.adoptStroke(stroke);
+            this._dragToolCanvas = targetCanvas;
+        }
+
+        this._dragToolCanvas.moveSelectedStroke(dx, dy);
+        this._dragToolStartX = stageX;
+        this._dragToolStartY = stageY;
+        this._updateTrashButton();
+    }
+
+    _onDragToolRelease() {
+        this._dragToolActive = false;
+        this._dragToolCanvas = null;
+
+        if (this._dragToolGrab) {
+            this._dragToolGrab.dismiss();
+            this._dragToolGrab = null;
+        }
+
+        this._updateTrashButton();
     }
 
     _compositeStrokesOntoPixbuf(bytes, pixbuf, data) {
@@ -437,22 +674,7 @@ export default class GradiaCompanion extends Extension {
         if (!ok)
             return;
 
-        const bins = ui._monitorBins?.length > 0
-            ? ui._monitorBins
-            : (primaryBin ? [primaryBin] : []);
-
-        this._textTargetCanvas = this._canvases[0] ?? null;
-        for (let i = 0; i < bins.length; i++) {
-            const [binOk, bx, by] = bins[i].transform_stage_point(stageX, stageY);
-            if (!binOk) continue;
-            const alloc = bins[i].allocation;
-            const w = alloc.get_width();
-            const h = alloc.get_height();
-            if (bx >= 0 && bx < w && by >= 0 && by < h) {
-                this._textTargetCanvas = this._canvases[i];
-                break;
-            }
-        }
+        this._textTargetCanvas = this._canvasForStagePoint(stageX, stageY);
 
         this._pendingTextStroke = {
             color: this._toolbar.selectedColor,
@@ -538,7 +760,7 @@ export default class GradiaCompanion extends Extension {
 
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this._committingText = false;
-             Main.screenshotUI.grab_key_focus();
+            Main.screenshotUI.grab_key_focus();
             return GLib.SOURCE_REMOVE;
         });
     }
@@ -614,13 +836,19 @@ export default class GradiaCompanion extends Extension {
         if (id !== 'text')
             this._commitTextEntry();
 
+        if (id !== 'drag') {
+            this._clearAllSelections();
+            this._hideTrashButton();
+        }
+
         const drawing = this._isDrawingTool(id);
+        const dragging = id === 'drag';
 
         for (const canvas of this._canvases)
             canvas.setTool(id);
 
         for (const overlay of this._overlays)
-            overlay.reactive = drawing;
+            overlay.reactive = drawing || dragging;
 
         this._updateAreaSelectorState(id);
     }
@@ -634,8 +862,9 @@ export default class GradiaCompanion extends Extension {
             return;
 
         const drawing = this._isDrawingTool(id);
+        const dragging = id === 'drag';
 
-        if (drawing) {
+        if (drawing || dragging) {
             selector.reactive = false;
             setAreaSelectorHandlesVisible(selector, false);
         } else {
@@ -666,6 +895,9 @@ export default class GradiaCompanion extends Extension {
 
         for (const overlay of this._overlays)
             overlay.visible = show;
+
+        if (!show)
+            this._hideTrashButton();
 
         if (show)
             this._updateAreaSelectorState(this._toolbar?.selectedTool ?? 'select');
@@ -716,6 +948,7 @@ export default class GradiaCompanion extends Extension {
 
         this._canvases = [];
         this._overlays = [];
+        this._bins = [];
 
         const monitorBins = ui._monitorBins ?? [];
         const binsToUse = monitorBins.length > 0
@@ -723,6 +956,8 @@ export default class GradiaCompanion extends Extension {
             : (ui._primaryMonitorBin ? [ui._primaryMonitorBin] : []);
 
         for (const bin of binsToUse) {
+            this._bins.push(bin);
+
             const canvas = new DrawingCanvas({
                 style: 'background-color: transparent;',
             });
@@ -732,17 +967,44 @@ export default class GradiaCompanion extends Extension {
             }));
             ui.insert_child_below(canvas, ui._areaSelector);
             this._canvases.push(canvas);
+
             const overlay = new DrawingInputOverlay(canvas, {
                 style: 'background-color: transparent;',
             });
 
             overlay.connect('button-press-event', (_actor, event) => {
-                if (this._toolbar?.selectedTool !== 'text')
-                    return Clutter.EVENT_PROPAGATE;
+                const tool = this._toolbar?.selectedTool;
 
-                const [stageX, stageY] = event.get_coords();
-                this._spawnTextEntry(stageX, stageY);
-                return Clutter.EVENT_STOP;
+                if (tool === 'text') {
+                    const [stageX, stageY] = event.get_coords();
+                    this._spawnTextEntry(stageX, stageY);
+                    return Clutter.EVENT_STOP;
+                }
+
+                if (tool === 'drag') {
+                    const [stageX, stageY] = event.get_coords();
+                    this._onDragToolPress(stageX, stageY);
+                    return Clutter.EVENT_STOP;
+                }
+
+                return Clutter.EVENT_PROPAGATE;
+            });
+
+            overlay.connect('motion-event', (_actor, event) => {
+                if (this._toolbar?.selectedTool === 'drag') {
+                    const [stageX, stageY] = event.get_coords();
+                    this._onDragToolMotion(stageX, stageY);
+                    return Clutter.EVENT_STOP;
+                }
+                return Clutter.EVENT_PROPAGATE;
+            });
+
+            overlay.connect('button-release-event', (_actor, _event) => {
+                if (this._toolbar?.selectedTool === 'drag') {
+                    this._onDragToolRelease();
+                    return Clutter.EVENT_STOP;
+                }
+                return Clutter.EVENT_PROPAGATE;
             });
 
             bin.add_child(overlay);
@@ -774,6 +1036,14 @@ export default class GradiaCompanion extends Extension {
                 this._cancelTextEntry();
                 return;
             }
+            if (this._toolbar.selectedTool === 'drag') {
+                const sel = this._getSelectedCanvasAndStroke();
+                if (sel) {
+                    sel.canvas.deleteSelectedStroke();
+                    this._hideTrashButton();
+                    return;
+                }
+            }
             for (let i = this._canvases.length - 1; i >= 0; i--) {
                 if (this._canvases[i].hasStrokes()) {
                     this._canvases[i].undo();
@@ -784,6 +1054,8 @@ export default class GradiaCompanion extends Extension {
 
         this._toolbar.connect('clear', () => {
             this._cancelTextEntry();
+            this._clearAllSelections();
+            this._hideTrashButton();
             for (const canvas of this._canvases)
                 canvas.clear();
         });
@@ -805,6 +1077,17 @@ export default class GradiaCompanion extends Extension {
                 this._toolbar.emit('undo');
                 return Clutter.EVENT_STOP;
             }
+
+            if (this._toolbar?.selectedTool === 'drag' &&
+                (sym === Clutter.KEY_Delete || sym === Clutter.KEY_BackSpace)) {
+                const sel = this._getSelectedCanvasAndStroke();
+                if (sel) {
+                    sel.canvas.deleteSelectedStroke();
+                    this._hideTrashButton();
+                    return Clutter.EVENT_STOP;
+                }
+            }
+
             return Clutter.EVENT_PROPAGATE;
         });
 
@@ -829,6 +1112,12 @@ export default class GradiaCompanion extends Extension {
 
     _removeUI() {
         this._cancelTextEntry();
+        this._destroyTrashButton();
+
+        if (this._dragToolGrab) {
+            this._dragToolGrab.dismiss();
+            this._dragToolGrab = null;
+        }
 
         const ui = Main.screenshotUI;
 
@@ -869,6 +1158,7 @@ export default class GradiaCompanion extends Extension {
         for (const canvas of this._canvases)
             canvas.destroy();
         this._canvases = [];
+        this._bins = [];
 
         if (this._toolbar) {
             this._toolbar.destroy();
