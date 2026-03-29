@@ -1,12 +1,17 @@
-<h1 align="center">Gradia Capture</h1>
-
 <div align="center">
-  <img src="https://raw.githubusercontent.com/AlexanderVanhee/gradia-capture/refs/heads/master/logo.svg?token=GHSAT0AAAAAADWUQ5K4VKO5NMWB6RVRZQ242OJGTEQ" alt="Gradia Capture Logo" width="150"/>
+  <img src="https://github.com/user-attachments/assets/03ba0ce8-aa83-4f9e-b829-23a66ec599cc" alt="logo" width="150"/>
+  <h1>Gradia Capture</h1>
 </div>
 
 <br/>
+<div align="center">
+  <p style="margin-bottom: 16px;">
+    Enhances the GNOME built-in screenshot tool with the annotation features you would expect.
+  </p>
 
-Enhances the GNOME built-in screenshot tool with the annotation features you might expect.
+  <img width="800" src="https://github.com/user-attachments/assets/3500562a-7e10-4eab-9f71-b1ea6b9f3a90" />
+</div>
+<br/>
 
 > [!IMPORTANT]
 >  Unlike the Gradia app, this extension is not part of GNOME Circle.
