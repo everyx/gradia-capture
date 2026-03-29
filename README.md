@@ -1,5 +1,6 @@
-# gradia-companion
+# Gradia Capture
 
+### Unlike Gradia, this extension is not part of GNOME Circle.
 ## Installing
 
 Use the following command in the root directory of the cloned repo to build and install:
