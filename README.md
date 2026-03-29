@@ -6,6 +6,8 @@
 
 <br/>
 
+Enhances the GNOME built-in screenshot tool with the annotation features you might expect.
+
 > [!IMPORTANT]
 >  Unlike the Gradia app, this extension is not part of GNOME Circle.
 
