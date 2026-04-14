@@ -26,9 +26,3 @@ Use the following command in the root directory of the cloned repository to buil
 ```bash
 ./build.sh -i
 ```
-
-The extension bundle will be generated as:
-
-```
-gradia-companion@alexandervanhee.github.io.shell-extension.zip
-```
