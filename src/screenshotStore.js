@@ -44,49 +44,45 @@ function _saveRecentFile(screenshotFile) {
     bookmarks.to_file(recentFile);
 }
 
-export function storeScreenshot(bytes, pixbuf) {
-    const clipboard = St.Clipboard.get_default();
-    clipboard.set_content(St.ClipboardType.CLIPBOARD, 'image/png', bytes);
-
-    const time = GLib.DateTime.new_now_local();
+function _saveToDisk(bytes) {
     const lockdownSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.lockdown'});
-    const disableSaveToDisk = lockdownSettings.get_boolean('disable-save-to-disk');
+    if (lockdownSettings.get_boolean('disable-save-to-disk'))
+        return null;
 
-    let file;
+    const dir = Gio.File.new_for_path(GLib.build_filenamev([
+        GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES) || GLib.get_home_dir(),
+        'Screenshots',
+    ]));
 
-    if (!disableSaveToDisk) {
-        const dir = Gio.File.new_for_path(GLib.build_filenamev([
-            GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES) || GLib.get_home_dir(),
-            'Screenshots',
+    try {
+        dir.make_directory_with_parents(null);
+    } catch (e) {
+        if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS))
+            throw e;
+    }
+
+    const timestamp = GLib.DateTime.new_now_local().format('%Y-%m-%d %H-%M-%S');
+    const name = `Screenshot From ${timestamp}`;
+
+    for (const suffix of _suffixes()) {
+        const file = Gio.File.new_for_path(GLib.build_filenamev([
+            dir.get_path(), `${name}${suffix}.png`,
         ]));
-
         try {
-            dir.make_directory_with_parents(null);
+            const stream = file.create(Gio.FileCreateFlags.NONE, null);
+            stream.write_bytes(bytes, null);
+            _saveRecentFile(file);
+            return file;
         } catch (e) {
             if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS))
                 throw e;
         }
-
-        const timestamp = time.format('%Y-%m-%d %H-%M-%S');
-        const name = `Screenshot From ${timestamp}`;
-
-        for (const suffix of _suffixes()) {
-            file = Gio.File.new_for_path(GLib.build_filenamev([
-                dir.get_path(), `${name}${suffix}.png`,
-            ]));
-            try {
-                const stream = file.create(Gio.FileCreateFlags.NONE, null);
-                stream.write_bytes(bytes, null);
-                break;
-            } catch (e) {
-                if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS))
-                    throw e;
-            }
-        }
-
-        _saveRecentFile(file);
     }
 
+    return null;
+}
+
+function _showNotification(pixbuf, file) {
     const coglContext = global.stage.context.get_backend().get_cogl_context();
     const pixels = pixbuf.read_pixel_bytes();
     const content = St.ImageContent.new_with_preferred_size(pixbuf.width, pixbuf.height);
@@ -102,14 +98,14 @@ export function storeScreenshot(bytes, pixbuf) {
     const source = getScreenshotNotificationSource();
     const notification = new MessageTray.Notification({
         source,
-        title: 'Screenshot captured',
+        title: file ? 'Screenshot captured' : 'Screenshot copied',
         body: 'You can paste the image from the clipboard',
-        datetime: time,
+        datetime: GLib.DateTime.new_now_local(),
         gicon: content,
         isTransient: true,
     });
 
-    if (!disableSaveToDisk && file) {
+    if (file) {
         notification.addAction('Show in Files', () => {
             const app = Gio.app_info_get_default_for_type('inode/directory', false);
             if (app === null)
@@ -125,10 +121,19 @@ export function storeScreenshot(bytes, pixbuf) {
     }
 
     source.addNotification(notification);
+}
+
+export function storeScreenshot(bytes, pixbuf, copyOnly = false) {
+    const clipboard = St.Clipboard.get_default();
+    clipboard.set_content(St.ClipboardType.CLIPBOARD, 'image/png', bytes);
+
+    const file = copyOnly ? null : _saveToDisk(bytes);
+    _showNotification(pixbuf, file);
+
     return file;
 }
 
-export async function captureAndStoreScreenshot(texture, geometry, scale, cursor, compositeFn) {
+export async function captureAndStoreScreenshot(texture, geometry, scale, cursor, compositeFn, copyOnly = false) {
     const stream = Gio.MemoryOutputStream.new_resizable();
     const [x, y, w, h] = geometry ?? [0, 0, -1, -1];
     if (cursor === null)
@@ -158,5 +163,5 @@ export async function captureAndStoreScreenshot(texture, geometry, scale, cursor
         }
     }
 
-    return storeScreenshot(finalBytes, finalPixbuf);
+    return storeScreenshot(finalBytes, finalPixbuf, copyOnly);
 }

@@ -403,46 +403,7 @@ export default class GradiaCompanion extends Extension {
         };
 
         Main.screenshotUI._saveScreenshot = async function () {
-            const ui = Main.screenshotUI;
-            self._commitTextEntry();
-            const hasStrokes = self._canvases.some(c => c.hasStrokes());
-            if (!hasStrokes)
-                return self._originalSaveScreenshot();
-
-            const strokeData = self._buildStrokeData();
-            let file = null;
-
-            if (ui._selectionButton.checked || ui._screenButton.checked) {
-                const content = ui._stageScreenshot.get_content();
-                if (!content)
-                    return;
-
-                const texture = content.get_texture();
-                const geometry = ui._getSelectedGeometry(true);
-                let cursorTexture = ui._cursor.content?.get_texture();
-                if (!ui._cursor.visible)
-                    cursorTexture = null;
-
-                const cursor = {
-                    texture: cursorTexture ?? null,
-                    x: ui._cursor.x * ui._scale,
-                    y: ui._cursor.y * ui._scale,
-                    scale: ui._cursorScale,
-                };
-
-                file = await captureAndStoreScreenshot(
-                    texture,
-                    geometry,
-                    ui._scale,
-                    cursor,
-                    (bytes, pixbuf) => self._compositeStrokesOntoPixbuf(bytes, pixbuf, strokeData)
-                );
-            } else if (ui._windowButton.checked) {
-                return self._originalSaveScreenshot();
-            }
-
-            if (file)
-                ui.emit('screenshot-taken', file);
+            await self._captureScreenshot({ copyOnly: false });
         };
 
         this._closedId = Main.screenshotUI.connect('closed', () => {
@@ -470,6 +431,55 @@ export default class GradiaCompanion extends Extension {
         this._gradiaSettings = null;
 
         this._removeUI();
+    }
+
+    async _captureScreenshot({ copyOnly = false } = {}) {
+        const ui = Main.screenshotUI;
+        this._commitTextEntry();
+
+        const hasStrokes = this._canvases.some(c => c.hasStrokes());
+        if (!hasStrokes && !copyOnly)
+            return this._originalSaveScreenshot();
+
+        const strokeData = hasStrokes ? this._buildStrokeData() : null;
+        let file = null;
+
+        if (ui._selectionButton.checked || ui._screenButton.checked) {
+            const content = ui._stageScreenshot.get_content();
+            if (!content)
+                return;
+
+            const texture = content.get_texture();
+            const geometry = ui._getSelectedGeometry(true);
+            let cursorTexture = ui._cursor.content?.get_texture();
+            if (!ui._cursor.visible)
+                cursorTexture = null;
+
+            const cursor = {
+                texture: cursorTexture ?? null,
+                x: ui._cursor.x * ui._scale,
+                y: ui._cursor.y * ui._scale,
+                scale: ui._cursorScale,
+            };
+
+            file = await captureAndStoreScreenshot(
+                texture,
+                geometry,
+                ui._scale,
+                cursor,
+                strokeData
+                    ? (bytes, pixbuf) => this._compositeStrokesOntoPixbuf(bytes, pixbuf, strokeData)
+                    : null,
+                copyOnly
+            );
+        } else if (ui._windowButton.checked) {
+            if (!copyOnly)
+                return this._originalSaveScreenshot();
+            return;
+        }
+
+        if (file)
+            ui.emit('screenshot-taken', file);
     }
 
     _binContainsStagePoint(bin, stageX, stageY) {
@@ -1077,6 +1087,13 @@ export default class GradiaCompanion extends Extension {
 
             if (ctrl && sym === Clutter.KEY_z) {
                 this._toolbar.emit('undo');
+                return Clutter.EVENT_STOP;
+            }
+
+            if (ctrl && sym === Clutter.KEY_c) {
+                this._captureScreenshot({ copyOnly: true }).then(() => {
+                    Main.screenshotUI.close();
+                });
                 return Clutter.EVENT_STOP;
             }
 
