@@ -1091,10 +1091,12 @@ export default class GradiaCompanion extends Extension {
             }
 
             if (ctrl && sym === Clutter.KEY_c) {
-                this._captureScreenshot({ copyOnly: true }).then(() => {
-                    Main.screenshotUI.close();
-                });
-                return Clutter.EVENT_STOP;
+                if (!this._isRecordingMode()) {
+                    this._captureScreenshot({ copyOnly: true }).then(() => {
+                        Main.screenshotUI.close();
+                    });
+                    return Clutter.EVENT_STOP;
+                }
             }
 
             if (this._toolbar?.selectedTool === 'drag' &&
