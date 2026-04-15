@@ -11,6 +11,7 @@ import { Toolbar, TRASH_BUTTON_RADIUS } from './topBar.js';
 import { TOOLS, SELECTION_PADDING } from './tools.js';
 import { GradiaSettings } from './settings.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
+import { ResolutionOverlay } from './resolutionOverlay.js';
 
 const MAX_CANVAS_WIDTH = 1920;
 const MAX_CANVAS_HEIGHT = 1080;
@@ -913,6 +914,7 @@ export default class GradiaCompanion extends Extension {
                 duration: 200,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             });
+            this._resolutionOverlay?.onDragStarted();
         });
 
         this._dragEndedId = selector.connect('drag-ended', () => {
@@ -921,6 +923,7 @@ export default class GradiaCompanion extends Extension {
                 duration: 200,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             });
+            this._resolutionOverlay?.onDragEnded();
         });
     }
 
@@ -1065,6 +1068,8 @@ export default class GradiaCompanion extends Extension {
 
         primaryBin.add_child(this._toolbar);
 
+        this._resolutionOverlay = new ResolutionOverlay(primaryBin);
+
         this._keyPressId = Main.screenshotUI.connect('key-press-event', (_actor, event) => {
             const sym = event.get_key_symbol();
             const mods = event.get_state();
@@ -1141,6 +1146,11 @@ export default class GradiaCompanion extends Extension {
         if (this._toolbar) {
             this._toolbar.destroy();
             this._toolbar = null;
+        }
+
+        if (this._resolutionOverlay) {
+            this._resolutionOverlay.destroy();
+            this._resolutionOverlay = null;
         }
     }
 }

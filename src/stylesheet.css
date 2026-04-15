@@ -85,3 +85,13 @@
 .gradia-selection-trash:active {
     background-color: #67676c;
 }
+
+.gradia-resolution-label {
+    background-color: rgba(0, 0, 0, 0.75);
+    border-radius: 999px;
+    color: #ffffff;
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 12px;
+}
