@@ -396,8 +396,9 @@ export default class GradiaCompanion extends Extension {
 
         const self = this;
 
-        Main.screenshotUI.open = async function (...args) {
-            const result = await self._originalOpen(...args);
+        Main.screenshotUI.open = async function (mode = 0, ...rest) {
+            self._portalMode = (mode === 2);
+            const result = await self._originalOpen(mode, ...rest);
             self._ensureUI();
             return result;
         };
@@ -407,6 +408,7 @@ export default class GradiaCompanion extends Extension {
         };
 
         this._closedId = Main.screenshotUI.connect('closed', () => {
+            self._portalMode = false;
             self._removeUI();
         });
     }
@@ -436,50 +438,46 @@ export default class GradiaCompanion extends Extension {
     async _captureScreenshot({ copyOnly = false } = {}) {
         const ui = Main.screenshotUI;
         this._commitTextEntry();
-
         const hasStrokes = this._canvases.some(c => c.hasStrokes());
         if (!hasStrokes && !copyOnly)
             return this._originalSaveScreenshot();
 
-        const strokeData = hasStrokes ? this._buildStrokeData() : null;
-        let file = null;
-
-        if (ui._selectionButton.checked || ui._screenButton.checked) {
-            const content = ui._stageScreenshot.get_content();
-            if (!content)
-                return;
-
-            const texture = content.get_texture();
-            const geometry = ui._getSelectedGeometry(true);
-            let cursorTexture = ui._cursor.content?.get_texture();
-            if (!ui._cursor.visible)
-                cursorTexture = null;
-
-            const cursor = {
-                texture: cursorTexture ?? null,
-                x: ui._cursor.x * ui._scale,
-                y: ui._cursor.y * ui._scale,
-                scale: ui._cursorScale,
-            };
-
-            file = await captureAndStoreScreenshot(
-                texture,
-                geometry,
-                ui._scale,
-                cursor,
-                strokeData
-                    ? (bytes, pixbuf) => this._compositeStrokesOntoPixbuf(bytes, pixbuf, strokeData)
-                    : null,
-                copyOnly
-            );
-        } else if (ui._windowButton.checked) {
+        if (ui._windowButton.checked) {
             if (!copyOnly)
                 return this._originalSaveScreenshot();
             return;
         }
 
-        if (file)
-            ui.emit('screenshot-taken', file);
+        if (!ui._selectionButton.checked && !ui._screenButton.checked)
+            return;
+
+        const strokeData = hasStrokes ? this._buildStrokeData() : null;
+        const content = ui._stageScreenshot.get_content();
+        if (!content)
+            return;
+
+        const texture = content.get_texture();
+        const geometry = ui._getSelectedGeometry(true);
+        let cursorTexture = ui._cursor.content?.get_texture();
+        if (!ui._cursor.visible)
+            cursorTexture = null;
+        const cursor = {
+            texture: cursorTexture ?? null,
+            x: ui._cursor.x * ui._scale,
+            y: ui._cursor.y * ui._scale,
+            scale: ui._cursorScale,
+        };
+        const compositeFn = strokeData
+            ? (bytes, pixbuf) => this._compositeStrokesOntoPixbuf(bytes, pixbuf, strokeData)
+            : null;
+        const capturePromise = captureAndStoreScreenshot(
+            texture, geometry, ui._scale, cursor, compositeFn, copyOnly
+        );
+        // We have to await in portal mode to prevent a race condition where
+        // the overlay gets closed before 'screenshot-taken' gets emitted, so the portal doesn't fail.
+        // GNOME Shell does the same, but we only await conditionally.
+        if (this._portalMode)
+            await capturePromise;
     }
 
     _binContainsStagePoint(bin, stageX, stageY) {
@@ -668,11 +666,7 @@ export default class GradiaCompanion extends Extension {
         if (!newPixbuf)
             return null;
 
-        const pngStream = Gio.MemoryOutputStream.new_resizable();
-        newPixbuf.save_to_streamv(pngStream, 'png', [], [], null);
-        pngStream.close(null);
-
-        return { bytes: pngStream.steal_as_bytes(), pixbuf: newPixbuf };
+        return { pixbuf: newPixbuf };
     }
 
     _spawnTextEntry(stageX, stageY) {

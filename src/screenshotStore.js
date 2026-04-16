@@ -44,10 +44,10 @@ function _saveRecentFile(screenshotFile) {
     bookmarks.to_file(recentFile);
 }
 
-function _saveToDisk(bytes) {
+function _saveToDiskAsync(bytes) {
     const lockdownSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.lockdown'});
     if (lockdownSettings.get_boolean('disable-save-to-disk'))
-        return null;
+        return Promise.resolve(null);
 
     const dir = Gio.File.new_for_path(GLib.build_filenamev([
         GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES) || GLib.get_home_dir(),
@@ -70,16 +70,40 @@ function _saveToDisk(bytes) {
         ]));
         try {
             const stream = file.create(Gio.FileCreateFlags.NONE, null);
-            stream.write_bytes(bytes, null);
-            _saveRecentFile(file);
-            return file;
+            return new Promise((resolve, reject) => {
+                stream.write_bytes_async(bytes, GLib.PRIORITY_DEFAULT, null, (s, res) => {
+                    try {
+                        s.write_bytes_finish(res);
+                        s.close(null);
+                        _saveRecentFile(file);
+                        resolve(file);
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
+            });
         } catch (e) {
             if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS))
                 throw e;
         }
     }
 
-    return null;
+    return Promise.resolve(null);
+}
+
+function _pixbufSaveToStreamAsync(pixbuf) {
+    return new Promise((resolve, reject) => {
+        const stream = Gio.MemoryOutputStream.new_resizable();
+        pixbuf.save_to_streamv_async(stream, 'png', [], [], null, (pb, res) => {
+            try {
+                GdkPixbuf.Pixbuf.save_to_stream_finish(res);
+                stream.close(null);
+                resolve(stream.steal_as_bytes());
+            } catch (e) {
+                reject(e);
+            }
+        });
+    });
 }
 
 function _showNotification(pixbuf, file) {
@@ -123,14 +147,20 @@ function _showNotification(pixbuf, file) {
     source.addNotification(notification);
 }
 
-export function storeScreenshot(bytes, pixbuf, copyOnly = false) {
+async function _storeScreenshotAsync(bytes, pixbuf, copyOnly) {
     const clipboard = St.Clipboard.get_default();
     clipboard.set_content(St.ClipboardType.CLIPBOARD, 'image/png', bytes);
 
-    const file = copyOnly ? null : _saveToDisk(bytes);
-    _showNotification(pixbuf, file);
+    if (copyOnly) {
+        _showNotification(pixbuf, null);
+        return;
+    }
 
-    return file;
+    const file = await _saveToDiskAsync(bytes);
+
+    if (file)
+        Main.screenshotUI.emit('screenshot-taken', file);
+    _showNotification(pixbuf, file);
 }
 
 export async function captureAndStoreScreenshot(texture, geometry, scale, cursor, compositeFn, copyOnly = false) {
@@ -156,12 +186,12 @@ export async function captureAndStoreScreenshot(texture, geometry, scale, cursor
     let finalPixbuf = pixbuf;
 
     if (compositeFn) {
-        const result = compositeFn(originalBytes, pixbuf);
-        if (result) {
-            finalBytes = result.bytes;
-            finalPixbuf = result.pixbuf;
+        const composited = compositeFn(originalBytes, pixbuf);
+        if (composited) {
+            finalPixbuf = composited.pixbuf;
+            finalBytes = await _pixbufSaveToStreamAsync(finalPixbuf);
         }
     }
 
-    return storeScreenshot(finalBytes, finalPixbuf, copyOnly);
+    await _storeScreenshotAsync(finalBytes, finalPixbuf, copyOnly);
 }
