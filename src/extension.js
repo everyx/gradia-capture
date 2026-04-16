@@ -896,8 +896,10 @@ export default class GradiaCompanion extends Extension {
         const recordingMode = this._isRecordingMode();
         const show = !windowMode && !recordingMode;
 
-        if (this._toolbar)
+        if (this._toolbar) {
             this._toolbar.visible = show;
+            this._toolbar.setSelectionToolVisible(!Main.screenshotUI._screenButton.checked);
+        }
 
         for (const canvas of this._canvases)
             canvas.visible = show;
