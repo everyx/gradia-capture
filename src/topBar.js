@@ -233,6 +233,22 @@ export const Toolbar = GObject.registerClass({
         this._saveCurrentToolEntry();
     }
 
+    setSelectionToolVisible(enabled) {
+        const btn = this._toolButtons.find(b => b._toolId === 'select');
+        if (!btn)
+            return;
+
+        btn.reactive = enabled;
+        btn.ease({
+            opacity: enabled ? 255 : 80,
+            duration: 200,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+
+        if (!enabled && this._selectedTool === 'select')
+            this._onToolClicked('drag');
+    }
+
     get selectedTool() { return this._selectedTool; }
     get selectedColor() { return this._selectedColor; }
     get lineWidth() { return this._lineWidth; }
