@@ -147,23 +147,26 @@ function _showNotification(pixbuf, file) {
     source.addNotification(notification);
 }
 
-async function _storeScreenshotAsync(bytes, pixbuf, copyOnly) {
-    const clipboard = St.Clipboard.get_default();
-    clipboard.set_content(St.ClipboardType.CLIPBOARD, 'image/png', bytes);
-
-    if (copyOnly) {
-        _showNotification(pixbuf, null);
-        return;
+async function _storeScreenshotAsync(bytes, pixbuf, { copy = true, save = true } = {}) {
+    if (copy) {
+        const clipboard = St.Clipboard.get_default();
+        clipboard.set_content(St.ClipboardType.CLIPBOARD, 'image/png', bytes);
     }
 
-    const file = await _saveToDiskAsync(bytes);
+    let file = null;
+    if (save) {
+        file = await _saveToDiskAsync(bytes);
+        if (file)
+            Main.screenshotUI.emit('screenshot-taken', file);
+    }
 
-    if (file)
-        Main.screenshotUI.emit('screenshot-taken', file);
-    _showNotification(pixbuf, file);
+    if (copy)
+        _showNotification(pixbuf, file);
+
+    return file;
 }
 
-export async function captureAndStoreScreenshot(texture, geometry, scale, cursor, compositeFn, copyOnly = false) {
+export async function captureAndStoreScreenshot(texture, geometry, scale, cursor, compositeFn, { copy = true, save = true } = {}) {
     const stream = Gio.MemoryOutputStream.new_resizable();
     const [x, y, w, h] = geometry ?? [0, 0, -1, -1];
     if (cursor === null)
@@ -193,5 +196,5 @@ export async function captureAndStoreScreenshot(texture, geometry, scale, cursor
         }
     }
 
-    await _storeScreenshotAsync(finalBytes, finalPixbuf, copyOnly);
+    return _storeScreenshotAsync(finalBytes, finalPixbuf, { copy, save });
 }

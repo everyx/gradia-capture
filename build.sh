@@ -13,11 +13,7 @@ gnome-extensions pack src \
     --force \
     --extra-source="LICENSE" \
     --extra-source="README.md" \
-    --extra-source="topBar.js" \
-    --extra-source="settings.js" \
-    --extra-source="screenshotStore.js" \
-    --extra-source="resolutionOverlay.js" \
-    --extra-source="tools.js" \
+    $(find src -maxdepth 1 -name '*.js' ! -name 'extension.js' -printf '--extra-source=%f ') \
     --extra-source="../icons" \
     --schema="../schemas/org.gnome.shell.extensions.gradia-companion.gschema.xml"
 echo "Packing Done!"

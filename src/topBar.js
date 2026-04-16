@@ -8,6 +8,7 @@ import {Slider} from 'resource:///org/gnome/shell/ui/slider.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import { TOOLS, SELECTION_PADDING } from './tools.js';
+import { attachTooltip } from './tooltip.js';
 
 export const TRASH_BUTTON_RADIUS = 16;
 
@@ -35,55 +36,6 @@ function makeIcon(spec, extensionPath = '') {
         style: 'icon-size: 16px;',
     });
 }
-
-const ToolbarTooltip = GObject.registerClass(
-class ToolbarTooltip extends St.Label {
-    _init(widget, text) {
-        super._init({
-            text,
-            style_class: 'screenshot-ui-tooltip',
-            visible: false,
-        });
-
-        this._timeoutId = null;
-
-        widget.connect('notify::hover', () => {
-            if (widget.hover)
-                this._scheduleShow(widget);
-            else
-                this._hide();
-        });
-
-        widget.connect('destroy', () => this.destroy());
-    }
-
-    _scheduleShow(widget) {
-        if (this._timeoutId)
-            return;
-
-        this._timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-            this._timeoutId = null;
-            this._show(widget);
-            return GLib.SOURCE_REMOVE;
-        });
-    }
-
-    _show(widget) {
-        const extents = widget.get_transformed_extents();
-        const x = Math.floor(extents.get_x() + (extents.get_width() - this.width) / 2);
-        const y = extents.get_y() + extents.get_height() + 6;
-        this.set_position(x, y);
-        this.show();
-    }
-
-    _hide() {
-        if (this._timeoutId) {
-            GLib.source_remove(this._timeoutId);
-            this._timeoutId = null;
-        }
-        this.hide();
-    }
-});
 
 const LINE_WIDTH_MIN = 1;
 const LINE_WIDTH_MAX = 16;
@@ -186,8 +138,7 @@ export const Toolbar = GObject.registerClass({
             this.add_child(btn);
             this._toolButtons.push(btn);
 
-            const tooltip = new ToolbarTooltip(btn, tool.name);
-            Main.uiGroup.add_child(tooltip);
+            attachTooltip(btn, tool.name);
 
             if (i === 1)
                 this._addSeparator();
@@ -223,8 +174,7 @@ export const Toolbar = GObject.registerClass({
             this.add_child(btn);
             this._colorButtons.push(btn);
 
-            const tooltip = new ToolbarTooltip(btn, color.name);
-            Main.uiGroup.add_child(tooltip);
+            attachTooltip(btn, color.name);
         }
     }
 
@@ -250,8 +200,7 @@ export const Toolbar = GObject.registerClass({
         this._undoBtn.connect('clicked', () => this.emit('undo'));
         this.add_child(this._undoBtn);
 
-        const undoTooltip = new ToolbarTooltip(this._undoBtn, 'Undo');
-        Main.uiGroup.add_child(undoTooltip);
+        attachTooltip(this._undoBtn, 'Undo');
 
         this._clearBtn = new St.Button({
             child: makeIcon('user-trash-symbolic', this._extensionPath),
@@ -262,8 +211,7 @@ export const Toolbar = GObject.registerClass({
         this._clearBtn.connect('clicked', () => this.emit('clear'));
         this.add_child(this._clearBtn);
 
-        const clearTooltip = new ToolbarTooltip(this._clearBtn, 'Clear all');
-        Main.uiGroup.add_child(clearTooltip);
+        attachTooltip(this._clearBtn, 'Clear all');
     }
 
     _addSeparator() {
