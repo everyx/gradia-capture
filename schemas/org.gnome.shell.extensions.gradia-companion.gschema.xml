@@ -5,5 +5,9 @@
       <default>{'freehand': ('#000000', 3.0), 'rectangle': ('#000000', 3.0), 'solid-rectangle': ('#000000', 3.0), 'highlighter': ('#ffdd00', 4.0), 'arrow': ('#000000', 3.0), 'stamp': ('#000000', 3.0)}</default>
       <summary>Per-tool color and line width</summary>
     </key>
+    <key name="screenshot-format" type="s">
+      <default>'png'</default>
+      <summary>File format for saved screenshots</summary>
+    </key>
   </schema>
 </schemalist>

@@ -44,6 +44,17 @@ export function createOcrButton(onClick) {
     return button;
 }
 
+export function createSettingsButton(onClick) {
+    const button = new St.Button({
+        style_class: 'screenshot-ui-show-pointer-button',
+        icon_name: 'org.gnome.Settings-symbolic',
+        toggle_mode: false,
+    });
+    button.connect('clicked', () => onClick());
+    attachTooltip(button, 'Settings', St.Side.TOP);
+    return button;
+}
+
 export function setOcrButtonEnabled(button, enabled) {
     if (!button)
         return;

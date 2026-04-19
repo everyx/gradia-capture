@@ -44,7 +44,7 @@ function _saveRecentFile(screenshotFile) {
     bookmarks.to_file(recentFile);
 }
 
-function _saveToDiskAsync(bytes) {
+function _saveToDiskAsync(bytes, format = 'png') {
     const lockdownSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.lockdown'});
     if (lockdownSettings.get_boolean('disable-save-to-disk'))
         return Promise.resolve(null);
@@ -66,7 +66,7 @@ function _saveToDiskAsync(bytes) {
 
     for (const suffix of _suffixes()) {
         const file = Gio.File.new_for_path(GLib.build_filenamev([
-            dir.get_path(), `${name}${suffix}.png`,
+            dir.get_path(), `${name}${suffix}.${format}`,
         ]));
         try {
             const stream = file.create(Gio.FileCreateFlags.NONE, null);
@@ -91,10 +91,10 @@ function _saveToDiskAsync(bytes) {
     return Promise.resolve(null);
 }
 
-function _pixbufSaveToStreamAsync(pixbuf) {
+function _pixbufSaveToStreamAsync(pixbuf, format = 'png') {
     return new Promise((resolve, reject) => {
         const stream = Gio.MemoryOutputStream.new_resizable();
-        pixbuf.save_to_streamv_async(stream, 'png', [], [], null, (pb, res) => {
+        pixbuf.save_to_streamv_async(stream, format, [], [], null, (pb, res) => {
             try {
                 GdkPixbuf.Pixbuf.save_to_stream_finish(res);
                 stream.close(null);
@@ -147,15 +147,19 @@ function _showNotification(pixbuf, file) {
     source.addNotification(notification);
 }
 
-async function _storeScreenshotAsync(bytes, pixbuf, { copy = true, save = true } = {}) {
+async function _storeScreenshotAsync(bytes, pixbuf, { copy = true, save = true, format = 'png', alreadyEncoded = false } = {}) {
+    let finalBytes = bytes;
+    if (format !== 'png' && !alreadyEncoded)
+        finalBytes = await _pixbufSaveToStreamAsync(pixbuf, format);
+
     if (copy) {
         const clipboard = St.Clipboard.get_default();
-        clipboard.set_content(St.ClipboardType.CLIPBOARD, 'image/png', bytes);
+        clipboard.set_content(St.ClipboardType.CLIPBOARD, `image/${format}`, finalBytes);
     }
 
     let file = null;
     if (save) {
-        file = await _saveToDiskAsync(bytes);
+        file = await _saveToDiskAsync(finalBytes, format);
         if (file)
             Main.screenshotUI.emit('screenshot-taken', file);
     }
@@ -166,7 +170,7 @@ async function _storeScreenshotAsync(bytes, pixbuf, { copy = true, save = true }
     return file;
 }
 
-export async function captureAndStoreScreenshot(texture, geometry, scale, cursor, compositeFn, { copy = true, save = true } = {}) {
+export async function captureAndStoreScreenshot(texture, geometry, scale, cursor, compositeFn, { copy = true, save = true, format = 'png' } = {}) {
     const stream = Gio.MemoryOutputStream.new_resizable();
     const [x, y, w, h] = geometry ?? [0, 0, -1, -1];
     if (cursor === null)
@@ -187,14 +191,16 @@ export async function captureAndStoreScreenshot(texture, geometry, scale, cursor
 
     let finalBytes = originalBytes;
     let finalPixbuf = pixbuf;
+    let alreadyEncoded = false;
 
     if (compositeFn) {
         const composited = compositeFn(originalBytes, pixbuf);
         if (composited) {
             finalPixbuf = composited.pixbuf;
-            finalBytes = await _pixbufSaveToStreamAsync(finalPixbuf);
+            finalBytes = await _pixbufSaveToStreamAsync(finalPixbuf, format);
+            alreadyEncoded = true;
         }
     }
 
-    return _storeScreenshotAsync(finalBytes, finalPixbuf, { copy, save });
+    return _storeScreenshotAsync(finalBytes, finalPixbuf, { copy, save, format, alreadyEncoded });
 }
