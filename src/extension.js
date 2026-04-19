@@ -311,6 +311,8 @@ const DrawingCanvas = GObject.registerClass(
             if (this._currentStroke)
                 allStrokes.push(this._currentStroke);
 
+            let stampCounter = 1;
+
             for (const stroke of allStrokes) {
                 const tool = getToolDef(stroke.toolId);
                 if (!tool?.render)
@@ -323,7 +325,7 @@ const DrawingCanvas = GObject.registerClass(
                 tool.render(cr, {
                     color: stroke.color,
                     points: localPoints,
-                    counter: stroke.counter,
+                    counter: stroke.toolId === 'stamp' ? stampCounter++ : stroke.counter,
                     text: stroke.text,
                 }, stroke.strokeWidth);
             }
