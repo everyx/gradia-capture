@@ -12,7 +12,7 @@ import { TOOLS, SELECTION_PADDING } from './tools.js';
 import { GradiaSettings } from './settings.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
 import { ResolutionOverlay } from './resolutionOverlay.js';
-import { isGradiaFlatpakInstalled, createOcrButton, launchGradiaOcrForFile } from './gradiaIntegration.js';
+import { isGradiaFlatpakInstalled, createOcrButton, launchGradiaOcrForFile, setOcrButtonEnabled } from './gradiaIntegration.js';
 
 const MAX_CANVAS_WIDTH = 1920;
 const MAX_CANVAS_HEIGHT = 1080;
@@ -894,11 +894,12 @@ export default class GradiaCompanion extends Extension {
     _updateVisibilityForMode() {
         const windowMode = this._isWindowMode();
         const recordingMode = this._isRecordingMode();
+        const screenMode = Main.screenshotUI._screenButton?.checked ?? false;
         const show = !windowMode && !recordingMode;
 
         if (this._toolbar) {
             this._toolbar.visible = show;
-            this._toolbar.setSelectionToolVisible(!Main.screenshotUI._screenButton.checked);
+            this._toolbar.setSelectionToolVisible(!screenMode);
         }
 
         for (const canvas of this._canvases)
@@ -912,6 +913,8 @@ export default class GradiaCompanion extends Extension {
 
         if (show)
             this._updateAreaSelectorState(this._toolbar?.selectedTool ?? 'select');
+
+        setOcrButtonEnabled(this._ocrButton, !windowMode && !recordingMode && !screenMode);
     }
 
     _connectDragOpacity() {

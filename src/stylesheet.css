@@ -1,5 +1,5 @@
 .gradia-toolbar {
-    border-radius: 16px;
+    border-radius: 9999px;
     padding: 6px 6px;
     spacing: 8px;
     margin-top: 12px;
@@ -9,7 +9,7 @@
     max-width: 32px;
     min-height: 32px;
     max-height: 32px;
-    border-radius: 12px;
+    border-radius: 9999px;
     padding: 0;
     background-color: transparent;
 }

@@ -43,3 +43,14 @@ export function createOcrButton(onClick) {
     attachTooltip(button, 'Extract Text', St.Side.TOP);
     return button;
 }
+
+export function setOcrButtonEnabled(button, enabled) {
+    if (!button)
+        return;
+    button.reactive = enabled;
+    button.ease({
+        opacity: enabled ? 255 : 80,
+        duration: 200,
+        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+    });
+}
