@@ -1,6 +1,7 @@
 import Cairo from 'gi://cairo';
 import Pango from 'gi://Pango';
 import PangoCairo from 'gi://PangoCairo';
+import Clutter from 'gi://Clutter';
 
 export const SELECTION_PADDING = 8;
 
@@ -42,6 +43,7 @@ export const TOOLS = [
         id: 'select',
         name: 'Crop',
         icon: 'icons/selection-opaque-3-symbolic.svg',
+        keybindings: [Clutter.KEY_1, Clutter.KEY_ampersand, Clutter.KEY_q],
         isDrawing: false,
         render: null,
         beginStroke: null,
@@ -52,6 +54,7 @@ export const TOOLS = [
         id: 'drag',
         name: 'Drag',
         icon: 'icons/pointer-primary-click-symbolic.svg',
+        keybindings: [Clutter.KEY_2, Clutter.KEY_eacute, Clutter.KEY_d],
         isDrawing: false,
         isDrag: true,
         render: null,
@@ -63,6 +66,7 @@ export const TOOLS = [
         id: 'freehand',
         name: 'Freehand',
         icon: 'document-edit-symbolic',
+        keybindings: [Clutter.KEY_3, Clutter.KEY_quotedbl, Clutter.KEY_f],
         isDrawing: true,
         beginStroke: () => ({}),
         bounds: makeStrokeBounds(s => SELECTION_PADDING + (s.strokeWidth ?? 4)),
@@ -82,6 +86,7 @@ export const TOOLS = [
         id: 'rectangle',
         name: 'Rectangle',
         icon: 'icons/square-outline-thick-symbolic.svg',
+        keybindings: [Clutter.KEY_4, Clutter.KEY_apostrophe, Clutter.KEY_r],
         isDrawing: true,
         beginStroke: () => ({}),
         bounds: makeStrokeBounds(s => SELECTION_PADDING + (s.strokeWidth ?? 4)),
@@ -100,6 +105,7 @@ export const TOOLS = [
         id: 'solid-rectangle',
         name: 'Solid Rectangle',
         icon: 'icons/square-filled-symbolic.svg',
+        keybindings: [Clutter.KEY_5, Clutter.KEY_parenleft, Clutter.KEY_b],
         isDrawing: true,
         beginStroke: () => ({}),
         bounds: makeStrokeBounds(() => SELECTION_PADDING),
@@ -117,6 +123,7 @@ export const TOOLS = [
         id: 'highlighter',
         name: 'Highlighter',
         icon: 'icons/marker-symbolic.svg',
+        keybindings: [Clutter.KEY_6, Clutter.KEY_section, Clutter.KEY_h],
         isDrawing: true,
         beginStroke: () => ({}),
         bounds: makeStrokeBounds(s => SELECTION_PADDING + (s.strokeWidth ?? 4) * 4),
@@ -137,6 +144,7 @@ export const TOOLS = [
         id: 'arrow',
         name: 'Arrow',
         icon: 'icons/arrow1-top-right-symbolic.svg',
+        keybindings: [Clutter.KEY_7, Clutter.KEY_egrave, Clutter.KEY_a],
         isDrawing: true,
         beginStroke: () => ({}),
         bounds: makeStrokeBounds(s => SELECTION_PADDING + (s.strokeWidth ?? 4) * 2),
@@ -167,6 +175,7 @@ export const TOOLS = [
         id: 'text',
         name: 'Text',
         icon: 'icons/text-insert2-symbolic.svg',
+        keybindings: [Clutter.KEY_8, Clutter.KEY_exclam, Clutter.KEY_t],
         isDrawing: true,
         isText: true,
         beginStroke: () => ({ text: '' }),
@@ -220,6 +229,7 @@ export const TOOLS = [
         id: 'stamp',
         name: 'Number Stamp',
         icon: 'icons/one-circle-symbolic.svg',
+        keybindings: [Clutter.KEY_9, Clutter.KEY_ccedilla, Clutter.KEY_n],
         isDrawing: true,
         isStamp: true,
         beginStroke: () => ({ counter: 1 }),
@@ -260,3 +270,7 @@ export const TOOLS = [
         },
     },
 ];
+
+export const TOOL_SHORTCUTS = Object.fromEntries(
+    TOOLS.flatMap(t => t.keybindings.map(key => [key, t.id]))
+);

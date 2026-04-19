@@ -8,11 +8,11 @@ import St from 'gi://St';
 import Gio from 'gi://Gio';
 
 import { Toolbar, TRASH_BUTTON_RADIUS } from './topBar.js';
-import { TOOLS, SELECTION_PADDING } from './tools.js';
+import { TOOLS, SELECTION_PADDING, TOOL_SHORTCUTS } from './tools.js';
 import { GradiaSettings } from './settings.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
 import { ResolutionOverlay } from './resolutionOverlay.js';
-import { isGradiaFlatpakInstalled, createOcrButton, launchGradiaOcrForFile, setOcrButtonEnabled } from './gradiaIntegration.js';
+import { isGradiaFlatpakInstalled, createOcrButton, createSettingsButton, launchGradiaOcrForFile, setOcrButtonEnabled } from './gradiaIntegration.js';
 
 const MAX_CANVAS_WIDTH = 1920;
 const MAX_CANVAS_HEIGHT = 1080;
@@ -398,6 +398,7 @@ export default class GradiaCompanion extends Extension {
         this._trashButton = null;
 
         const self = this;
+        this._settings = this.getSettings();
 
         Main.screenshotUI.open = async function (mode = 0, ...rest) {
             self._portalMode = (mode === 2);
@@ -434,6 +435,7 @@ export default class GradiaCompanion extends Extension {
 
         this._gradiaSettings.destroy();
         this._gradiaSettings = null;
+        this._settings = null;
 
         this._removeUI();
     }
@@ -441,50 +443,79 @@ export default class GradiaCompanion extends Extension {
     async _captureScreenshot({ copyOnly = false, ocr = false } = {}) {
         const ui = Main.screenshotUI;
         this._commitTextEntry();
-        const hasStrokes = this._canvases.some(c => c.hasStrokes());
         if (ocr)
             copyOnly = false;
-        if (!hasStrokes && !copyOnly && !ocr)
-            return this._originalSaveScreenshot();
+
+        if (!ui._selectionButton.checked && !ui._screenButton.checked && !ui._windowButton.checked)
+            return;
+
+        const shouldCopy = !ocr;
+        const shouldSave = !copyOnly;
+        const format = this._portalMode ? 'png' : this._settings.get_string('screenshot-format');
+
+        const _capture = (texture, geometry, scale, cursor, compositeFn) => {
+            const capturePromise = captureAndStoreScreenshot(
+                texture, geometry, scale, cursor, compositeFn, { copy: shouldCopy, save: shouldSave, format }
+            );
+            // We have to await in portal mode to prevent a race condition where
+            // the overlay gets closed before 'screenshot-taken' gets emitted, so the portal doesn't fail.
+            // GNOME Shell does the same, but we only await conditionally.
+            if (this._portalMode || ocr)
+                return capturePromise;
+        };
 
         if (ui._windowButton.checked) {
-            if (!copyOnly && !ocr)
-                return this._originalSaveScreenshot();
-            return;
+            const window =
+                ui._windowSelectors.flatMap(sel => sel.windows())
+                                   .find(win => win.checked);
+            if (!window)
+                return;
+
+            const content = window.windowContent;
+            if (!content)
+                return;
+
+            let cursorTexture = window.getCursorTexture()?.get_texture();
+            if (!ui._cursor.visible)
+                cursorTexture = null;
+
+            return await _capture(
+                content.get_texture(),
+                null,
+                window.bufferScale,
+                {
+                    texture: cursorTexture ?? null,
+                    x: window.cursorPoint.x * window.bufferScale,
+                    y: window.cursorPoint.y * window.bufferScale,
+                    scale: ui._cursorScale,
+                },
+                null
+            );
         }
 
-        if (!ui._selectionButton.checked && !ui._screenButton.checked)
-            return;
-
-        const strokeData = hasStrokes ? this._buildStrokeData() : null;
         const content = ui._stageScreenshot.get_content();
         if (!content)
             return;
 
-        const texture = content.get_texture();
-        const geometry = ui._getSelectedGeometry(true);
         let cursorTexture = ui._cursor.content?.get_texture();
         if (!ui._cursor.visible)
             cursorTexture = null;
-        const cursor = {
-            texture: cursorTexture ?? null,
-            x: ui._cursor.x * ui._scale,
-            y: ui._cursor.y * ui._scale,
-            scale: ui._cursorScale,
-        };
-        const compositeFn = strokeData
-            ? (bytes, pixbuf) => this._compositeStrokesOntoPixbuf(bytes, pixbuf, strokeData)
-            : null;
-        const shouldCopy = !ocr;
-        const shouldSave = !copyOnly;
-        const capturePromise = captureAndStoreScreenshot(
-            texture, geometry, ui._scale, cursor, compositeFn, { copy: shouldCopy, save: shouldSave }
+
+        const hasStrokes = this._canvases.some(c => c.hasStrokes());
+        const strokeData = hasStrokes ? this._buildStrokeData() : null;
+
+        return await _capture(
+            content.get_texture(),
+            ui._getSelectedGeometry(true),
+            ui._scale,
+            {
+                texture: cursorTexture ?? null,
+                x: ui._cursor.x * ui._scale,
+                y: ui._cursor.y * ui._scale,
+                scale: ui._cursorScale,
+            },
+            strokeData ? (bytes, pixbuf) => this._compositeStrokesOntoPixbuf(bytes, pixbuf, strokeData) : null
         );
-        // We have to await in portal mode to prevent a race condition where
-        // the overlay gets closed before 'screenshot-taken' gets emitted, so the portal doesn't fail.
-        // GNOME Shell does the same, but we only await conditionally.
-        if (this._portalMode || ocr)
-            return await capturePromise;
     }
 
     _binContainsStagePoint(bin, stageX, stageY) {
@@ -1076,6 +1107,12 @@ export default class GradiaCompanion extends Extension {
                 canvas.clear();
         });
 
+        this._settingsButton = createSettingsButton(() => {
+            Main.screenshotUI.close();
+            this.openPreferences();
+        });
+        ui._showPointerButtonContainer.insert_child_below(this._settingsButton, ui._showPointerButton);
+
         if (isGradiaFlatpakInstalled()) {
             const ui = Main.screenshotUI;
             this._ocrButton = createOcrButton(async () => {
@@ -1125,6 +1162,11 @@ export default class GradiaCompanion extends Extension {
                 }
             }
 
+            if (!ctrl && sym in TOOL_SHORTCUTS) {
+                this._toolbar._onToolClicked(TOOL_SHORTCUTS[sym]);
+                return Clutter.EVENT_STOP;
+            }
+
             return Clutter.EVENT_PROPAGATE;
         });
 
@@ -1145,6 +1187,11 @@ export default class GradiaCompanion extends Extension {
         if (this._ocrButton) {
             this._ocrButton.destroy();
             this._ocrButton = null;
+        }
+
+        if (this._settingsButton) {
+            this._settingsButton.destroy();
+            this._settingsButton = null;
         }
 
         if (this._dragToolGrab) {

@@ -6,6 +6,7 @@
   "donations": {
      "kofi": "alexandervanhee"
   },
+  "settings-schema": "org.gnome.shell.extensions.gradia-companion",
   "shell-version": [
     "49","50"
   ]

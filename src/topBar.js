@@ -219,6 +219,10 @@ export const Toolbar = GObject.registerClass({
     }
 
     _onToolClicked(id) {
+        const btn = this._toolButtons.find(b => b._toolId === id);
+        if (btn && !btn.reactive)
+            return;
+
         this._saveCurrentToolEntry();
         this._selectedTool = id;
         for (const btn of this._toolButtons)

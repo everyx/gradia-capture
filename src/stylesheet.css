@@ -95,3 +95,9 @@
     font-weight: 600;
     padding: 6px 12px;
 }
+
+.screenshot-ui-show-pointer-button {
+    padding: 10px;
+    min-width: 0;
+    min-height: 0;
+}
