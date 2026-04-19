@@ -451,7 +451,7 @@ export default class GradiaCompanion extends Extension {
 
         const shouldCopy = !ocr;
         const shouldSave = !copyOnly;
-        const format = this._portalMode ? 'png' : this._settings.get_string('screenshot-format');
+        const format = (this._portalMode || ocr) ? 'png' : this._settings.get_string('screenshot-format');
 
         const _capture = (texture, geometry, scale, cursor, compositeFn) => {
             const capturePromise = captureAndStoreScreenshot(
@@ -947,7 +947,7 @@ export default class GradiaCompanion extends Extension {
         if (show)
             this._updateAreaSelectorState(this._toolbar?.selectedTool ?? 'select');
 
-        setOcrButtonEnabled(this._ocrButton, !windowMode && !recordingMode && !screenMode);
+        setOcrButtonEnabled(this._ocrButton, !windowMode && !recordingMode && !screenMode && !this._portalMode);
     }
 
     _connectDragOpacity() {
@@ -1107,12 +1107,6 @@ export default class GradiaCompanion extends Extension {
                 canvas.clear();
         });
 
-        this._settingsButton = createSettingsButton(() => {
-            Main.screenshotUI.close();
-            this.openPreferences();
-        });
-        ui._showPointerButtonContainer.insert_child_below(this._settingsButton, ui._showPointerButton);
-
         if (isGradiaFlatpakInstalled()) {
             const ui = Main.screenshotUI;
             this._ocrButton = createOcrButton(async () => {
@@ -1122,6 +1116,12 @@ export default class GradiaCompanion extends Extension {
             });
             ui._showPointerButtonContainer.insert_child_below(this._ocrButton, ui._showPointerButton);
         }
+
+        this._settingsButton = createSettingsButton(() => {
+            Main.screenshotUI.close();
+            this.openPreferences();
+        });
+        ui._showPointerButtonContainer.insert_child_below(this._settingsButton, ui._showPointerButton);
 
         for (const canvas of this._canvases) {
             canvas.setColor(this._toolbar.selectedColor);
@@ -1144,7 +1144,7 @@ export default class GradiaCompanion extends Extension {
             }
 
             if (ctrl && sym === Clutter.KEY_c) {
-                if (!this._isRecordingMode()) {
+                if (!this._isRecordingMode() && !this._portalMode) {
                     this._captureScreenshot({ copyOnly: true }).then(() => {
                         Main.screenshotUI.close();
                     });
