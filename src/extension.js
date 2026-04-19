@@ -1152,6 +1152,11 @@ export default class GradiaCompanion extends Extension {
                 }
             }
 
+            if (ctrl && sym === Clutter.KEY_e) {
+                this._ocrButton?.emit('clicked', 0);
+                return Clutter.EVENT_STOP;
+            }
+
             if (this._toolbar?.selectedTool === 'drag' &&
                 (sym === Clutter.KEY_Delete || sym === Clutter.KEY_BackSpace)) {
                 const sel = this._getSelectedCanvasAndStroke();
