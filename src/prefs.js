@@ -16,8 +16,8 @@ const AboutPage = GObject.registerClass(
 class AboutPage extends Adw.PreferencesPage {
     constructor(settings) {
         super({
-            title: 'About',
-            icon_name: 'help-about-symbolic',
+            title: 'Preferences',
+            icon_name: 'org.gnome.Settings-symbolic',
         });
         this._settings = settings;
         this._setupCss();
@@ -144,9 +144,17 @@ class ShortcutsPage extends Adw.PreferencesPage {
         ]);
 
         this._addGroup('Annotations', [
-            ['Undo Last Stroke',           '<Control>z'],
-            ['Delete Selected',            'Delete'],
-            ['Delete Selected',            'BackSpace'],
+            ['Undo Last Stroke',     '<Control>z'],
+            ['Delete Selected',      'Delete BackSpace'],
+            ['Crop Tool',            '1 q'],
+            ['Drag Tool',            '2 d'],
+            ['Freehand Tool',        '3 f'],
+            ['Rectangle Tool',       '4 r'],
+            ['Solid Rectangle Tool', '5 b'],
+            ['Highlighter Tool',     '6 h'],
+            ['Arrow Tool',           '7 a'],
+            ['Text Tool',            '8 t'],
+            ['Number Stamp Tool',    '9 n'],
         ]);
 
         this._addSystemKeybindingsGroup();

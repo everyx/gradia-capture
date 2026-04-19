@@ -8,7 +8,7 @@ import St from 'gi://St';
 import Gio from 'gi://Gio';
 
 import { Toolbar, TRASH_BUTTON_RADIUS } from './topBar.js';
-import { TOOLS, SELECTION_PADDING } from './tools.js';
+import { TOOLS, SELECTION_PADDING, TOOL_SHORTCUTS } from './tools.js';
 import { GradiaSettings } from './settings.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
 import { ResolutionOverlay } from './resolutionOverlay.js';
@@ -1160,6 +1160,11 @@ export default class GradiaCompanion extends Extension {
                     this._hideTrashButton();
                     return Clutter.EVENT_STOP;
                 }
+            }
+
+            if (!ctrl && sym in TOOL_SHORTCUTS) {
+                this._toolbar._onToolClicked(TOOL_SHORTCUTS[sym]);
+                return Clutter.EVENT_STOP;
             }
 
             return Clutter.EVENT_PROPAGATE;
