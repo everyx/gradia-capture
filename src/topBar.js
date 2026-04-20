@@ -90,6 +90,8 @@ export const Toolbar = GObject.registerClass({
         for (const btn of this._colorButtons) {
             btn.reactive = drawing;
             btn.opacity = drawing ? 255 : 80;
+            if (!drawing)
+                btn.style = `border-color: transparent;`;
         }
         this._slider.reactive = drawing;
         this._slider.opacity = drawing ? 255 : 80;
@@ -109,10 +111,9 @@ export const Toolbar = GObject.registerClass({
     _applyColor(hex) {
         this._selectedColor = hex;
         for (const btn of this._colorButtons) {
-            const isSelected = btn._colorHex === hex;
-            btn.checked = isSelected;
-            btn.style = `background-color: ${btn._colorHex};`;
-            if (btn._checkIcon) btn._checkIcon.visible = isSelected;
+            const selected = btn._colorHex === hex;
+            btn.style = `border-color: ${selected ? btn._colorHex : 'transparent'};`;
+            btn._swatch.style = `background-color: ${btn._colorHex};`;
         }
         this.emit('color-changed', hex);
     }
@@ -147,34 +148,30 @@ export const Toolbar = GObject.registerClass({
 
     _buildColorButtons() {
         for (const color of COLORS) {
-            const btn = new St.Button({
-                style_class: 'gradia-color-button',
+            const selected = color.hex === this._selectedColor;
+
+            const ring = new St.Button({
+                style_class: 'gradia-ring-button',
+                style: `border-color: ${selected ? color.hex : 'transparent'};`,
+                y_align: Clutter.ActorAlign.CENTER,
+                layout_manager: new Clutter.BinLayout(),
+            });
+
+            const swatch = new St.Widget({
+                style_class: 'gradia-swatch',
                 style: `background-color: ${color.hex};`,
-                reactive: true,
-                toggle_mode: true,
-                checked: color.hex === this._selectedColor,
                 y_align: Clutter.ActorAlign.CENTER,
             });
 
-            const isWhite = color.hex.toLowerCase() === '#ffffff';
-            const checkIcon = new St.Icon({
-                icon_name: 'object-select-symbolic',
-                style_class: isWhite ? 'gradia-check-icon-dark' : 'gradia-check-icon',
-                x_align: Clutter.ActorAlign.CENTER,
-                y_align: Clutter.ActorAlign.CENTER,
-                x_expand: true,
-                y_expand: true,
-                visible: color.hex === this._selectedColor,
-            });
-            btn.set_child(checkIcon);
-            btn._checkIcon = checkIcon;
-            btn._colorHex = color.hex;
+            ring._colorHex = color.hex;
+            ring._swatch = swatch;
 
-            btn.connect('clicked', () => this._onColorClicked(color.hex));
-            this.add_child(btn);
-            this._colorButtons.push(btn);
+            ring.add_child(swatch);
+            ring.connect('clicked', () => this._onColorClicked(color.hex));
+            this.add_child(ring);
+            this._colorButtons.push(ring);
 
-            attachTooltip(btn, color.name);
+            attachTooltip(ring, color.name);
         }
     }
 
