@@ -99,13 +99,16 @@
     background-color: transparent;
 }
 
-.gradia-selection-trash {
+.gradia-circle-button {
     min-width: 32px;
     max-width: 32px;
     min-height: 32px;
     max-height: 32px;
     border-radius: 9999px;
     padding: 0;
+}
+
+.gradia-selection-trash {
     background-color: #3a3a3d;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
@@ -116,6 +119,26 @@
 
 .gradia-selection-trash:active {
     background-color: #67676c;
+}
+
+.gradia-pill-button {
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 4px 4px;
+    border: none;
+    min-width: 50px;
+}
+
+.gradia-osd-button {
+    background-color: rgba(0, 0, 0, 0.45);
+    color: #ffffff;
+}
+.gradia-osd-button:hover {
+    background-color: rgba(0, 0, 0, 0.62);
+}
+.gradia-osd-button:active {
+    background-color: rgba(0, 0, 0, 0.75);
 }
 
 .gradia-resolution-label {
@@ -132,4 +155,19 @@
     padding: 10px;
     min-width: 0;
     min-height: 0;
+}
+
+.gradia-copied-label {
+    background-color: -st-accent-color;
+    color: white;
+    border-radius: 9999px;
+    padding: 5px 16px;
+    font-size: 13px;
+    font-weight: bold;
+    spacing: 6px;
+}
+
+.gradia-toast-border {
+    border: 4px solid #222226;
+    border-radius: 10px;
 }

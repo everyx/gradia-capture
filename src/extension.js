@@ -574,7 +574,7 @@ export default class GradiaCompanion extends Extension {
 
         if (!this._trashButton) {
             this._trashButton = new St.Button({
-                style_class: 'gradia-selection-trash',
+                style_class: 'gradia-selection-trash gradia-circle-button',
                 child: new St.Icon({
                     icon_name: 'user-trash-symbolic',
                     style: 'icon-size: 16px;',
