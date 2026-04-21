@@ -6,23 +6,7 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
-
-let screenshotNotificationSource = null;
-
-function getScreenshotNotificationSource() {
-    if (!screenshotNotificationSource) {
-        screenshotNotificationSource = new MessageTray.Source({
-            title: 'Screen Capture',
-            iconName: 'screenshooter-symbolic',
-        });
-        screenshotNotificationSource.connect('destroy', () => {
-            screenshotNotificationSource = null;
-        });
-        Main.messageTray.add(screenshotNotificationSource);
-    }
-    return screenshotNotificationSource;
-}
+import { showScreenshotToast } from './screenshotToast.js';
 
 function* _suffixes() {
     yield '';
@@ -106,47 +90,6 @@ function _pixbufSaveToStreamAsync(pixbuf, format = 'png') {
     });
 }
 
-function _showNotification(pixbuf, file) {
-    const coglContext = global.stage.context.get_backend().get_cogl_context();
-    const pixels = pixbuf.read_pixel_bytes();
-    const content = St.ImageContent.new_with_preferred_size(pixbuf.width, pixbuf.height);
-    content.set_bytes(
-        coglContext,
-        pixels,
-        Cogl.PixelFormat.RGBA_8888,
-        pixbuf.width,
-        pixbuf.height,
-        pixbuf.rowstride
-    );
-
-    const source = getScreenshotNotificationSource();
-    const notification = new MessageTray.Notification({
-        source,
-        title: file ? 'Screenshot captured' : 'Screenshot copied',
-        body: 'You can paste the image from the clipboard',
-        datetime: GLib.DateTime.new_now_local(),
-        gicon: content,
-        isTransient: true,
-    });
-
-    if (file) {
-        notification.addAction('Show in Files', () => {
-            const app = Gio.app_info_get_default_for_type('inode/directory', false);
-            if (app === null)
-                return;
-            app.launch([file], global.create_app_launch_context(0, -1));
-        });
-        notification.connect('activated', () => {
-            Gio.app_info_launch_default_for_uri(
-                file.get_uri(), global.create_app_launch_context(0, -1));
-            Main.overview.hide();
-            Main.panel.closeCalendar();
-        });
-    }
-
-    source.addNotification(notification);
-}
-
 async function _storeScreenshotAsync(bytes, pixbuf, { copy = true, save = true, format = 'png', alreadyEncoded = false } = {}) {
     let finalBytes = bytes;
     if (format !== 'png' && !alreadyEncoded)
@@ -164,8 +107,21 @@ async function _storeScreenshotAsync(bytes, pixbuf, { copy = true, save = true, 
             Main.screenshotUI.emit('screenshot-taken', file);
     }
 
-    if (copy)
-        _showNotification(pixbuf, file);
+    if (copy) {
+        const coglContext = global.stage.context.get_backend().get_cogl_context();
+        const pixels = pixbuf.read_pixel_bytes();
+        const imageContent = St.ImageContent.new_with_preferred_size(pixbuf.width, pixbuf.height);
+        imageContent.set_bytes(
+            coglContext,
+            pixels,
+            Cogl.PixelFormat.RGBA_8888,
+            pixbuf.width,
+            pixbuf.height,
+            pixbuf.rowstride
+        );
+
+        showScreenshotToast(file, imageContent, pixbuf.width, pixbuf.height);
+    }
 
     return file;
 }
