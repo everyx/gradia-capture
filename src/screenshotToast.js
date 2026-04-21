@@ -1,30 +1,25 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import GioUnix from 'gi://GioUnix';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import { isGradiaFlatpakInstalled, launchGradiaForScreenshot, openContainingFolder, openFileInDefaultApp } from './gradiaIntegration.js';
 
 const TOAST_WIDTH = 250;
 const TOAST_MARGIN = 24;
 const ANIMATION_TIME = 150;
 const CLOSE_ANIMATION_TIME = 150;
-const AUTO_HIDE_TIMEOUT = 6000;
+const AUTO_HIDE_TIMEOUT = 3000;
 const CLOSE_BUTTON_SIZE = 32;
 const CLOSE_BUTTON_OFFSET = CLOSE_BUTTON_SIZE / 2;
 const MIN_THUMB_H = 100;
-const MAX_THUMB_H = 300;
+const MAX_THUMB_H = 250;
 
 let _activeToast = null;
 
-function _isGradiaInstalled() {
-    const appInfo = GioUnix.DesktopAppInfo.new('be.alexandervanhee.gradia.desktop');
-    return appInfo !== null;
-}
-
 class ScreenshotToast {
-    constructor(file, imageContent, imgW, imgH) {
+    constructor(file, imageContent, imgW, imgH, showCopied = false) {
         this._file = file;
         this._timeoutId = 0;
         this._destroyed = false;
@@ -93,7 +88,7 @@ class ScreenshotToast {
         const btnMargin = 12;
         const btnH = 28;
 
-        if (file && _isGradiaInstalled()) {
+        if (file && isGradiaFlatpakInstalled()) {
             this._editButton = new St.Button({
                 style_class: 'gradia-pill-button gradia-selection-trash',
                 label: 'Edit',
@@ -103,17 +98,10 @@ class ScreenshotToast {
             this._editButton.set_position(btnMargin, thumbH - btnH - btnMargin);
             this._contentLayer.add_child(this._editButton);
 
-            this._editButton.connect('realize', () => {
-                const [, naturalW] = this._editButton.get_preferred_width(-1);
-                this._editButton.set_size(naturalW, btnH);
-            });
+            this._connectNaturalWidth(this._editButton, btnMargin, thumbH - btnH - btnMargin, btnH);
 
             this._editButton.connect('clicked', () => {
-                try {
-                    const appInfo = GioUnix.DesktopAppInfo.new('be.alexandervanhee.gradia.desktop');
-                    if (appInfo)
-                        appInfo.launch([file], global.create_app_launch_context(0, -1));
-                } catch (_e) {}
+                launchGradiaForScreenshot(file);
                 this.destroy();
             });
         }
@@ -128,38 +116,41 @@ class ScreenshotToast {
             this._openFolderButton.set_position(btnMargin, thumbH - btnH - btnMargin);
             this._contentLayer.add_child(this._openFolderButton);
 
-            this._openFolderButton.connect('realize', () => {
-                const [, naturalW] = this._openFolderButton.get_preferred_width(-1);
-                this._openFolderButton.set_size(naturalW, btnH);
-                this._openFolderButton.set_position(
-                    TOAST_WIDTH - naturalW - btnMargin,
-                    thumbH - btnH - btnMargin
-                );
-            });
+            this._connectNaturalWidth(this._openFolderButton, null, thumbH - btnH - btnMargin, btnH);
 
             this._openFolderButton.connect('clicked', () => {
-                try {
-                    Gio.DBus.session.call(
-                        'org.freedesktop.FileManager1',
-                        '/org/freedesktop/FileManager1',
-                        'org.freedesktop.FileManager1',
-                        'ShowItems',
-                        new GLib.Variant('(ass)', [[file.get_uri()], '']),
-                        null,
-                        Gio.DBusCallFlags.NONE,
-                        -1,
-                        null,
-                        null
-                    );
-                } catch (_e) {
-                    const app = Gio.app_info_get_default_for_type('inode/directory', false);
-                    if (app !== null) {
-                        const parent = file.get_parent();
-                        if (parent)
-                            app.launch([parent], global.create_app_launch_context(0, -1));
-                    }
-                }
+                openContainingFolder(file);
                 this.destroy();
+            });
+        }
+
+        if (showCopied) {
+            this._copiedLabel = new St.BoxLayout({
+                style_class: 'gradia-copied-label',
+            });
+
+            const checkIcon = new St.Icon({
+                icon_name: 'object-select-symbolic',
+                icon_size: 16,
+            });
+
+            const label = new St.Label({
+                text: 'Copied to Clipboard',
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+
+            this._copiedLabel.add_child(checkIcon);
+            this._copiedLabel.add_child(label);
+
+            this._contentLayer.add_child(this._copiedLabel);
+            this._copiedLabel.connect('realize', () => {
+                const [, naturalW] = this._copiedLabel.get_preferred_width(-1);
+                const [, naturalH] = this._copiedLabel.get_preferred_height(-1);
+                this._copiedLabel.set_size(naturalW, naturalH);
+                this._copiedLabel.set_position(
+                    Math.round((TOAST_WIDTH - naturalW) / 2),
+                    Math.round((thumbH - naturalH) / 2)
+                );
             });
         }
 
@@ -173,23 +164,18 @@ class ScreenshotToast {
                     return Clutter.EVENT_PROPAGATE;
             }
             if (this._file) {
-                Gio.app_info_launch_default_for_uri(
-                    this._file.get_uri(),
-                    global.create_app_launch_context(0, -1));
+                openFileInDefaultApp(this._file);
             }
             this.destroy();
             return Clutter.EVENT_STOP;
         });
 
         const borderOverlay = new St.Widget({
-            style: `
-                border: 3px solid #222226;
-                border-radius: 8px;
-            `,
+            style_class: 'gradia-toast-border',
             reactive: false,
         });
-        borderOverlay.set_size(TOAST_WIDTH + 6, thumbH + 6);
-        borderOverlay.set_position(-3, CLOSE_BUTTON_OFFSET - 3);
+        borderOverlay.set_size(TOAST_WIDTH + 8, thumbH + 8);
+        borderOverlay.set_position(-4, CLOSE_BUTTON_OFFSET - 4);
         this._outerContainer.add_child(borderOverlay);
 
         this._closeButton = new St.Button({
@@ -215,6 +201,14 @@ class ScreenshotToast {
         this._scheduleHide();
     }
 
+    _connectNaturalWidth(btn, x, y, btnH) {
+        btn.connect('realize', () => {
+            const [, w] = btn.get_preferred_width(-1);
+            btn.set_size(w, btnH);
+            btn.set_position(x === null ? TOAST_WIDTH - w - 12 : x, y);
+        });
+    }
+
     _addToStage() {
         Main.layoutManager.addChrome(this._outerContainer);
 
@@ -223,7 +217,7 @@ class ScreenshotToast {
             return;
 
         const targetX = monitor.x + monitor.width - TOAST_WIDTH - TOAST_MARGIN - CLOSE_BUTTON_OFFSET;
-        const targetY = monitor.y + monitor.height - this._outerContainer.height - TOAST_MARGIN;
+        const targetY = monitor.y + monitor.height - this._outerContainer.height - TOAST_MARGIN - CLOSE_BUTTON_OFFSET;
         const hiddenY = monitor.y + monitor.height + 10;
 
         this._outerContainer.set_position(targetX, hiddenY);
@@ -280,7 +274,7 @@ class ScreenshotToast {
     }
 }
 
-export function showScreenshotToast(file, imageContent, imgW, imgH) {
+export function showScreenshotToast(file, imageContent, imgW, imgH, showCopied = false) {
     _activeToast?.destroy();
-    _activeToast = new ScreenshotToast(file, imageContent, imgW, imgH);
+    _activeToast = new ScreenshotToast(file, imageContent, imgW, imgH, showCopied);
 }

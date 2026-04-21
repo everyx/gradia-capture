@@ -120,7 +120,7 @@ async function _storeScreenshotAsync(bytes, pixbuf, { copy = true, save = true, 
             pixbuf.rowstride
         );
 
-        showScreenshotToast(file, imageContent, pixbuf.width, pixbuf.height);
+        showScreenshotToast(file, imageContent, pixbuf.width, pixbuf.height, copy && !save);
     }
 
     return file;

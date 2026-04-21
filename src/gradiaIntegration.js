@@ -17,6 +17,44 @@ export function isGradiaFlatpakInstalled() {
     return !!appInfo.get_string('X-Flatpak');
 }
 
+export function launchGradiaForScreenshot(file) {
+    if (!file)
+        return;
+    const path = file.get_path();
+    if (!path)
+        return;
+    try {
+        Gio.Subprocess.new(
+            ['flatpak', 'run', GRADIA_FLATPAK_ID, path],
+            Gio.SubprocessFlags.NONE
+        );
+    } catch (e) {
+        console.error(`Failed to spawn Gradia: ${e.message}`);
+    }
+}
+
+export function openContainingFolder(file) {
+    Gio.DBus.session.call(
+        'org.freedesktop.FileManager1',
+        '/org/freedesktop/FileManager1',
+        'org.freedesktop.FileManager1',
+        'ShowItems',
+        new GLib.Variant('(ass)', [[file.get_uri()], '']),
+        null,
+        Gio.DBusCallFlags.NONE,
+        -1,
+        null,
+        null
+    );
+}
+
+export function openFileInDefaultApp(file) {
+    Gio.app_info_launch_default_for_uri(
+        file.get_uri(),
+        global.create_app_launch_context(0, -1)
+    );
+}
+
 export function launchGradiaOcrForFile(file) {
     if (!file)
         return;

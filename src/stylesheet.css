@@ -156,3 +156,18 @@
     min-width: 0;
     min-height: 0;
 }
+
+.gradia-copied-label {
+    background-color: -st-accent-color;
+    color: white;
+    border-radius: 9999px;
+    padding: 5px 16px;
+    font-size: 13px;
+    font-weight: bold;
+    spacing: 6px;
+}
+
+.gradia-toast-border {
+    border: 4px solid #222226;
+    border-radius: 10px;
+}
