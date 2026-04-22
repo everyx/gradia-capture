@@ -161,13 +161,13 @@
     background-color: -st-accent-color;
     color: white;
     border-radius: 9999px;
-    padding: 5px 16px;
+    padding: 5px 16px 5px 12px;
     font-size: 13px;
     font-weight: bold;
-    spacing: 6px;
+    spacing: 4px;
 }
 
 .gradia-toast-border {
-    border: 4px solid #222226;
-    border-radius: 10px;
+    border: 3.5px solid #222226;
+    border-radius: 12px;
 }

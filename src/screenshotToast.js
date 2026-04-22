@@ -7,13 +7,13 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { isGradiaFlatpakInstalled, launchGradiaForScreenshot, openContainingFolder, openFileInDefaultApp } from './gradiaIntegration.js';
 
 const TOAST_WIDTH = 250;
-const TOAST_MARGIN = 24;
+const TOAST_MARGIN = 18;
 const ANIMATION_TIME = 150;
 const CLOSE_ANIMATION_TIME = 150;
 const AUTO_HIDE_TIMEOUT = 3000;
 const CLOSE_BUTTON_SIZE = 32;
 const CLOSE_BUTTON_OFFSET = CLOSE_BUTTON_SIZE / 2;
-const MIN_THUMB_H = 100;
+const MIN_THUMB_H = 150;
 const MAX_THUMB_H = 250;
 
 let _activeToast = null;
@@ -174,8 +174,8 @@ class ScreenshotToast {
             style_class: 'gradia-toast-border',
             reactive: false,
         });
-        borderOverlay.set_size(TOAST_WIDTH + 8, thumbH + 8);
-        borderOverlay.set_position(-4, CLOSE_BUTTON_OFFSET - 4);
+        borderOverlay.set_size(TOAST_WIDTH + 7, thumbH + 7);
+        borderOverlay.set_position(-3.5, CLOSE_BUTTON_OFFSET - 3.5);
         this._outerContainer.add_child(borderOverlay);
 
         this._closeButton = new St.Button({
@@ -228,7 +228,7 @@ class ScreenshotToast {
             y: targetY,
             opacity: 255,
             duration: ANIMATION_TIME,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
         });
     }
 
