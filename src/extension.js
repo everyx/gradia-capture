@@ -614,6 +614,8 @@ export default class GradiaCompanion extends Extension {
             if (stroke) {
                 this._clearAllSelections(this._canvases[i]);
                 this._updateTrashButton();
+                this._toolbar._syncToStroke(stroke);
+                this._toolbar._updateDrawingControlsSensitivity();
 
                 this._dragToolActive = true;
                 this._dragToolStartX = stageX;
@@ -661,6 +663,7 @@ export default class GradiaCompanion extends Extension {
         }
 
         this._updateTrashButton();
+        this._toolbar._updateDrawingControlsSensitivity();
     }
 
     _compositeStrokesOntoPixbuf(bytes, pixbuf, data) {
@@ -1071,12 +1074,27 @@ export default class GradiaCompanion extends Extension {
         this._toolbar.connect('color-changed', (_toolbar, hex) => {
             for (const canvas of this._canvases)
                 canvas.setColor(hex);
+
+            const sel = this._getSelectedCanvasAndStroke();
+            if (sel) {
+                sel.stroke.color = hex;
+                sel.canvas.queue_repaint();
+            }
         });
 
         this._toolbar.connect('line-width-changed', (_toolbar, width) => {
             for (const canvas of this._canvases)
                 canvas.setStrokeWidth(width);
+
+            const sel = this._getSelectedCanvasAndStroke();
+            if (sel) {
+                sel.stroke.strokeWidth = width;
+                sel.canvas.queue_repaint();
+                this._updateTrashButton();
+            }
         });
+
+        this._toolbar._hasSelection = () => !!this._getSelectedCanvasAndStroke();
 
         this._toolbar.connect('undo', () => {
             if (this._textEntry) {

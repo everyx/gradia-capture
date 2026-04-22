@@ -87,14 +87,17 @@ export const Toolbar = GObject.registerClass({
 
     _updateDrawingControlsSensitivity() {
         const drawing = this._currentToolIsDrawing();
+        const hasSelection = this._hasSelection?.() ?? false;
+        const enabled = drawing || hasSelection;
+
         for (const btn of this._colorButtons) {
-            btn.reactive = drawing;
-            btn.opacity = drawing ? 255 : 80;
-            if (!drawing)
+            btn.reactive = enabled;
+            btn.opacity = enabled ? 255 : 80;
+            if (!enabled)
                 btn.style = `border-color: transparent;`;
         }
-        this._slider.reactive = drawing;
-        this._slider.opacity = drawing ? 255 : 80;
+        this._slider.reactive = enabled;
+        this._slider.opacity = enabled ? 255 : 80;
     }
 
     _saveCurrentToolEntry() {
@@ -122,6 +125,11 @@ export const Toolbar = GObject.registerClass({
         this._lineWidth = width;
         this._slider.value = (width - LINE_WIDTH_MIN) / (LINE_WIDTH_MAX - LINE_WIDTH_MIN);
         this.emit('line-width-changed', width);
+    }
+
+    _syncToStroke(stroke) {
+        this._applyColor(stroke.color);
+        this._applyLineWidth(stroke.strokeWidth);
     }
 
     _buildToolButtons() {
