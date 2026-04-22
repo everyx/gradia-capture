@@ -7,7 +7,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import { attachTooltip } from './tooltip.js';
 
-const GRADIA_FLATPAK_ID = 'be.alexandervanhee.gradia.Devel';
+const GRADIA_FLATPAK_ID = 'be.alexandervanhee.gradia';
 const GRADIA_DESKTOP_ID = `${GRADIA_FLATPAK_ID}.desktop`;
 
 export function isGradiaFlatpakInstalled() {
