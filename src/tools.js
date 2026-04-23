@@ -110,7 +110,7 @@ export const TOOLS = [
         beginStroke: () => ({}),
         bounds: makeStrokeBounds(() => SELECTION_PADDING),
         hitTest: standardHitTest,
-        render(cr, stroke, lineWidth) {
+        render(cr, stroke, _lineWidth) {
             if (stroke.points.length < 2) return;
             const { r, g, b } = hexToRgb(stroke.color);
             cr.setSourceRGBA(r, g, b, 1.0);

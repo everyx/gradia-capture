@@ -126,15 +126,16 @@ async function _storeScreenshotAsync(bytes, pixbuf, { copy = true, save = true, 
     return file;
 }
 
-export async function captureAndStoreScreenshot(texture, geometry, scale, cursor, compositeFn, { copy = true, save = true, format = 'png' } = {}) {
+export async function captureAndStoreScreenshot(texture, geometry, scale, cursor, compositeFn, { copy = true, save = true, format = 'png', playSound = true } = {}) {
     const stream = Gio.MemoryOutputStream.new_resizable();
     const [x, y, w, h] = geometry ?? [0, 0, -1, -1];
     if (cursor === null)
         cursor = {texture: null, x: 0, y: 0, scale: 1};
 
-    global.display.get_sound_player().play_from_theme('screen-capture', 'Screenshot taken', null);
+    if (playSound)
+        global.display.get_sound_player().play_from_theme('screen-capture', 'Screenshot taken', null);
 
-    let pixbuf = await Shell.Screenshot.composite_to_stream(
+    const pixbuf = await Shell.Screenshot.composite_to_stream(
         texture,
         x, y, w, h,
         scale,

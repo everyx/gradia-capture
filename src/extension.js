@@ -5,10 +5,9 @@ import Cairo from 'gi://cairo';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
-import Gio from 'gi://Gio';
 
 import { Toolbar, TRASH_BUTTON_RADIUS } from './topBar.js';
-import { TOOLS, SELECTION_PADDING, TOOL_SHORTCUTS } from './tools.js';
+import { TOOLS, TOOL_SHORTCUTS } from './tools.js';
 import { GradiaSettings } from './settings.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
 import { ResolutionOverlay } from './resolutionOverlay.js';
@@ -452,10 +451,11 @@ export default class GradiaCompanion extends Extension {
         const shouldCopy = !ocr;
         const shouldSave = !copyOnly;
         const format = (this._portalMode || ocr) ? 'png' : this._settings.get_string('screenshot-format');
+        const playSound = this._settings.get_boolean('play-sound');
 
         const _capture = (texture, geometry, scale, cursor, compositeFn) => {
             const capturePromise = captureAndStoreScreenshot(
-                texture, geometry, scale, cursor, compositeFn, { copy: shouldCopy, save: shouldSave, format }
+                texture, geometry, scale, cursor, compositeFn, { copy: shouldCopy, save: shouldSave, format, playSound }
             );
             // We have to await in portal mode to prevent a race condition where
             // the overlay gets closed before 'screenshot-taken' gets emitted, so the portal doesn't fail.
@@ -467,7 +467,7 @@ export default class GradiaCompanion extends Extension {
         if (ui._windowButton.checked) {
             const window =
                 ui._windowSelectors.flatMap(sel => sel.windows())
-                                   .find(win => win.checked);
+                    .find(win => win.checked);
             if (!window)
                 return;
 
@@ -710,6 +710,19 @@ export default class GradiaCompanion extends Extension {
         return { pixbuf: newPixbuf };
     }
 
+    _updateTextEntryStyle() {
+        if (!this._textEntry)
+            return;
+        const fs = Math.max(8, Math.round(this._toolbar.lineWidth * 3));
+        const col = this._toolbar.selectedColor;
+        this._textEntry.style = `
+            color: ${col};
+            caret-color: ${col};
+            font-size: ${fs}px;
+            font-family: "Sans";
+        `;
+    }
+
     _spawnTextEntry(stageX, stageY) {
         if (this._textEntry) {
             this._commitTextEntry();
@@ -735,24 +748,16 @@ export default class GradiaCompanion extends Extension {
             text: '',
         };
 
-        const fontSize = Math.max(8, Math.round(this._toolbar.lineWidth * 3));
-
         const entry = new St.Entry({
             style_class: 'gradia-text-entry',
             reactive: true,
             can_focus: true,
         });
 
-        entry.style = `
-            color: ${this._toolbar.selectedColor};
-            caret-color: ${this._toolbar.selectedColor};
-            font-size: ${fontSize}px;
-            font-family: "Sans";
-        `;
-
         entry.set_x_expand(false);
-        entry.set_width(fontSize * 4);
         primaryBin.add_child(entry);
+        this._textEntry = entry;
+        this._updateTextEntryStyle();
 
         const allocId = entry.connect('notify::allocation', () => {
             entry.disconnect(allocId);
@@ -770,8 +775,9 @@ export default class GradiaCompanion extends Extension {
         const clutterText = entry.get_clutter_text();
 
         clutterText.connect('text-changed', () => {
+            const fs = Math.max(8, Math.round(this._toolbar.lineWidth * 3));
             const [, naturalWidth] = clutterText.get_preferred_width(-1);
-            entry.set_width(Math.max(fontSize * 4, naturalWidth + fontSize));
+            entry.set_width(Math.max(fs * 4, naturalWidth + fs));
         });
 
         clutterText.connect('key-press-event', (_actor, event) => {
@@ -790,7 +796,6 @@ export default class GradiaCompanion extends Extension {
         });
 
         entry.grab_key_focus();
-        this._textEntry = entry;
     }
 
     _teardownTextEntry() {
@@ -1049,7 +1054,7 @@ export default class GradiaCompanion extends Extension {
                 return Clutter.EVENT_PROPAGATE;
             });
 
-            overlay.connect('button-release-event', (_actor, _event) => {
+            overlay.connect('button-release-event', () => {
                 if (this._toolbar?.selectedTool === 'drag') {
                     this._onDragToolRelease();
                     return Clutter.EVENT_STOP;
@@ -1080,6 +1085,11 @@ export default class GradiaCompanion extends Extension {
                 sel.stroke.color = hex;
                 sel.canvas.queue_repaint();
             }
+
+            if (this._pendingTextStroke) {
+                this._pendingTextStroke.color = hex;
+                this._updateTextEntryStyle();
+            }
         });
 
         this._toolbar.connect('line-width-changed', (_toolbar, width) => {
@@ -1091,6 +1101,11 @@ export default class GradiaCompanion extends Extension {
                 sel.stroke.strokeWidth = width;
                 sel.canvas.queue_repaint();
                 this._updateTrashButton();
+            }
+
+            if (this._pendingTextStroke) {
+                this._pendingTextStroke.strokeWidth = width;
+                this._updateTextEntryStyle();
             }
         });
 

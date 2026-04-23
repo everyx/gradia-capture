@@ -1,13 +1,11 @@
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
 import St from 'gi://St';
 
 import {Slider} from 'resource:///org/gnome/shell/ui/slider.js';
-import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import { TOOLS, SELECTION_PADDING } from './tools.js';
+import { TOOLS } from './tools.js';
 import { attachTooltip } from './tooltip.js';
 
 export const TRASH_BUTTON_RADIUS = 16;
@@ -94,7 +92,7 @@ export const Toolbar = GObject.registerClass({
             btn.reactive = enabled;
             btn.opacity = enabled ? 255 : 80;
             if (!enabled)
-                btn.style = `border-color: transparent;`;
+                btn.style = 'border-color: transparent;';
         }
         this._slider.reactive = enabled;
         this._slider.opacity = enabled ? 255 : 80;

@@ -1,5 +1,4 @@
 import Clutter from 'gi://Clutter';
-import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 
@@ -59,8 +58,7 @@ class ScreenshotToast {
         this._outerContainer.add_child(this._contentLayer);
 
         if (imageContent) {
-            let fitW, fitH, offX, offY;
-
+            let fitW, fitH;
             if (imgW > 0 && imgH > 0) {
                 const scale = Math.max(TOAST_WIDTH / imgW, thumbH / imgH);
                 fitW = Math.round(imgW * scale);
@@ -70,8 +68,8 @@ class ScreenshotToast {
                 fitH = thumbH;
             }
 
-            offX = Math.round((TOAST_WIDTH - fitW) / 2);
-            offY = Math.round((thumbH - fitH) / 2);
+            const offX = Math.round((TOAST_WIDTH - fitW) / 2);
+            const offY = Math.round((thumbH - fitH) / 2);
 
             const img = new Clutter.Actor({
                 width: fitW,

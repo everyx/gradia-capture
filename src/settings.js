@@ -1,5 +1,4 @@
 import GLib from 'gi://GLib';
-import Gio from 'gi://Gio';
 
 const SCHEMA_ID = 'org.gnome.shell.extensions.gradia-companion';
 

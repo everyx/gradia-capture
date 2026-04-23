@@ -9,5 +9,9 @@
       <default>'png'</default>
       <summary>File format for saved screenshots</summary>
     </key>
+    <key name="play-sound" type="b">
+      <default>true</default>
+      <summary>Play sound when a screenshot is taken</summary>
+    </key>
   </schema>
 </schemalist>
