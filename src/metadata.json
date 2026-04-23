@@ -1,6 +1,6 @@
 {
   "name": "Gradia Capture",
-  "description": "Enhances the built-in screenshot tool with annotation features.\nClipboard data will be overwritten with the annotated screenshot.",
+  "description": "Enhances the built-in screenshot tool with annotation features.\nClipboard data may be overwritten with the annotated screenshot.",
   "uuid": "gradia-integration@alexandervanhee.github.io",
   "url": "https://github.com/AlexanderVanhee/gradia-companion",
   "donations": {

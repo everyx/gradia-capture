@@ -22,6 +22,7 @@ class ScreenshotToast {
         this._file = file;
         this._timeoutId = 0;
         this._destroyed = false;
+        this._signalIds = [];
 
         let thumbH = 140;
         if (imgW > 0 && imgH > 0)
@@ -98,10 +99,10 @@ class ScreenshotToast {
 
             this._connectNaturalWidth(this._editButton, btnMargin, thumbH - btnH - btnMargin, btnH);
 
-            this._editButton.connect('clicked', () => {
+            this._signalIds.push([this._editButton, this._editButton.connect('clicked', () => {
                 launchGradiaForScreenshot(file);
                 this.destroy();
-            });
+            })]);
         }
 
         if (file) {
@@ -116,10 +117,10 @@ class ScreenshotToast {
 
             this._connectNaturalWidth(this._openFolderButton, null, thumbH - btnH - btnMargin, btnH);
 
-            this._openFolderButton.connect('clicked', () => {
+            this._signalIds.push([this._openFolderButton, this._openFolderButton.connect('clicked', () => {
                 openContainingFolder(file);
                 this.destroy();
-            });
+            })]);
         }
 
         if (showCopied) {
@@ -141,7 +142,7 @@ class ScreenshotToast {
             this._copiedLabel.add_child(label);
 
             this._contentLayer.add_child(this._copiedLabel);
-            this._copiedLabel.connect('realize', () => {
+            this._signalIds.push([this._copiedLabel, this._copiedLabel.connect('realize', () => {
                 const [, naturalW] = this._copiedLabel.get_preferred_width(-1);
                 const [, naturalH] = this._copiedLabel.get_preferred_height(-1);
                 this._copiedLabel.set_size(naturalW, naturalH);
@@ -149,10 +150,10 @@ class ScreenshotToast {
                     Math.round((TOAST_WIDTH - naturalW) / 2),
                     Math.round((thumbH - naturalH) / 2)
                 );
-            });
+            })]);
         }
 
-        this._contentLayer.connect('button-release-event', (_actor, event) => {
+        this._signalIds.push([this._contentLayer, this._contentLayer.connect('button-release-event', (_actor, event) => {
             const buttons = [this._editButton, this._openFolderButton];
             for (const btn of buttons) {
                 if (!btn) continue;
@@ -166,7 +167,7 @@ class ScreenshotToast {
             }
             this.destroy();
             return Clutter.EVENT_STOP;
-        });
+        })]);
 
         const borderOverlay = new St.Widget({
             style_class: 'gradia-toast-border',
@@ -185,26 +186,27 @@ class ScreenshotToast {
             reactive: true,
         });
         this._closeButton.set_position(TOAST_WIDTH - CLOSE_BUTTON_OFFSET + 1, -1);
-        this._closeButton.connect('clicked', () => this.destroy());
+        this._signalIds.push([this._closeButton, this._closeButton.connect('clicked', () => this.destroy())]);
         this._outerContainer.add_child(this._closeButton);
 
-        this._outerContainer.connect('notify::hover', () => {
+        this._signalIds.push([this._outerContainer, this._outerContainer.connect('notify::hover', () => {
             if (this._outerContainer.hover)
                 this._clearTimeout();
             else
                 this._scheduleHide();
-        });
+        })]);
 
         this._addToStage();
         this._scheduleHide();
     }
 
     _connectNaturalWidth(btn, x, y, btnH) {
-        btn.connect('realize', () => {
+        const id = btn.connect('realize', () => {
             const [, w] = btn.get_preferred_width(-1);
             btn.set_size(w, btnH);
             btn.set_position(x === null ? TOAST_WIDTH - w - 12 : x, y);
         });
+        this._signalIds.push([btn, id]);
     }
 
     _addToStage() {
@@ -256,6 +258,10 @@ class ScreenshotToast {
 
         this._clearTimeout();
 
+        for (const [obj, id] of this._signalIds)
+            obj.disconnect(id);
+        this._signalIds = [];
+
         this._outerContainer.ease({
             y: this._outerContainer.y + this._outerContainer.height + TOAST_MARGIN + 10,
             opacity: 0,
@@ -264,6 +270,8 @@ class ScreenshotToast {
             onStopped: () => {
                 Main.layoutManager.removeChrome(this._outerContainer);
                 this._outerContainer.destroy();
+                this._outerContainer = null;
+
             },
         });
 
@@ -275,4 +283,9 @@ class ScreenshotToast {
 export function showScreenshotToast(file, imageContent, imgW, imgH, showCopied = false) {
     _activeToast?.destroy();
     _activeToast = new ScreenshotToast(file, imageContent, imgW, imgH, showCopied);
+}
+
+export function destroyActiveToast() {
+    _activeToast?.destroy();
+    _activeToast = null;
 }

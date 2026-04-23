@@ -12,6 +12,7 @@ import { GradiaSettings } from './settings.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
 import { ResolutionOverlay } from './resolutionOverlay.js';
 import { isGradiaFlatpakInstalled, createOcrButton, createSettingsButton, launchGradiaOcrForFile, setOcrButtonEnabled } from './gradiaIntegration.js';
+import { destroyActiveToast } from './screenshotToast.js';
 
 const MAX_CANVAS_WIDTH = 1920;
 const MAX_CANVAS_HEIGHT = 1080;
@@ -435,6 +436,7 @@ export default class GradiaCompanion extends Extension {
         this._gradiaSettings.destroy();
         this._gradiaSettings = null;
         this._settings = null;
+        destroyActiveToast();
 
         this._removeUI();
     }
@@ -805,7 +807,11 @@ export default class GradiaCompanion extends Extension {
         this._pendingTextStroke = null;
         this._textTargetCanvas = null;
 
-        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        if (this._idleSourceId)
+            GLib.source_remove(this._idleSourceId);
+
+        this._idleSourceId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._idleSourceId = 0;
             this._committingText = false;
             Main.screenshotUI.grab_key_focus();
             return GLib.SOURCE_REMOVE;
@@ -1221,6 +1227,11 @@ export default class GradiaCompanion extends Extension {
     _removeUI() {
         this._cancelTextEntry();
         this._destroyTrashButton();
+
+        if (this._idleSourceId) {
+            GLib.source_remove(this._idleSourceId);
+            this._idleSourceId = 0;
+        }
 
         if (this._ocrButton) {
             this._ocrButton.destroy();
