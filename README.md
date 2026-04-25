@@ -22,10 +22,21 @@ Includes features like annotations, custom saving options and integration with t
 > [!IMPORTANT]
 > The [GNOME Code of Conduct](https://conduct.gnome.org) applies to this project, including this repository.
 
-## Installing
+## Setup
 
-Use the following command in the root directory of the cloned repository to build and install:
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/AlexanderVanhee/gradia-capture.git
+cd gradia-capture
+```
+
+### 2. Build and install
+
+Run the following command from the root directory of the cloned repo:
 
 ```bash
 ./build.sh -i
 ```
+
+The `-i` flag tells the script to both build the project and install it automatically.
