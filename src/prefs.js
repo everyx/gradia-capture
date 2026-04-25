@@ -123,7 +123,7 @@ const AboutPage = GObject.registerClass(
                 subtitle: 'OCR text extraction is available in the screenshot UI',
             } : {
                 title: 'Get the Gradia Flatpak',
-                subtitle: 'Install the app via Flathub to enable OCR text extraction feature',
+                subtitle: 'Install the app via Flathub to enable the OCR text extraction feature',
                 activatable: true,
             });
 
