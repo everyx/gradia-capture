@@ -171,3 +171,10 @@
     border: 3.5px solid #222226;
     border-radius: 12px;
 }
+
+.gradia-hint-label {
+    border-radius: 9999px;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 14px 24px;
+}

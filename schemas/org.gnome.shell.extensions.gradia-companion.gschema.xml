@@ -13,5 +13,9 @@
       <default>true</default>
       <summary>Play sound when a screenshot is taken</summary>
     </key>
+    <key name="clear-selection" type="b">
+      <default>false</default>
+      <summary>Clear the pre-selected area when the screenshot UI opens</summary>
+    </key>
   </schema>
 </schemalist>
