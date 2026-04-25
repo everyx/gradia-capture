@@ -13,6 +13,7 @@ import { captureAndStoreScreenshot } from './screenshotStore.js';
 import { ResolutionOverlay } from './resolutionOverlay.js';
 import { isGradiaFlatpakInstalled, createOcrButton, createSettingsButton, launchGradiaOcrForFile, setOcrButtonEnabled } from './gradiaIntegration.js';
 import { destroyActiveToast } from './screenshotToast.js';
+import { SelectionClearer } from './selectionClearer.js';
 
 const MAX_CANVAS_WIDTH = 1920;
 const MAX_CANVAS_HEIGHT = 1080;
@@ -400,6 +401,8 @@ export default class GradiaCompanion extends Extension {
         const self = this;
         this._settings = this.getSettings();
 
+        this._selectionClearer = new SelectionClearer();
+
         Main.screenshotUI.open = async function (mode = 0, ...rest) {
             self._portalMode = (mode === 2);
             const result = await self._originalOpen(mode, ...rest);
@@ -450,6 +453,12 @@ export default class GradiaCompanion extends Extension {
         if (!ui._selectionButton.checked && !ui._screenButton.checked && !ui._windowButton.checked)
             return;
 
+        if (ui._selectionButton.checked) {
+            const [,, w, h] = ui._areaSelector.getGeometry?.() ?? [0, 0, 0, 0];
+            if (w <= 2 || h <= 2)
+                return;
+        }
+
         const shouldCopy = !ocr && !externalSave;
         const shouldSave = !copyOnly && !externalSave;
         const format = (this._portalMode || ocr) ? 'png' : this._settings.get_string('screenshot-format');
@@ -464,6 +473,7 @@ export default class GradiaCompanion extends Extension {
             // GNOME Shell does the same, but we only await conditionally.
             if (this._portalMode || ocr)
                 return capturePromise;
+            return true;
         };
 
         if (ui._windowButton.checked) {
@@ -940,6 +950,7 @@ export default class GradiaCompanion extends Extension {
 
     _updateVisibilityForMode() {
         const windowMode = this._isWindowMode();
+        const selectionMode = Main.screenshotUI._selectionButton?.checked ?? false;
         const recordingMode = this._isRecordingMode();
         const screenMode = Main.screenshotUI._screenButton?.checked ?? false;
         const show = !windowMode && !recordingMode;
@@ -962,6 +973,8 @@ export default class GradiaCompanion extends Extension {
             this._updateAreaSelectorState(this._toolbar?.selectedTool ?? 'select');
 
         setOcrButtonEnabled(this._ocrButton, !windowMode && !recordingMode && !screenMode && !this._portalMode);
+
+        this._selectionHintLabel?.set({ visible: selectionMode && !recordingMode });
     }
 
     _connectDragOpacity() {
@@ -1184,8 +1197,9 @@ export default class GradiaCompanion extends Extension {
 
             if (ctrl && sym === Clutter.KEY_c) {
                 if (!this._isRecordingMode() && !this._portalMode) {
-                    this._captureScreenshot({ copyOnly: true }).then(() => {
-                        Main.screenshotUI.close();
+                    this._captureScreenshot({ copyOnly: true }).then(result => {
+                        if (result !== undefined)
+                            Main.screenshotUI.close();
                     });
                     return Clutter.EVENT_STOP;
                 }
@@ -1193,8 +1207,9 @@ export default class GradiaCompanion extends Extension {
 
             if (ctrl && sym === Clutter.KEY_s) {
                 if (!this._isRecordingMode()) {
-                    this._captureScreenshot({ externalSave: true }).then(() => {
-                        Main.screenshotUI.close();
+                    this._captureScreenshot({ externalSave: true }).then(result => {
+                        if (result !== undefined)
+                            Main.screenshotUI.close();
                     });
                     return Clutter.EVENT_STOP;
                 }
@@ -1225,6 +1240,29 @@ export default class GradiaCompanion extends Extension {
 
         for (const [prop, id] of MODE_BUTTONS) {
             this[id] = ui[prop].connect('notify::checked', () => this._updateVisibilityForMode());
+        }
+
+        if (this._settings.get_boolean('clear-selection')) {
+            this._selectionClearer.patch(ui._areaSelector);
+
+            this._selectionHintLabel = new St.Label({
+                text: 'Drag to Make a Selection',
+                style_class: 'screenshot-ui-panel gradia-hint-label',
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER,
+                x_expand: true,
+                y_expand: true,
+            });
+            primaryBin.add_child(this._selectionHintLabel);
+
+          const hideLabelId = ui._areaSelector.connect('drag-started', () => {
+              this._selectionHintLabel?.ease({
+                  opacity: 0, duration: 200,
+                  mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                  onComplete: () => this._selectionHintLabel?.hide(),
+              });
+              ui._areaSelector.disconnect(hideLabelId);
+          });
         }
 
         this._connectDragOpacity();
@@ -1277,6 +1315,7 @@ export default class GradiaCompanion extends Extension {
         }
 
         this._disconnectDragOpacity();
+        this._selectionClearer.restore();
 
         const selector = ui._areaSelector;
         if (selector) {
@@ -1292,6 +1331,11 @@ export default class GradiaCompanion extends Extension {
             canvas.destroy();
         this._canvases = [];
         this._bins = [];
+
+        if (this._selectionHintLabel) {
+            this._selectionHintLabel.destroy();
+            this._selectionHintLabel = null;
+        }
 
         if (this._toolbar) {
             this._toolbar.destroy();
