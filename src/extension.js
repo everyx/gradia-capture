@@ -441,7 +441,7 @@ export default class GradiaCompanion extends Extension {
         this._removeUI();
     }
 
-    async _captureScreenshot({ copyOnly = false, ocr = false } = {}) {
+    async _captureScreenshot({ copyOnly = false, ocr = false, externalSave = false } = {}) {
         const ui = Main.screenshotUI;
         this._commitTextEntry();
         if (ocr)
@@ -450,14 +450,14 @@ export default class GradiaCompanion extends Extension {
         if (!ui._selectionButton.checked && !ui._screenButton.checked && !ui._windowButton.checked)
             return;
 
-        const shouldCopy = !ocr;
-        const shouldSave = !copyOnly;
+        const shouldCopy = !ocr && !externalSave;
+        const shouldSave = !copyOnly && !externalSave;
         const format = (this._portalMode || ocr) ? 'png' : this._settings.get_string('screenshot-format');
         const playSound = this._settings.get_boolean('play-sound');
 
         const _capture = (texture, geometry, scale, cursor, compositeFn) => {
             const capturePromise = captureAndStoreScreenshot(
-                texture, geometry, scale, cursor, compositeFn, { copy: shouldCopy, save: shouldSave, format, playSound }
+                texture, geometry, scale, cursor, compositeFn, { copy: shouldCopy, save: shouldSave, externalSave, format, playSound }
             );
             // We have to await in portal mode to prevent a race condition where
             // the overlay gets closed before 'screenshot-taken' gets emitted, so the portal doesn't fail.
@@ -1185,6 +1185,15 @@ export default class GradiaCompanion extends Extension {
             if (ctrl && sym === Clutter.KEY_c) {
                 if (!this._isRecordingMode() && !this._portalMode) {
                     this._captureScreenshot({ copyOnly: true }).then(() => {
+                        Main.screenshotUI.close();
+                    });
+                    return Clutter.EVENT_STOP;
+                }
+            }
+
+            if (ctrl && sym === Clutter.KEY_s) {
+                if (!this._isRecordingMode()) {
+                    this._captureScreenshot({ externalSave: true }).then(() => {
                         Main.screenshotUI.close();
                     });
                     return Clutter.EVENT_STOP;
