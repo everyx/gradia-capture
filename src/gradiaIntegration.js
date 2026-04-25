@@ -19,15 +19,14 @@ export function isGradiaFlatpakInstalled() {
 
 export function launchGradiaForScreenshot(file) {
     if (!file)
-        return;
-    const path = file.get_path();
-    if (!path)
-        return;
+      return;
+
+    const appInfo = Shell.AppSystem.get_default().lookup_app(GRADIA_DESKTOP_ID)?.get_app_info();
+    if (!appInfo)
+      return;
+
     try {
-        Gio.Subprocess.new(
-            ['flatpak', 'run', GRADIA_FLATPAK_ID, path],
-            Gio.SubprocessFlags.NONE
-        );
+        Gio.Subprocess.new(['gio', 'launch', appInfo.get_filename(), file.get_uri()], Gio.SubprocessFlags.NONE);
     } catch (e) {
         console.error(`Failed to spawn Gradia: ${e.message}`);
     }

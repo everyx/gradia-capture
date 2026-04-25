@@ -197,7 +197,8 @@ const ShortcutsPage = GObject.registerClass(
             this._addGroup('Screenshot Mode', [
                 ['Take Screenshot / Capture',  'Return space'],
                 ['Copy to Clipboard',          '<Control>c'],
-                ['Extract Text',               '<Control>e'],
+                ['Save As…',                   '<Control>s'],
+                ['Extract Text (OCR)',         '<Control>e'],
                 ['Area Selection',             's'],
                 ['Screen Selection',           'c'],
                 ['Window Selection',           'w'],
