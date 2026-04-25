@@ -256,6 +256,16 @@ export const Toolbar = GObject.registerClass({
             this._onToolClicked('drag');
     }
 
+    scrollLineWidth(direction) {
+        if (!this._slider.reactive)
+            return;
+        const step = 1 / (LINE_WIDTH_MAX - LINE_WIDTH_MIN);
+        if (direction === Clutter.ScrollDirection.UP)
+            this._slider.value = Math.min(1, this._slider.value + step);
+        else if (direction === Clutter.ScrollDirection.DOWN)
+            this._slider.value = Math.max(0, this._slider.value - step);
+    }
+
     get selectedTool() { return this._selectedTool; }
     get selectedColor() { return this._selectedColor; }
     get lineWidth() { return this._lineWidth; }

@@ -1220,6 +1220,11 @@ export default class GradiaCompanion extends Extension {
 
         this._connectDragOpacity();
 
+        this._scrollId = Main.screenshotUI.connect('scroll-event', (_actor, event) => {
+            this._toolbar.scrollLineWidth(event.get_scroll_direction());
+            return Clutter.EVENT_PROPAGATE;
+        });
+
         this._setTool('select');
         this._updateVisibilityForMode();
     }
@@ -1282,6 +1287,11 @@ export default class GradiaCompanion extends Extension {
         if (this._toolbar) {
             this._toolbar.destroy();
             this._toolbar = null;
+        }
+
+        if (this._scrollId) {
+            Main.screenshotUI.disconnect(this._scrollId);
+            this._scrollId = null;
         }
 
         if (this._resolutionOverlay) {
