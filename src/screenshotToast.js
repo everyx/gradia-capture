@@ -49,14 +49,18 @@ class ScreenshotToast {
         this._shadowLayer.set_position(0, CLOSE_BUTTON_OFFSET);
         this._outerContainer.add_child(this._shadowLayer);
 
-        this._contentLayer = new St.Widget({
+        this._mainButton = new St.Button({
             reactive: true,
             clip_to_allocation: true,
-            style: 'border-radius: 8px;',
+            style: 'background: transparent;',
         });
+        this._mainButton.set_size(TOAST_WIDTH, thumbH);
+        this._mainButton.set_position(0, CLOSE_BUTTON_OFFSET);
+        this._outerContainer.add_child(this._mainButton);
+
+        this._contentLayer = new St.Widget();
         this._contentLayer.set_size(TOAST_WIDTH, thumbH);
-        this._contentLayer.set_position(0, CLOSE_BUTTON_OFFSET);
-        this._outerContainer.add_child(this._contentLayer);
+        this._mainButton.set_child(this._contentLayer);
 
         if (imageContent) {
             let fitW, fitH;
@@ -153,20 +157,10 @@ class ScreenshotToast {
             })]);
         }
 
-        this._signalIds.push([this._contentLayer, this._contentLayer.connect('button-release-event', (_actor, event) => {
-            const buttons = [this._editButton, this._openFolderButton];
-            for (const btn of buttons) {
-                if (!btn) continue;
-                const [ex, ey] = event.get_coords();
-                const [bx, by] = btn.get_transformed_position();
-                if (ex >= bx && ex <= bx + btn.width && ey >= by && ey <= by + btn.height)
-                    return Clutter.EVENT_PROPAGATE;
-            }
-            if (this._file) {
+        this._signalIds.push([this._mainButton, this._mainButton.connect('clicked', () => {
+            if (this._file)
                 openFileInDefaultApp(this._file);
-            }
             this.destroy();
-            return Clutter.EVENT_STOP;
         })]);
 
         const borderOverlay = new St.Widget({
