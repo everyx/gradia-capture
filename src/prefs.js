@@ -173,6 +173,13 @@ const AboutPage = GObject.registerClass(
                     this._settings.set_string('screenshot-format', selected.id);
             });
 
+            const clearSelectionRow = new Adw.SwitchRow({
+                title: 'Disable Initial Selection',
+                subtitle: 'Hide the default or last pre-selected area when the overlay opens',
+            });
+
+            this._settings.bind('clear-selection', clearSelectionRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+
             const soundRow = new Adw.SwitchRow({
                 title: 'Sound',
                 subtitle: 'Play a shutter sound effect on capture',
@@ -181,6 +188,7 @@ const AboutPage = GObject.registerClass(
             this._settings.bind('play-sound', soundRow, 'active', Gio.SettingsBindFlags.DEFAULT);
 
             group.add(formatRow);
+            group.add(clearSelectionRow);
             group.add(soundRow);
             this.add(group);
         }
