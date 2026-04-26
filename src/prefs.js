@@ -180,6 +180,13 @@ const AboutPage = GObject.registerClass(
 
             this._settings.bind('clear-selection', clearSelectionRow, 'active', Gio.SettingsBindFlags.DEFAULT);
 
+            const compositeWindowRow = new Adw.SwitchRow({
+                title: 'Include Parent Windows',
+                subtitle: 'Also capture parent windows when a transient window is selected',
+            });
+
+            this._settings.bind('composite-window-capture', compositeWindowRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+
             const soundRow = new Adw.SwitchRow({
                 title: 'Sound',
                 subtitle: 'Play a shutter sound effect on capture',
@@ -189,6 +196,7 @@ const AboutPage = GObject.registerClass(
 
             group.add(formatRow);
             group.add(clearSelectionRow);
+            group.add(compositeWindowRow);
             group.add(soundRow);
             this.add(group);
         }
