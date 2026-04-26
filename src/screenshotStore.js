@@ -4,6 +4,7 @@ import GLib from 'gi://GLib';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
+import Cairo from 'gi://cairo';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { showScreenshotToast } from './screenshotToast.js';
@@ -193,36 +194,80 @@ async function _saveToUserChosenLocation(bytes, pixbuf, format = 'png') {
     return file;
 }
 
-export async function captureAndStoreScreenshot(texture, geometry, scale, cursor, compositeFn, { copy = true, save = true, externalSave = false, format = 'png', playSound = true } = {}) {
-    const stream = Gio.MemoryOutputStream.new_resizable();
-    const [x, y, w, h] = geometry ?? [0, 0, -1, -1];
-    if (cursor === null)
-        cursor = {texture: null, x: 0, y: 0, scale: 1};
+async function _captureWindowComposite(windowEntries, cursor) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const { rect } of windowEntries) {
+        minX = Math.min(minX, rect.x);
+        minY = Math.min(minY, rect.y);
+        maxX = Math.max(maxX, rect.x + rect.width);
+        maxY = Math.max(maxY, rect.y + rect.height);
+    }
 
+    const outputScale = windowEntries[0].scale;
+    const outW = Math.round((maxX - minX) * outputScale);
+    const outH = Math.round((maxY - minY) * outputScale);
+    const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, outW, outH);
+    const cr = new Cairo.Context(surface);
+
+    async function paintEntry(texture, scale, dx, dy) {
+        const stream = Gio.MemoryOutputStream.new_resizable();
+        const pixbuf = await Shell.Screenshot.composite_to_stream(texture, 0, 0, -1, -1, scale, null, 0, 0, 1, stream);
+        stream.close(null);
+        imports.gi.Gdk.cairo_set_source_pixbuf(cr, pixbuf, dx, dy);
+        cr.paint();
+    }
+
+    for (const entry of [...windowEntries].reverse())
+        await paintEntry(entry.texture, entry.scale,
+            Math.round((entry.rect.x - minX) * outputScale),
+            Math.round((entry.rect.y - minY) * outputScale));
+
+    if (cursor?.texture)
+        await paintEntry(cursor.texture, cursor.scale,
+            Math.round((cursor.x - minX) * outputScale),
+            Math.round((cursor.y - minY) * outputScale));
+
+    cr.$dispose();
+
+    const finalPixbuf = imports.gi.Gdk.pixbuf_get_from_surface(surface, 0, 0, outW, outH);
+    const bytes = await _pixbufSaveToStreamAsync(finalPixbuf, 'png');
+    return { bytes, pixbuf: finalPixbuf };
+}
+
+export async function captureAndStoreScreenshot(texture, geometry, scale, cursor, compositeFn, windowComposite = null, { copy = true, save = true, externalSave = false, format = 'png', playSound = true } = {}) {
     if (playSound)
         global.display.get_sound_player().play_from_theme('screen-capture', 'Screenshot taken', null);
 
-    const pixbuf = await Shell.Screenshot.composite_to_stream(
-        texture,
-        x, y, w, h,
-        scale,
-        cursor.texture, cursor.x, cursor.y, cursor.scale,
-        stream
-    );
+    let finalBytes, finalPixbuf, alreadyEncoded = false;
 
-    stream.close(null);
-    const originalBytes = stream.steal_as_bytes();
+    if (windowComposite) {
+      const result = await _captureWindowComposite(windowComposite.windows, windowComposite.cursor);
+      finalBytes = result.bytes;
+      finalPixbuf = result.pixbuf;
+      alreadyEncoded = true;
+    } else {
+        const stream = Gio.MemoryOutputStream.new_resizable();
+        const [x, y, w, h] = geometry ?? [0, 0, -1, -1];
+        if (cursor === null)
+            cursor = { texture: null, x: 0, y: 0, scale: 1 };
 
-    let finalBytes = originalBytes;
-    let finalPixbuf = pixbuf;
-    let alreadyEncoded = false;
+        finalPixbuf = await Shell.Screenshot.composite_to_stream(
+            texture,
+            x, y, w, h,
+            scale,
+            cursor.texture, cursor.x, cursor.y, cursor.scale,
+            stream
+        );
+        stream.close(null);
+        finalBytes = stream.steal_as_bytes();
 
-    if (compositeFn) {
-        const composited = compositeFn(originalBytes, pixbuf);
-        if (composited) {
-            finalPixbuf = composited.pixbuf;
-            finalBytes = await _pixbufSaveToStreamAsync(finalPixbuf, format);
-            alreadyEncoded = true;
+        if (compositeFn) {
+            const composited = compositeFn(finalBytes, finalPixbuf);
+            if (composited) {
+                finalPixbuf = composited.pixbuf;
+                finalBytes = await _pixbufSaveToStreamAsync(finalPixbuf, format);
+                alreadyEncoded = true;
+            }
         }
     }
 

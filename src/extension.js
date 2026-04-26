@@ -444,6 +444,88 @@ export default class GradiaCompanion extends Extension {
         this._removeUI();
     }
 
+    _buildWindowComposite(ui) {
+        const selectedWindow =
+            ui._windowSelectors.flatMap(sel => sel.windows())
+                .find(win => win.checked);
+        if (!selectedWindow)
+            return null;
+
+        const allActors = global.get_window_actors();
+        const allUIWindows = ui._windowSelectors.flatMap(sel => sel.windows());
+
+        function metaForBoundingBox(bb) {
+            for (const actor of allActors) {
+                const fr = actor.metaWindow.get_frame_rect();
+                if (fr.x === bb.x && fr.y === bb.y &&
+                    fr.width === bb.width && fr.height === bb.height)
+                    return actor.metaWindow;
+            }
+            return null;
+        }
+
+        function entryForMeta(meta) {
+            const fr = meta.get_frame_rect();
+            const br = meta.get_buffer_rect();
+            const uiWin = allUIWindows.find(w =>
+                w.boundingBox.x === fr.x && w.boundingBox.y === fr.y &&
+                w.boundingBox.width === fr.width && w.boundingBox.height === fr.height
+            );
+            if (uiWin) {
+                const c = uiWin.windowContent;
+                if (!c)
+                    return null;
+                return {
+                    texture: c.get_texture(),
+                    scale: uiWin.bufferScale,
+                    rect: { x: br.x, y: br.y, width: br.width, height: br.height },
+                };
+            }
+            const actor = allActors.find(a => {
+                const afr = a.metaWindow.get_frame_rect();
+                return afr.x === fr.x && afr.y === fr.y &&
+                       afr.width === fr.width && afr.height === fr.height;
+            });
+            if (!actor)
+                return null;
+            const content = actor.paint_to_content(null);
+            if (!content)
+                return null;
+            return {
+                texture: content.get_texture(),
+                scale: actor.get_resource_scale(),
+                rect: { x: br.x, y: br.y, width: br.width, height: br.height },
+            };
+        }
+
+        const selectedMeta = metaForBoundingBox(selectedWindow.boundingBox);
+        const chain = [];
+        if (selectedMeta) {
+            let cur = selectedMeta.get_transient_for();
+            while (cur) {
+                chain.push(cur);
+                cur = cur.get_transient_for();
+            }
+        }
+
+        const selContent = selectedWindow.windowContent;
+        if (!selContent)
+            return null;
+
+        const selBr = selectedMeta?.get_buffer_rect() ?? selectedWindow.boundingBox;
+
+        const entries = [
+            {
+                texture: selContent.get_texture(),
+                scale: selectedWindow.bufferScale,
+                rect: { x: selBr.x, y: selBr.y, width: selBr.width, height: selBr.height },
+            },
+            ...chain.map(entryForMeta).filter(e => e !== null),
+        ];
+
+        return { windows: entries };
+    }
+
     async _captureScreenshot({ copyOnly = false, ocr = false, externalSave = false } = {}) {
         const ui = Main.screenshotUI;
         this._commitTextEntry();
@@ -464,9 +546,10 @@ export default class GradiaCompanion extends Extension {
         const format = (this._portalMode || ocr) ? 'png' : this._settings.get_string('screenshot-format');
         const playSound = this._settings.get_boolean('play-sound');
 
-        const _capture = (texture, geometry, scale, cursor, compositeFn) => {
+        const _capture = (texture, geometry, scale, cursor, compositeFn, windowComposite = null) => {
             const capturePromise = captureAndStoreScreenshot(
-                texture, geometry, scale, cursor, compositeFn, { copy: shouldCopy, save: shouldSave, externalSave, format, playSound }
+                texture, geometry, scale, cursor, compositeFn, windowComposite,
+                { copy: shouldCopy, save: shouldSave, externalSave, format, playSound }
             );
             // We have to await in portal mode to prevent a race condition where
             // the overlay gets closed before 'screenshot-taken' gets emitted, so the portal doesn't fail.
@@ -477,28 +560,42 @@ export default class GradiaCompanion extends Extension {
         };
 
         if (ui._windowButton.checked) {
-            const window =
+            const selectedWindow =
                 ui._windowSelectors.flatMap(sel => sel.windows())
                     .find(win => win.checked);
-            if (!window)
+            if (!selectedWindow)
                 return;
 
-            const content = window.windowContent;
-            if (!content)
-                return;
-
-            let cursorTexture = window.getCursorTexture()?.get_texture();
+            let cursorTexture = selectedWindow.getCursorTexture()?.get_texture();
             if (!ui._cursor.visible)
                 cursorTexture = null;
+
+            if (this._settings.get_boolean('composite-window-capture')) {
+                const windowComposite = this._buildWindowComposite(ui);
+                if (!windowComposite)
+                    return;
+
+                windowComposite.cursor = {
+                    texture: cursorTexture ?? null,
+                    x: selectedWindow.cursorPoint.x + selectedWindow.boundingBox.x,
+                    y: selectedWindow.cursorPoint.y + selectedWindow.boundingBox.y,
+                    scale: ui._cursorScale,
+                };
+                return await _capture(null, null, 1, null, null, windowComposite);
+            }
+
+            const content = selectedWindow.windowContent;
+            if (!content)
+                return;
 
             return await _capture(
                 content.get_texture(),
                 null,
-                window.bufferScale,
+                selectedWindow.bufferScale,
                 {
                     texture: cursorTexture ?? null,
-                    x: window.cursorPoint.x * window.bufferScale,
-                    y: window.cursorPoint.y * window.bufferScale,
+                    x: selectedWindow.cursorPoint.x * selectedWindow.bufferScale,
+                    y: selectedWindow.cursorPoint.y * selectedWindow.bufferScale,
                     scale: ui._cursorScale,
                 },
                 null
