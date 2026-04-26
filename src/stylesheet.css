@@ -123,9 +123,9 @@
 
 .gradia-pill-button {
     border-radius: 9999px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: bold;
-    padding: 4px 4px;
+    padding: 4px 8px;
     border: none;
     min-width: 50px;
 }

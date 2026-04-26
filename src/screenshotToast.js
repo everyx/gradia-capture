@@ -88,20 +88,24 @@ class ScreenshotToast {
             this._contentLayer.add_child(img);
         }
 
-        const btnMargin = 12;
-        const btnH = 28;
+        const btnMargin = 16;
 
         if (file && isGradiaFlatpakInstalled()) {
             this._editButton = new St.Button({
                 style_class: 'gradia-pill-button gradia-selection-trash',
                 label: 'Edit',
                 reactive: true,
+                y_align: Clutter.ActorAlign.CENTER,
             });
 
-            this._editButton.set_position(btnMargin, thumbH - btnH - btnMargin);
             this._contentLayer.add_child(this._editButton);
 
-            this._connectNaturalWidth(this._editButton, btnMargin, thumbH - btnH - btnMargin, btnH);
+            this._signalIds.push([this._editButton, this._editButton.connect('realize', () => {
+                const [, natW] = this._editButton.get_preferred_width(-1);
+                const [, natH] = this._editButton.get_preferred_height(-1);
+                this._editButton.set_size(natW, natH);
+                this._editButton.set_position(btnMargin, thumbH - natH - btnMargin);
+            })]);
 
             this._signalIds.push([this._editButton, this._editButton.connect('clicked', () => {
                 launchGradiaForScreenshot(file);
@@ -114,12 +118,17 @@ class ScreenshotToast {
                 style_class: 'gradia-pill-button gradia-selection-trash',
                 label: 'Open Folder',
                 reactive: true,
+                y_align: Clutter.ActorAlign.CENTER,
             });
 
-            this._openFolderButton.set_position(btnMargin, thumbH - btnH - btnMargin);
             this._contentLayer.add_child(this._openFolderButton);
 
-            this._connectNaturalWidth(this._openFolderButton, null, thumbH - btnH - btnMargin, btnH);
+            this._signalIds.push([this._openFolderButton, this._openFolderButton.connect('realize', () => {
+                const [, natW] = this._openFolderButton.get_preferred_width(-1);
+                const [, natH] = this._openFolderButton.get_preferred_height(-1);
+                this._openFolderButton.set_size(natW, natH);
+                this._openFolderButton.set_position(TOAST_WIDTH - natW - btnMargin, thumbH - natH - btnMargin);
+            })]);
 
             this._signalIds.push([this._openFolderButton, this._openFolderButton.connect('clicked', () => {
                 openContainingFolder(file);
@@ -194,15 +203,6 @@ class ScreenshotToast {
         this._scheduleHide();
     }
 
-    _connectNaturalWidth(btn, x, y, btnH) {
-        const id = btn.connect('realize', () => {
-            const [, w] = btn.get_preferred_width(-1);
-            btn.set_size(w, btnH);
-            btn.set_position(x === null ? TOAST_WIDTH - w - 12 : x, y);
-        });
-        this._signalIds.push([btn, id]);
-    }
-
     _addToStage() {
         Main.layoutManager.addChrome(this._outerContainer);
 
@@ -265,7 +265,6 @@ class ScreenshotToast {
                 Main.layoutManager.removeChrome(this._outerContainer);
                 this._outerContainer.destroy();
                 this._outerContainer = null;
-
             },
         });
 
