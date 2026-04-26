@@ -1136,7 +1136,11 @@ export default class GradiaCompanion extends Extension {
             const canvas = new DrawingCanvas({
                 style: 'background-color: transparent;',
             });
-            bin.insert_child_below(canvas, bin.get_first_child());
+            canvas.add_constraint(new Clutter.BindConstraint({
+                source: bin,
+                coordinate: Clutter.BindCoordinate.ALL,
+            }));
+            ui.insert_child_below(canvas, ui._areaSelector);
             this._canvases.push(canvas);
 
             const overlay = new DrawingInputOverlay(canvas, {
