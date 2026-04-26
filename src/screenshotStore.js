@@ -108,12 +108,12 @@ function _showToast(file, pixbuf, copyOnly) {
 
 async function _storeScreenshotAsync(bytes, pixbuf, { copy = true, save = true, format = 'png', alreadyEncoded = false } = {}) {
     let finalBytes = bytes;
-    if (format !== 'png' && !alreadyEncoded)
+    if (format !== 'png' && !alreadyEncoded && save)
         finalBytes = await _pixbufSaveToStreamAsync(pixbuf, format);
 
     if (copy) {
         const clipboard = St.Clipboard.get_default();
-        clipboard.set_content(St.ClipboardType.CLIPBOARD, `image/${format}`, finalBytes);
+        clipboard.set_content(St.ClipboardType.CLIPBOARD, 'image/png', bytes);
     }
 
     let file = null;
