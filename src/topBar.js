@@ -145,7 +145,7 @@ export const Toolbar = GObject.registerClass({
             this.add_child(btn);
             this._toolButtons.push(btn);
 
-            attachTooltip(btn, tool.name);
+            btn._tooltip = attachTooltip(btn, tool.name);
 
             if (i === 1)
                 this._addSeparator();
@@ -242,18 +242,9 @@ export const Toolbar = GObject.registerClass({
 
     setSelectionToolVisible(enabled) {
         const btn = this._toolButtons.find(b => b._toolId === 'select');
-        if (!btn)
-            return;
-
-        btn.reactive = enabled;
-        btn.ease({
-            opacity: enabled ? 255 : 80,
-            duration: 200,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-        });
-
-        if (!enabled && this._selectedTool === 'select')
-            this._onToolClicked('drag');
+        const iconName = enabled ? 'icons/selection-opaque-3-symbolic.svg' : 'icons/display-symbolic.svg';
+        btn.get_child().gicon = Gio.Icon.new_for_string(`${this._extensionPath}/${iconName}`);
+        btn._tooltip.text = enabled ? 'Crop' : 'Pick Display';
     }
 
     scrollLineWidth(direction) {

@@ -961,16 +961,20 @@ export default class GradiaCompanion extends Extension {
         }
 
         for (const canvas of this._canvases)
-            canvas.visible = show;
+            canvas.opacity = show ? 255 : 0;
 
-        for (const overlay of this._overlays)
-            overlay.visible = show;
+        for (const overlay of this._overlays) {
+            overlay.opacity = show ? 255 : 0;
+            if (!show)
+                overlay.reactive = false;
+        }
 
-        if (!show)
+        if (!show) {
             this._hideTrashButton();
-
-        if (show)
+        } else {
             this._updateAreaSelectorState(this._toolbar?.selectedTool ?? 'select');
+            this._setTool(this._toolbar?.selectedTool ?? 'select');
+        }
 
         setOcrButtonEnabled(this._ocrButton, !windowMode && !recordingMode && !screenMode && !this._portalMode);
 
@@ -1035,11 +1039,7 @@ export default class GradiaCompanion extends Extension {
             const canvas = new DrawingCanvas({
                 style: 'background-color: transparent;',
             });
-            canvas.add_constraint(new Clutter.BindConstraint({
-                source: bin,
-                coordinate: Clutter.BindCoordinate.ALL,
-            }));
-            ui.insert_child_below(canvas, ui._areaSelector);
+            bin.insert_child_below(canvas, bin.get_first_child());
             this._canvases.push(canvas);
 
             const overlay = new DrawingInputOverlay(canvas, {
