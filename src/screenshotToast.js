@@ -88,23 +88,23 @@ class ScreenshotToast {
             this._contentLayer.add_child(img);
         }
 
-        const btnMargin = 16;
+        const btnMargin = 10;
 
         if (file && isGradiaFlatpakInstalled()) {
             this._editButton = new St.Button({
-                style_class: 'gradia-pill-button gradia-selection-trash',
-                label: 'Edit',
+                style_class: 'gradia-circle-button gradia-selection-trash',
+                child: new St.Icon({
+                    icon_name: 'document-edit-symbolic',
+                    style: 'icon-size: 16px;',
+                }),
                 reactive: true,
-                y_align: Clutter.ActorAlign.CENTER,
             });
 
             this._contentLayer.add_child(this._editButton);
 
             this._signalIds.push([this._editButton, this._editButton.connect('realize', () => {
-                const [, natW] = this._editButton.get_preferred_width(-1);
-                const [, natH] = this._editButton.get_preferred_height(-1);
-                this._editButton.set_size(natW, natH);
-                this._editButton.set_position(btnMargin, thumbH - natH - btnMargin);
+                this._editButton.set_size(CLOSE_BUTTON_SIZE, CLOSE_BUTTON_SIZE);
+                this._editButton.set_position(btnMargin, thumbH - CLOSE_BUTTON_SIZE - btnMargin);
             })]);
 
             this._signalIds.push([this._editButton, this._editButton.connect('clicked', () => {
@@ -115,19 +115,19 @@ class ScreenshotToast {
 
         if (file) {
             this._openFolderButton = new St.Button({
-                style_class: 'gradia-pill-button gradia-selection-trash',
-                label: 'Open Folder',
+                style_class: 'gradia-circle-button gradia-selection-trash',
+                child: new St.Icon({
+                    icon_name: 'folder-open-symbolic',
+                    style: 'icon-size: 16px;',
+                }),
                 reactive: true,
-                y_align: Clutter.ActorAlign.CENTER,
             });
 
             this._contentLayer.add_child(this._openFolderButton);
 
             this._signalIds.push([this._openFolderButton, this._openFolderButton.connect('realize', () => {
-                const [, natW] = this._openFolderButton.get_preferred_width(-1);
-                const [, natH] = this._openFolderButton.get_preferred_height(-1);
-                this._openFolderButton.set_size(natW, natH);
-                this._openFolderButton.set_position(TOAST_WIDTH - natW - btnMargin, thumbH - natH - btnMargin);
+                this._openFolderButton.set_size(CLOSE_BUTTON_SIZE, CLOSE_BUTTON_SIZE);
+                this._openFolderButton.set_position(TOAST_WIDTH - CLOSE_BUTTON_SIZE - btnMargin, thumbH - CLOSE_BUTTON_SIZE - btnMargin);
             })]);
 
             this._signalIds.push([this._openFolderButton, this._openFolderButton.connect('clicked', () => {
@@ -147,8 +147,9 @@ class ScreenshotToast {
             });
 
             const label = new St.Label({
-                text: 'Copied to Clipboard',
+                text: 'Copied!',
                 y_align: Clutter.ActorAlign.CENTER,
+                x_expand: true,
             });
 
             this._copiedLabel.add_child(checkIcon);
@@ -158,7 +159,6 @@ class ScreenshotToast {
             this._signalIds.push([this._copiedLabel, this._copiedLabel.connect('realize', () => {
                 const [, naturalW] = this._copiedLabel.get_preferred_width(-1);
                 const [, naturalH] = this._copiedLabel.get_preferred_height(-1);
-                this._copiedLabel.set_size(naturalW, naturalH);
                 this._copiedLabel.set_position(
                     Math.round((TOAST_WIDTH - naturalW) / 2),
                     Math.round((thumbH - naturalH) / 2)
