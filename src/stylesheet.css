@@ -1,8 +1,9 @@
 .gradia-toolbar {
     border-radius: 9999px;
-    padding: 6px 6px;
-    spacing: 8px;
-    margin-top: 12px;
+    padding: 2px 2px;
+    spacing: 2px;
+    margin-top: 1.2em;
+    margin-bottom: 1.2em;
 }
 
 .gradia-square-button {

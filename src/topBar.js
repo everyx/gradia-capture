@@ -56,7 +56,8 @@ export const Toolbar = GObject.registerClass({
             style_class: 'screenshot-ui-panel gradia-toolbar',
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.START,
-            y_expand: true,
+            x_expand: false,
+            y_expand: false,
             reactive: true,
             ...rest,
         });
@@ -77,6 +78,8 @@ export const Toolbar = GObject.registerClass({
 
         this._restoreToolEntry(this._selectedTool);
         this._updateDrawingControlsSensitivity();
+
+        this._naturalHeight = this.get_preferred_height(-1)[1];
     }
 
     _currentToolIsDrawing() {
@@ -255,6 +258,67 @@ export const Toolbar = GObject.registerClass({
             this._slider.value = Math.min(1, this._slider.value + step);
         else if (direction === Clutter.ScrollDirection.DOWN)
             this._slider.value = Math.max(0, this._slider.value - step);
+    }
+
+    reposition({ selectionRect, monitorRect, primaryBin }) {
+        const [, natW] = this.get_preferred_width(-1);
+        const natH = this._naturalHeight || this.get_preferred_height(-1)[1];
+        if (natW <= 0 || natH <= 0)
+            return;
+
+        const [ok, localMonCX] = primaryBin.transform_stage_point(
+            monitorRect.x + monitorRect.width / 2, monitorRect.y);
+        if (!ok) return;
+
+        let targetX;
+        let targetY;
+
+        if (selectionRect) {
+            const selTop = selectionRect.y;
+            const selHeight = selectionRect.height;
+            const selRight = selectionRect.x + selectionRect.width;
+            const [ok2, _sx1, localSelTop] = primaryBin.transform_stage_point(
+                selectionRect.x, selTop);
+            if (!ok2) return;
+
+            const [ok3, _sx2, localSelBottom] = primaryBin.transform_stage_point(
+                selectionRect.x, selTop + selHeight);
+            if (!ok3) return;
+
+            const [ok5, localSelRightX] = primaryBin.transform_stage_point(
+                selRight, selTop);
+            if (!ok5) return;
+
+            const monBottomY = monitorRect.y + monitorRect.height;
+            const [ok4, _sx3, localMonBottom] = primaryBin.transform_stage_point(
+                monitorRect.x, monBottomY);
+            if (!ok4) return;
+
+            const [okMonRight, localMonRight] = primaryBin.transform_stage_point(
+                monitorRect.x + monitorRect.width, monitorRect.y);
+            if (!okMonRight) return;
+
+            const yAbove = Math.round(localSelTop - natH);
+            const yBelow = Math.round(localSelBottom);
+            const spaceAbove = Math.round(localSelTop);
+            const spaceBelow = Math.round(localMonBottom - localSelBottom);
+
+            if (spaceAbove >= natH) {
+                targetY = yAbove;
+            } else if (spaceBelow >= natH) {
+                targetY = yBelow;
+            } else {
+                targetY = 0;
+            }
+
+            targetX = Math.round(localSelRightX - natW);
+            targetX = Math.max(0, Math.min(targetX, Math.round(localMonRight - natW)));
+        } else {
+            targetX = Math.round(localMonCX - natW / 2);
+            targetY = 0;
+        }
+
+        this.set_position(targetX, targetY);
     }
 
     get selectedTool() { return this._selectedTool; }

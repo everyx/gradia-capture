@@ -1052,10 +1052,8 @@ export default class GradiaCompanion extends Extension {
         const screenMode = Main.screenshotUI._screenButton?.checked ?? false;
         const show = !windowMode && !recordingMode;
 
-        if (this._toolbar) {
-            this._toolbar.visible = show;
+        if (this._toolbar)
             this._toolbar.setSelectionToolVisible(!screenMode);
-        }
 
         for (const canvas of this._canvases)
             canvas.opacity = show ? 255 : 0;
@@ -1076,33 +1074,28 @@ export default class GradiaCompanion extends Extension {
         setOcrButtonEnabled(this._ocrButton, !windowMode && !recordingMode && !screenMode && !this._portalMode);
 
         this._selectionHintLabel?.set({ visible: selectionMode && !recordingMode });
+
+        this._repositionToolbar();
     }
 
-    _connectDragOpacity() {
+    _connectDragBehavior() {
         const selector = Main.screenshotUI?._areaSelector;
         if (!selector)
             return;
 
         this._dragStartedId = selector.connect('drag-started', () => {
-            this._toolbar?.ease({
-                opacity: 100,
-                duration: 200,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            });
+            if (this._toolbar)
+                this._toolbar.visible = false;
             this._resolutionOverlay?.onDragStarted();
         });
 
         this._dragEndedId = selector.connect('drag-ended', () => {
-            this._toolbar?.ease({
-                opacity: 255,
-                duration: 200,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            });
+            this._repositionToolbar();
             this._resolutionOverlay?.onDragEnded();
         });
     }
 
-    _disconnectDragOpacity() {
+    _disconnectDragBehavior() {
         const selector = Main.screenshotUI?._areaSelector;
         if (!selector)
             return;
@@ -1113,6 +1106,52 @@ export default class GradiaCompanion extends Extension {
                 this[id] = null;
             }
         }
+    }
+
+    _repositionToolbar() {
+        if (!this._toolbar || !this._primaryBin)
+            return;
+
+        const ui = Main.screenshotUI;
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!monitor) return;
+
+        const selectionMode = ui._selectionButton?.checked ?? false;
+        const windowMode = this._isWindowMode();
+        const recordingMode = this._isRecordingMode();
+
+        // Hidden modes
+        if (windowMode || recordingMode) {
+            this._toolbar.visible = false;
+            return;
+        }
+
+        let selectionRect = null;
+        if (selectionMode && ui._areaSelector) {
+            const [x, y, w, h] = ui._areaSelector.getGeometry();
+            if (w > 2 && h > 2) {
+                selectionRect = { x, y, width: w, height: h };
+            }
+        }
+
+        // Selection mode without a valid selection → hide
+        if (selectionMode && !selectionRect) {
+            this._toolbar.visible = false;
+            return;
+        }
+
+        this._toolbar.visible = true;
+
+        this._toolbar.reposition({
+            selectionRect,
+            monitorRect: {
+                x: monitor.x,
+                y: monitor.y,
+                width: monitor.width,
+                height: monitor.height,
+            },
+            primaryBin: this._primaryBin,
+        });
     }
 
     _ensureUI() {
@@ -1282,7 +1321,9 @@ export default class GradiaCompanion extends Extension {
             canvas.setStrokeWidth(this._toolbar.lineWidth);
         }
 
+        this._primaryBin = primaryBin;
         primaryBin.add_child(this._toolbar);
+        this._repositionToolbar();
 
         this._resolutionOverlay = new ResolutionOverlay(primaryBin);
 
@@ -1366,7 +1407,7 @@ export default class GradiaCompanion extends Extension {
           });
         }
 
-        this._connectDragOpacity();
+        this._connectDragBehavior();
 
         this._scrollId = Main.screenshotUI.connect('scroll-event', (_actor, event) => {
             this._toolbar.scrollLineWidth(event.get_scroll_direction());
@@ -1415,7 +1456,7 @@ export default class GradiaCompanion extends Extension {
             }
         }
 
-        this._disconnectDragOpacity();
+        this._disconnectDragBehavior();
         this._selectionClearer.restore();
 
         const selector = ui._areaSelector;
