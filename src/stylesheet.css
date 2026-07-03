@@ -53,37 +53,33 @@
     padding: 0;
 }
 
-.gradia-color-button {
-    border-radius: 99999px;
-    width: 20px;
-    height: 20px;
-    min-width: 20px;
-    min-height: 20px;
-    max-width: 20px;
-    max-height: 20px;
-    margin: 2px;
-    padding: 0;
-    border: 2px solid transparent;
-    outline: 2px solid transparent;
-    outline-offset: 2px;
-}
-.gradia-color-button:checked {
-    outline-color: inherit;
-    border-color: transparent;
-}
-
 .gradia-separator {
     background-color: rgba(255, 255, 255, 0.3);
     width: 1px;
     margin: 4px 4px;
 }
-.gradia-check-icon {
-    icon-size: 12px;
-    color: white;
+
+.gradia-color-trigger-button {
+    max-width: 48px;
+    padding: 2px 6px;
+    spacing: 4px;
 }
-.gradia-check-icon-dark {
-    icon-size: 12px;
-    color: rgba(0, 0, 0, 0.8);
+
+.gradia-color-trigger-swatch {
+    border: 2px solid rgba(255, 255, 255, 0.4);
+}
+
+.gradia-color-trigger-caret {
+    icon-size: 10px;
+    opacity: 0.7;
+}
+
+.gradia-color-menu {
+    spacing: 2px;
+    padding: 2px;
+    border-radius: 9999px;
+    margin-top: 2px;
+    margin-bottom: 2px;
 }
 
 .gradia-text-entry {
@@ -129,17 +125,6 @@
     padding: 4px 8px;
     border: none;
     min-width: 50px;
-}
-
-.gradia-osd-button {
-    background-color: rgba(0, 0, 0, 0.45);
-    color: #ffffff;
-}
-.gradia-osd-button:hover {
-    background-color: rgba(0, 0, 0, 0.62);
-}
-.gradia-osd-button:active {
-    background-color: rgba(0, 0, 0, 0.75);
 }
 
 .gradia-resolution-label {

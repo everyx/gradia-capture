@@ -1231,7 +1231,7 @@ export default class GradiaCompanion extends Extension {
         if (!primaryBin)
             return;
 
-        this._toolbar = new Toolbar({ extensionPath: this.path, gradiaSettings: this._gradiaSettings });
+        this._toolbar = new Toolbar({ extensionPath: this.path, gradiaSettings: this._gradiaSettings, primaryBin });
 
         this._toolbar.connect('tool-changed', (_toolbar, id) => {
             this._setTool(id);
