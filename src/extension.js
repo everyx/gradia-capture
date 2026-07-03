@@ -1254,8 +1254,20 @@ export default class GradiaCompanion extends Extension {
         });
 
         this._toolbar.connect('line-width-changed', (_toolbar, width) => {
-            for (const canvas of this._canvases)
+            for (const canvas of this._canvases) {
                 canvas.setStrokeWidth(width);
+
+                if (this._pendingTextStroke && this._toolbar.selectedTool === 'text')
+                    continue;
+
+                const strokes = canvas.strokes;
+                if (strokes.length === 0) continue;
+                const last = strokes[strokes.length - 1];
+                if (last.toolId !== this._toolbar.selectedTool) continue;
+                if (canvas.selectedStroke === last) continue;
+                last.strokeWidth = width;
+                canvas.queue_repaint();
+            }
 
             const sel = this._getSelectedCanvasAndStroke();
             if (sel) {
