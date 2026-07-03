@@ -874,10 +874,12 @@ export default class GradiaCompanion extends Extension {
             const node = entry.get_theme_node();
             const paddingTop = node.get_padding(St.Side.TOP);
             const paddingLeft = node.get_padding(St.Side.LEFT);
+            const borderTop = node.get_border_width(St.Side.TOP);
+            const borderLeft = node.get_border_width(St.Side.LEFT);
 
             entry.set_position(
-                Math.round(localX - paddingLeft),
-                Math.round(localY - paddingTop)
+                localX - borderLeft - paddingLeft,
+                localY - borderTop - paddingTop
             );
         });
 

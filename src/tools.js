@@ -193,9 +193,11 @@ export const TOOLS = [
 
             const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, 1, 1);
             const cr = new Cairo.Context(surface);
-            cr.selectFontFace('Sans', Cairo.FontSlant.NORMAL, Cairo.FontWeight.NORMAL);
-            cr.setFontSize(fontSize);
-            const extents = cr.textExtents(stroke.text);
+            const layout = PangoCairo.create_layout(cr);
+            const desc = Pango.font_description_from_string(`Sans ${fontSize}px`);
+            layout.set_font_description(desc);
+            layout.set_text(stroke.text, -1);
+            const [, extents] = layout.get_pixel_extents();
             cr.$dispose();
             surface.finish();
 
@@ -216,13 +218,14 @@ export const TOOLS = [
             const { r, g, b } = hexToRgb(stroke.color);
             const fontSize = Math.max(8, Math.round(lineWidth * 3));
 
-            cr.selectFontFace('Sans', Cairo.FontSlant.NORMAL, Cairo.FontWeight.NORMAL);
-            cr.setFontSize(fontSize);
+            const layout = PangoCairo.create_layout(cr);
+            const desc = Pango.font_description_from_string(`Sans ${fontSize}px`);
+            layout.set_font_description(desc);
+            layout.set_text(stroke.text, -1);
 
-            const extents = cr.textExtents(stroke.text);
             cr.setSourceRGBA(r, g, b, 1.0);
-            cr.moveTo(pt.x - extents.xBearing, pt.y - extents.yBearing);
-            cr.showText(stroke.text);
+            cr.moveTo(pt.x, pt.y);
+            PangoCairo.show_layout(cr, layout);
         },
     },
     {
