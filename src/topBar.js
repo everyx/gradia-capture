@@ -38,6 +38,140 @@ function makeIcon(spec, extensionPath = '') {
 const LINE_WIDTH_MIN = 1;
 const LINE_WIDTH_MAX = 16;
 
+export const ColorMenu = GObject.registerClass({
+    Signals: {
+        'color-picked': { param_types: [GObject.TYPE_STRING] },
+    },
+}, class ColorMenu extends St.BoxLayout {
+    _init(params = {}) {
+        const { extensionPath = '', ...rest } = params;
+        this._extensionPath = extensionPath;
+        this._selectedHex = null;
+
+        super._init({
+            style_class: 'screenshot-ui-panel gradia-color-menu',
+            x_expand: false,
+            y_expand: false,
+            reactive: true,
+            visible: false,
+            ...rest,
+        });
+    }
+
+    setSelectedHex(hex) {
+        this._selectedHex = hex;
+        for (const btn of this.get_children()) {
+            if (btn._colorHex !== undefined)
+                btn.style = `border-color: ${btn._colorHex === hex ? hex : 'transparent'};`;
+        }
+    }
+
+    show() {
+        this.destroy_all_children();
+        for (const color of COLORS)
+            this._addSwatch(color.hex, color.name);
+        super.show();
+        this.setSelectedHex(this._selectedHex);
+    }
+
+    _addSwatch(hex, name) {
+        const ring = new St.Button({
+            style_class: 'gradia-ring-button',
+            style: `border-color: transparent;`,
+            y_align: Clutter.ActorAlign.CENTER,
+            layout_manager: new Clutter.BinLayout(),
+        });
+        const swatch = new St.Widget({
+            style_class: 'gradia-swatch',
+            style: `background-color: ${hex};`,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        ring._colorHex = hex;
+        ring.add_child(swatch);
+        ring.connect('clicked', () => this.emit('color-picked', hex));
+        this.add_child(ring);
+        attachTooltip(ring, name);
+    }
+
+    reposition(ctx) {
+        if (!this.visible)
+            return;
+        const { colorButton, toolbar, selectionRect, monitorRect, primaryBin } = ctx;
+        if (!primaryBin || !colorButton || !toolbar)
+            return;
+
+        const [cbSX, cbSY] = colorButton.get_transformed_position();
+        const [tbSX, tbSY] = toolbar.get_transformed_position();
+        const [, tbH] = toolbar.get_size();
+        if (cbSX == null || tbSX == null)
+            return;
+
+        const [, menuW] = this.get_preferred_width(-1);
+        const [, menuH] = this.get_preferred_height(menuW);
+        if (menuW <= 0 || menuH <= 0)
+            return;
+
+        const [okC, localCbX, localTbTop] = primaryBin.transform_stage_point(cbSX, tbSY);
+        if (!okC) return;
+        const localTbBottom = localTbTop + tbH;
+
+        const [okL, localMonLeft, localMonTop] = primaryBin.transform_stage_point(
+            monitorRect.x, monitorRect.y);
+        const [okB, _bx, localMonBottom] = primaryBin.transform_stage_point(
+            monitorRect.x, monitorRect.y + monitorRect.height);
+        const [okR, localMonRight] = primaryBin.transform_stage_point(
+            monitorRect.x + monitorRect.width, monitorRect.y);
+        if (!okL || !okB || !okR)
+            return;
+
+        let menuX = localCbX;
+        if (menuX + menuW > localMonRight)
+            menuX = localMonRight - menuW;
+        if (menuX < localMonLeft)
+            menuX = localMonLeft;
+        menuX = Math.round(menuX);
+
+        const toolbarTop = localTbTop;
+        const toolbarBottom = localTbBottom;
+
+        let preferAbove = true;
+        if (selectionRect) {
+            const [okS, _sx, localSelTop] = primaryBin.transform_stage_point(
+                selectionRect.x, selectionRect.y);
+            const [okS2, _sx2, localSelBottom] = primaryBin.transform_stage_point(
+                selectionRect.x, selectionRect.y + selectionRect.height);
+            if (okS && okS2) {
+                if (toolbarBottom <= localSelTop)
+                    preferAbove = true;
+                else if (toolbarTop >= localSelBottom)
+                    preferAbove = false;
+                else {
+                    const spaceAbove = toolbarTop - localMonTop;
+                    const spaceBelow = localMonBottom - toolbarBottom;
+                    preferAbove = spaceAbove >= spaceBelow;
+                }
+            }
+        }
+
+        const yAbove = toolbarTop - menuH;
+        const yBelow = toolbarBottom;
+        const candidates = preferAbove ? [yAbove, yBelow] : [yBelow, yAbove];
+
+        let menuY = null;
+        for (const y of candidates) {
+            if (y >= localMonTop && y + menuH <= localMonBottom) {
+                menuY = y;
+                break;
+            }
+        }
+        if (menuY === null)
+            menuY = Math.max(localMonTop, Math.min(preferAbove ? yAbove : yBelow, localMonBottom - menuH));
+        menuY = Math.round(menuY);
+
+        this.set_position(menuX, menuY);
+    }
+});
+
 export const Toolbar = GObject.registerClass({
     Signals: {
         'tool-changed': { param_types: [GObject.TYPE_STRING] },
@@ -48,9 +182,11 @@ export const Toolbar = GObject.registerClass({
     },
 }, class Toolbar extends St.BoxLayout {
     _init(params = {}) {
-        const { extensionPath = '', gradiaSettings = null, ...rest } = params;
+        const { extensionPath = '', gradiaSettings = null, primaryBin = null, ...rest } = params;
         this._extensionPath = extensionPath;
         this._settings = gradiaSettings;
+        this._primaryBin = primaryBin;
+        this._lastReposition = null;
 
         super._init({
             style_class: 'screenshot-ui-panel gradia-toolbar',
@@ -65,21 +201,37 @@ export const Toolbar = GObject.registerClass({
         this._selectedColor = COLORS[1].hex;
         this._selectedTool = TOOLS[0].id;
         this._lineWidth = 4;
-        this._colorButtons = [];
         this._toolButtons = [];
+        this._stagePressId = 0;
 
         this._buildToolButtons();
         this._addSeparator();
-        this._buildColorButtons();
+        this._buildColorButton();
         this._addSeparator();
         this._buildLineWidthSlider();
         this._addSeparator();
         this._buildActionButtons();
 
+        this._buildColorMenu();
+
         this._restoreToolEntry(this._selectedTool);
         this._updateDrawingControlsSensitivity();
 
         this._naturalHeight = this.get_preferred_height(-1)[1];
+
+        this.connect('notify::visible', () => {
+            if (!this.visible)
+                this._hideColorMenu();
+        });
+        this.connect('destroy', () => this._onDestroy());
+    }
+
+    _onDestroy() {
+        this._hideColorMenu();
+        if (this._colorMenu) {
+            this._colorMenu.destroy();
+            this._colorMenu = null;
+        }
     }
 
     _currentToolIsDrawing() {
@@ -91,14 +243,13 @@ export const Toolbar = GObject.registerClass({
         const hasSelection = this._hasSelection?.() ?? false;
         const enabled = drawing || hasSelection;
 
-        for (const btn of this._colorButtons) {
-            btn.reactive = enabled;
-            btn.opacity = enabled ? 255 : 80;
-            if (!enabled)
-                btn.style = 'border-color: transparent;';
-        }
+        this._colorButton.reactive = enabled;
+        this._colorButton.opacity = enabled ? 255 : 80;
         this._slider.reactive = enabled;
         this._slider.opacity = enabled ? 255 : 80;
+
+        if (!enabled)
+            this._hideColorMenu();
     }
 
     _saveCurrentToolEntry() {
@@ -114,11 +265,10 @@ export const Toolbar = GObject.registerClass({
 
     _applyColor(hex) {
         this._selectedColor = hex;
-        for (const btn of this._colorButtons) {
-            const selected = btn._colorHex === hex;
-            btn.style = `border-color: ${selected ? btn._colorHex : 'transparent'};`;
-            btn._swatch.style = `background-color: ${btn._colorHex};`;
-        }
+        if (this._colorSwatch)
+            this._colorSwatch.style = `background-color: ${hex};`;
+        if (this._colorMenu)
+            this._colorMenu.setSelectedHex(hex);
         this.emit('color-changed', hex);
     }
 
@@ -155,33 +305,94 @@ export const Toolbar = GObject.registerClass({
         }
     }
 
-    _buildColorButtons() {
-        for (const color of COLORS) {
-            const selected = color.hex === this._selectedColor;
+    _buildColorButton() {
+        const button = new St.Button({
+            style_class: 'screenshot-ui-type-button gradia-square-button gradia-color-trigger-button',
+            y_align: Clutter.ActorAlign.CENTER,
+            layout_manager: new Clutter.BinLayout(),
+        });
+        const content = new St.BoxLayout({
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+            style: 'spacing: 4px;',
+        });
 
-            const ring = new St.Button({
-                style_class: 'gradia-ring-button',
-                style: `border-color: ${selected ? color.hex : 'transparent'};`,
-                y_align: Clutter.ActorAlign.CENTER,
-                layout_manager: new Clutter.BinLayout(),
+        const swatch = new St.Widget({
+            style_class: 'gradia-swatch gradia-color-trigger-swatch',
+            style: `background-color: ${this._selectedColor};`,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+
+        const caret = new St.Icon({
+            icon_name: 'pan-down-symbolic',
+            style_class: 'gradia-color-trigger-caret',
+        });
+
+        content.add_child(swatch);
+        content.add_child(caret);
+        button.add_child(content);
+
+        button.connect('clicked', () => this._toggleColorMenu());
+
+        this.add_child(button);
+        this._colorButton = button;
+        this._colorSwatch = swatch;
+        attachTooltip(button, 'Color');
+    }
+
+    _buildColorMenu() {
+        this._colorMenu = new ColorMenu({
+            extensionPath: this._extensionPath,
+        });
+        this._colorMenu.connect('color-picked', (_m, hex) => {
+            this._applyColor(hex);
+            this._saveCurrentToolEntry();
+            this._hideColorMenu();
+        });
+        if (this._primaryBin)
+            this._primaryBin.add_child(this._colorMenu);
+    }
+
+    _repositionColorMenu() {
+        if (!this._colorMenu?.visible || !this._lastReposition)
+            return;
+        this._colorMenu.reposition({
+            colorButton: this._colorButton,
+            toolbar: this,
+            selectionRect: this._lastReposition.selectionRect,
+            monitorRect: this._lastReposition.monitorRect,
+            primaryBin: this._lastReposition.primaryBin,
+        });
+    }
+
+    _toggleColorMenu() {
+        if (this._colorMenu.visible)
+            this._hideColorMenu();
+        else
+            this._showColorMenu();
+    }
+
+    _showColorMenu() {
+        this._colorMenu.show();
+        this._repositionColorMenu();
+        if (this._stagePressId === 0) {
+            this._stagePressId = global.stage.connect('button-press-event', (stage, event) => {
+                const target = event.get_source();
+                if (target && (this._colorMenu.contains(target) || this._colorButton.contains(target)))
+                    return Clutter.EVENT_PROPAGATE;
+                this._hideColorMenu();
+                return Clutter.EVENT_STOP;
             });
-
-            const swatch = new St.Widget({
-                style_class: 'gradia-swatch',
-                style: `background-color: ${color.hex};`,
-                y_align: Clutter.ActorAlign.CENTER,
-            });
-
-            ring._colorHex = color.hex;
-            ring._swatch = swatch;
-
-            ring.add_child(swatch);
-            ring.connect('clicked', () => this._onColorClicked(color.hex));
-            this.add_child(ring);
-            this._colorButtons.push(ring);
-
-            attachTooltip(ring, color.name);
         }
+    }
+
+    _hideColorMenu() {
+        if (this._stagePressId !== 0) {
+            global.stage.disconnect(this._stagePressId);
+            this._stagePressId = 0;
+        }
+        if (this._colorMenu)
+            this._colorMenu.hide();
     }
 
     _buildLineWidthSlider() {
@@ -229,6 +440,7 @@ export const Toolbar = GObject.registerClass({
         if (btn && !btn.reactive)
             return;
 
+        this._hideColorMenu();
         this._saveCurrentToolEntry();
         this._selectedTool = id;
         for (const btn of this._toolButtons)
@@ -236,11 +448,6 @@ export const Toolbar = GObject.registerClass({
         this.emit('tool-changed', id);
         this._restoreToolEntry(id);
         this._updateDrawingControlsSensitivity();
-    }
-
-    _onColorClicked(hex) {
-        this._applyColor(hex);
-        this._saveCurrentToolEntry();
     }
 
     setSelectionToolVisible(enabled) {
@@ -260,7 +467,15 @@ export const Toolbar = GObject.registerClass({
             this._slider.value = Math.max(0, this._slider.value - step);
     }
 
+    hideColorMenu() {
+        this._hideColorMenu();
+    }
+
     reposition({ selectionRect, monitorRect, primaryBin }) {
+        this._primaryBin = primaryBin ?? this._primaryBin;
+        if (this._colorMenu && this._primaryBin && !this._colorMenu.get_parent())
+            this._primaryBin.add_child(this._colorMenu);
+
         const [, natW] = this.get_preferred_width(-1);
         const natH = this._naturalHeight || this.get_preferred_height(-1)[1];
         if (natW <= 0 || natH <= 0)
@@ -319,6 +534,14 @@ export const Toolbar = GObject.registerClass({
         }
 
         this.set_position(targetX, targetY);
+
+        this._lastReposition = {
+            selectionRect,
+            monitorRect,
+            primaryBin,
+        };
+        if (this._colorMenu?.visible)
+            this._repositionColorMenu();
     }
 
     get selectedTool() { return this._selectedTool; }
