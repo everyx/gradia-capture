@@ -12,16 +12,6 @@ const FORMAT_INFO = [
     { id: 'avif', label: 'AVIF' },
 ];
 
-const GRADIA_FLATPAK_ID = 'be.alexandervanhee.gradia';
-const GRADIA_DESKTOP_ID = `${GRADIA_FLATPAK_ID}.desktop`;
-
-function isGradiaInstalled() {
-    const appInfo = Gio.DesktopAppInfo.new(GRADIA_DESKTOP_ID);
-    if (!appInfo)
-        return false;
-    return !!appInfo.get_string('X-Flatpak');
-}
-
 const AboutPage = GObject.registerClass(
     class AboutPage extends Adw.PreferencesPage {
         constructor(settings) {
@@ -32,7 +22,6 @@ const AboutPage = GObject.registerClass(
             this._settings = settings;
             this._setupCss();
             this._buildDonationGroup();
-            this._buildTextRecognitionGroup();
             this._buildScreenshotGroup();
         }
 
@@ -97,48 +86,6 @@ const AboutPage = GObject.registerClass(
 
             group.add(card);
             this.add(group);
-        }
-
-        _buildTextRecognitionGroup() {
-            this._ocrGroup = new Adw.PreferencesGroup({ title: 'Text Recognition' });
-            this.add(this._ocrGroup);
-            this._ocrRow = null;
-            this._refreshOcrRow();
-
-            const monitor = Gio.AppInfoMonitor.get();
-            this._appInfoMonitor = monitor;
-            this._appInfoChangedId = monitor.connect('changed', () => this._refreshOcrRow());
-        }
-
-        _refreshOcrRow() {
-            const installed = isGradiaInstalled();
-
-            if (this._ocrRow) {
-                this._ocrGroup.remove(this._ocrRow);
-                this._ocrRow = null;
-            }
-
-            const row = new Adw.ActionRow(installed ? {
-                title: 'Gradia Installed',
-                subtitle: 'OCR text extraction is available in the screenshot UI',
-            } : {
-                title: 'Get the Gradia Flatpak',
-                subtitle: 'Install the app via Flathub to enable the OCR text extraction feature',
-                activatable: true,
-            });
-
-            row.add_suffix(new Gtk.Image({
-                icon_name: installed ? 'object-select-symbolic' : 'go-next-symbolic',
-                css_classes: installed ? ['success'] : [],
-                valign: Gtk.Align.CENTER,
-            }));
-
-            if (!installed)
-              row.connect('activated', () =>
-                  Gtk.show_uri(null, `appstream://${GRADIA_FLATPAK_ID}`, Gdk.CURRENT_TIME));
-
-            this._ocrGroup.add(row);
-            this._ocrRow = row;
         }
 
         _buildScreenshotGroup() {

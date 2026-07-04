@@ -3,7 +3,7 @@ import GLib from 'gi://GLib';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import { isGradiaFlatpakInstalled, launchGradiaForScreenshot, openContainingFolder, openFileInDefaultApp } from './gradiaIntegration.js';
+import { isGradiaInstalled, launchGradiaForScreenshot, openContainingFolder, openFileInDefaultApp } from './gradiaIntegration.js';
 
 const TOAST_WIDTH = 250;
 const TOAST_MARGIN = 18;
@@ -90,7 +90,7 @@ class ScreenshotToast {
 
         const btnMargin = 10;
 
-        if (file && isGradiaFlatpakInstalled()) {
+        if (file && isGradiaInstalled()) {
             this._editButton = new St.Button({
                 style_class: 'gradia-circle-button gradia-selection-trash',
                 child: new St.Icon({
