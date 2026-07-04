@@ -217,8 +217,6 @@ export const Toolbar = GObject.registerClass({
         this._restoreToolEntry(this._selectedTool);
         this._updateDrawingControlsSensitivity();
 
-        this._naturalHeight = this.get_preferred_height(-1)[1];
-
         this.connect('notify::visible', () => {
             if (!this.visible)
                 this._hideColorMenu();
@@ -477,7 +475,7 @@ export const Toolbar = GObject.registerClass({
             this._primaryBin.add_child(this._colorMenu);
 
         const [, natW] = this.get_preferred_width(-1);
-        const natH = this._naturalHeight || this.get_preferred_height(-1)[1];
+        const natH = this.get_preferred_height(-1)[1];
         if (natW <= 0 || natH <= 0)
             return;
 
