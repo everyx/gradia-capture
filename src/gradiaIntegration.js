@@ -4,17 +4,52 @@ import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
-
 import { attachTooltip } from './tooltip.js';
 
 const GRADIA_FLATPAK_ID = 'be.alexandervanhee.gradia';
 const GRADIA_DESKTOP_ID = `${GRADIA_FLATPAK_ID}.desktop`;
 
-export function isGradiaFlatpakInstalled() {
-    const appInfo = Shell.AppSystem.get_default().lookup_app(GRADIA_DESKTOP_ID)?.get_app_info();
-    if (!appInfo)
+export function isRapidOcrAvailable() {
+    try {
+        const proc = Gio.Subprocess.new(
+            ['which', 'rapidocr'],
+            Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE
+        );
+        return proc.wait_check(null);
+    } catch (e) {
         return false;
-    return !!appInfo.get_string('X-Flatpak');
+    }
+}
+
+export function runRapidOcr(file, extensionPath) {
+    return new Promise((resolve, reject) => {
+        const path = file.get_path();
+        if (!path) {
+            reject(new Error('No file path'));
+            return;
+        }
+        try {
+            const proc = Gio.Subprocess.new(
+                ['python3', `${extensionPath}/ocr.py`, path],
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE
+            );
+            proc.communicate_utf8_async(null, null, (_p, res) => {
+                try {
+                    const [, stdout] = _p.communicate_utf8_finish(res);
+                    const parsed = JSON.parse(stdout ?? '[]');
+                    resolve(Array.isArray(parsed) ? parsed : []);
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
+export function isGradiaInstalled() {
+    return Gio.DesktopAppInfo.new(GRADIA_DESKTOP_ID) !== null;
 }
 
 export function launchGradiaForScreenshot(file) {
@@ -54,33 +89,6 @@ export function openFileInDefaultApp(file) {
     );
 }
 
-export function launchGradiaOcrForFile(file) {
-    if (!file)
-        return;
-    const path = file.get_path();
-    if (!path)
-        return;
-    try {
-        Gio.Subprocess.new(
-            ['flatpak', 'run', GRADIA_FLATPAK_ID, `--ocr-file=${path}`],
-            Gio.SubprocessFlags.NONE
-        );
-    } catch (e) {
-        console.error(`Failed to spawn Gradia: ${e.message}`);
-    }
-}
-
-export function createOcrButton(onClick) {
-    const button = new St.Button({
-        style_class: 'screenshot-ui-show-pointer-button',
-        icon_name: 'scanner-symbolic',
-        toggle_mode: false,
-    });
-    button.connect('clicked', () => onClick());
-    attachTooltip(button, 'Extract Text', St.Side.TOP);
-    return button;
-}
-
 export function createSettingsButton(onClick) {
     const button = new St.Button({
         style_class: 'screenshot-ui-show-pointer-button',
@@ -90,15 +98,4 @@ export function createSettingsButton(onClick) {
     button.connect('clicked', () => onClick());
     attachTooltip(button, 'Settings', St.Side.TOP);
     return button;
-}
-
-export function setOcrButtonEnabled(button, enabled) {
-    if (!button)
-        return;
-    button.reactive = enabled;
-    button.ease({
-        opacity: enabled ? 255 : 80,
-        duration: 200,
-        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-    });
 }
