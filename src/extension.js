@@ -830,6 +830,15 @@ export default class GradiaCompanion extends Extension {
             font-size: ${fs}px;
             font-family: "Sans";
         `;
+        const clutterText = this._textEntry.get_clutter_text();
+        const node = this._textEntry.get_theme_node();
+        const vExtra =
+            node.get_padding(St.Side.TOP) +
+            node.get_padding(St.Side.BOTTOM) +
+            node.get_border_width(St.Side.TOP) +
+            node.get_border_width(St.Side.BOTTOM);
+        const [, naturalHeight] = clutterText.get_preferred_height(-1);
+        this._textEntry.set_height(naturalHeight + vExtra);
     }
 
     _spawnTextEntry(stageX, stageY) {
@@ -884,17 +893,30 @@ export default class GradiaCompanion extends Extension {
         });
 
         const clutterText = entry.get_clutter_text();
+        clutterText.single_line_mode = false;
 
         clutterText.connect('text-changed', () => {
             const fs = Math.max(8, Math.round(this._toolbar.lineWidth * 3));
             const [, naturalWidth] = clutterText.get_preferred_width(-1);
             entry.set_width(Math.max(fs * 4, naturalWidth + fs));
+
+            const node = entry.get_theme_node();
+            const vExtra =
+                node.get_padding(St.Side.TOP) +
+                node.get_padding(St.Side.BOTTOM) +
+                node.get_border_width(St.Side.TOP) +
+                node.get_border_width(St.Side.BOTTOM);
+            const [, naturalHeight] = clutterText.get_preferred_height(-1);
+            entry.set_height(naturalHeight + vExtra);
         });
 
         clutterText.connect('key-press-event', (_actor, event) => {
             const sym = event.get_key_symbol();
-            if (sym === Clutter.KEY_Return || sym === Clutter.KEY_KP_Enter)
+            if (sym === Clutter.KEY_Return || sym === Clutter.KEY_KP_Enter) {
+                if (event.get_state() & Clutter.ModifierType.SHIFT_MASK)
+                    return Clutter.EVENT_PROPAGATE; // insert newline
                 return this._commitTextEntry(), Clutter.EVENT_STOP;
+            }
             if (sym === Clutter.KEY_Escape)
                 return this._cancelTextEntry(), Clutter.EVENT_STOP;
             return Clutter.EVENT_PROPAGATE;
