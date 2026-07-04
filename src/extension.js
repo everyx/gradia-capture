@@ -390,6 +390,7 @@ export default class GradiaCompanion extends Extension {
         this._bins = [];
         this._textEntry = null;
         this._pendingTextStroke = null;
+        this._textEntryResizeIdle = 0;
 
         this._dragToolActive = false;
         this._dragToolStartX = 0;
@@ -830,15 +831,23 @@ export default class GradiaCompanion extends Extension {
             font-size: ${fs}px;
             font-family: "Sans";
         `;
-        const clutterText = this._textEntry.get_clutter_text();
-        const node = this._textEntry.get_theme_node();
-        const vExtra =
-            node.get_padding(St.Side.TOP) +
-            node.get_padding(St.Side.BOTTOM) +
-            node.get_border_width(St.Side.TOP) +
-            node.get_border_width(St.Side.BOTTOM);
-        const [, naturalHeight] = clutterText.get_preferred_height(-1);
-        this._textEntry.set_height(naturalHeight + vExtra);
+        if (this._textEntryResizeIdle) {
+            GLib.source_remove(this._textEntryResizeIdle);
+            this._textEntryResizeIdle = 0;
+        }
+        this._textEntryResizeIdle = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._textEntryResizeIdle = 0;
+            const clutterText = this._textEntry.get_clutter_text();
+            const node = this._textEntry.get_theme_node();
+            const vExtra =
+                node.get_padding(St.Side.TOP) +
+                node.get_padding(St.Side.BOTTOM) +
+                node.get_border_width(St.Side.TOP) +
+                node.get_border_width(St.Side.BOTTOM);
+            const [, naturalHeight] = clutterText.get_preferred_height(-1);
+            this._textEntry.set_height(naturalHeight + vExtra);
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _spawnTextEntry(stageX, stageY) {
@@ -896,18 +905,26 @@ export default class GradiaCompanion extends Extension {
         clutterText.single_line_mode = false;
 
         clutterText.connect('text-changed', () => {
-            const fs = Math.max(8, Math.round(this._toolbar.lineWidth * 3));
-            const [, naturalWidth] = clutterText.get_preferred_width(-1);
-            entry.set_width(Math.max(fs * 4, naturalWidth + fs));
+            if (this._textEntryResizeIdle) {
+                GLib.source_remove(this._textEntryResizeIdle);
+                this._textEntryResizeIdle = 0;
+            }
+            this._textEntryResizeIdle = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                this._textEntryResizeIdle = 0;
+                const fs = Math.max(8, Math.round(this._toolbar.lineWidth * 3));
+                const [, naturalWidth] = clutterText.get_preferred_width(-1);
+                entry.set_width(Math.max(fs * 4, naturalWidth + fs));
 
-            const node = entry.get_theme_node();
-            const vExtra =
-                node.get_padding(St.Side.TOP) +
-                node.get_padding(St.Side.BOTTOM) +
-                node.get_border_width(St.Side.TOP) +
-                node.get_border_width(St.Side.BOTTOM);
-            const [, naturalHeight] = clutterText.get_preferred_height(-1);
-            entry.set_height(naturalHeight + vExtra);
+                const node = entry.get_theme_node();
+                const vExtra =
+                    node.get_padding(St.Side.TOP) +
+                    node.get_padding(St.Side.BOTTOM) +
+                    node.get_border_width(St.Side.TOP) +
+                    node.get_border_width(St.Side.BOTTOM);
+                const [, naturalHeight] = clutterText.get_preferred_height(-1);
+                entry.set_height(naturalHeight + vExtra);
+                return GLib.SOURCE_REMOVE;
+            });
         });
 
         clutterText.connect('key-press-event', (_actor, event) => {
@@ -933,6 +950,10 @@ export default class GradiaCompanion extends Extension {
 
     _teardownTextEntry() {
         this._committingText = true;
+        if (this._textEntryResizeIdle) {
+            GLib.source_remove(this._textEntryResizeIdle);
+            this._textEntryResizeIdle = 0;
+        }
         this._textEntry.destroy();
         this._textEntry = null;
         this._pendingTextStroke = null;
