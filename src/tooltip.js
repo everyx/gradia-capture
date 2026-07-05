@@ -15,13 +15,17 @@ export const Tooltip = GObject.registerClass(
             });
             this._timeoutId = null;
             this._side = side;
-            widget.connect('notify::hover', () => {
+            this._hoverId = widget.connect('notify::hover', () => {
                 if (widget.hover)
                     this._scheduleShow(widget);
                 else
                     this._hide();
             });
-            widget.connect('destroy', () => this.destroy());
+            this._destroyId = widget.connect('destroy', () => this.destroy());
+            this.connect('destroy', () => {
+                widget.disconnect(this._hoverId);
+                widget.disconnect(this._destroyId);
+            });
         }
         _scheduleShow(widget) {
             if (this._timeoutId)

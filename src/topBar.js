@@ -229,11 +229,13 @@ export const Toolbar = GObject.registerClass({
     }
 
     _onDestroy() {
-        this._hideColorMenu();
-        if (this._colorMenu) {
+        this._disconnectStagePress();
+        if (this._colorPickerId && this._colorMenu) {
+            this._colorMenu.disconnect(this._colorPickerId);
+            this._colorPickerId = 0;
             this._colorMenu.destroy();
-            this._colorMenu = null;
         }
+        this._colorMenu = null;
     }
 
     _currentToolIsDrawing() {
@@ -346,7 +348,7 @@ export const Toolbar = GObject.registerClass({
         this._colorMenu = new ColorMenu({
             extensionPath: this._extensionPath,
         });
-        this._colorMenu.connect('color-picked', (_m, hex) => {
+        this._colorPickerId = this._colorMenu.connect('color-picked', (_m, hex) => {
             this._applyColor(hex);
             this._saveCurrentToolEntry();
             this._hideColorMenu();
@@ -388,11 +390,15 @@ export const Toolbar = GObject.registerClass({
         }
     }
 
-    _hideColorMenu() {
+    _disconnectStagePress() {
         if (this._stagePressId !== 0) {
             global.stage.disconnect(this._stagePressId);
             this._stagePressId = 0;
         }
+    }
+
+    _hideColorMenu() {
+        this._disconnectStagePress();
         if (this._colorMenu)
             this._colorMenu.hide();
     }

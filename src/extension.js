@@ -334,7 +334,7 @@ export default class GradiaCompanion extends Extension {
                         return Clutter.EVENT_STOP;
                     }
 
-                    if (tool === 'drag') {
+                    if (tool === 'drag' && this._dragTool) {
                         const [stageX, stageY] = event.get_coords();
                         this._dragTool.press(stageX, stageY);
                         if (this._dragTool.active)
@@ -348,7 +348,7 @@ export default class GradiaCompanion extends Extension {
                 });
 
                 overlay.connect('motion-event', (_actor, event) => {
-                    if (this._toolbar?.selectedTool === 'drag') {
+                    if (this._toolbar?.selectedTool === 'drag' && this._dragTool) {
                         const [stageX, stageY] = event.get_coords();
                         this._dragTool.motion(stageX, stageY);
                         this._updateTrashButton();
@@ -358,7 +358,7 @@ export default class GradiaCompanion extends Extension {
                 });
 
                 overlay.connect('button-release-event', () => {
-                    if (this._toolbar?.selectedTool === 'drag') {
+                    if (this._toolbar?.selectedTool === 'drag' && this._dragTool) {
                         this._dragTool.release();
                         this._updateTrashButton();
                         this._toolbar._updateDrawingControlsSensitivity();
@@ -547,7 +547,7 @@ export default class GradiaCompanion extends Extension {
                 this._monitors.clearSelections();
                 this._hideTrashButton();
                 this._toolbar._clearToolSelection();
-                this._ocrSelector.activate();
+                this._ocrSelector?.activate();
 
             });
             this._toolbar.connect('ocr-clear', () => this._ocrSelector.deactivate(true));
