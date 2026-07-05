@@ -443,12 +443,7 @@ export const Toolbar = GObject.registerClass({
             reactive: true,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        btn.connect('clicked', () => {
-            if (this._ocrDone)
-                this.emit('ocr-clear');
-            else
-                this.emit('ocr-trigger');
-        });
+        btn.connect('clicked', () => this.emit('ocr-trigger'));
         this.add_child(btn);
         this._ocrButton = btn;
         this._ocrIcon = btn.get_child();
