@@ -635,7 +635,7 @@ export default class GradiaCompanion extends Extension {
             cursorTexture = null;
 
         const hasStrokes = this._canvases.some(c => c.hasStrokes());
-        const strokeData = hasStrokes ? this._buildStrokeData() : null;
+        const strokeData = (hasStrokes && !ocr) ? this._buildStrokeData() : null;
 
         return await _capture(
             content.get_texture(),
@@ -1064,8 +1064,9 @@ export default class GradiaCompanion extends Extension {
     }
 
     _setTool(id) {
-        if (this._ocrBlockData)
-            this._clearOcrSelection();
+        if (this._ocrBlockData) {
+            this._clearOcrSelection(true);
+        }
 
         if (id !== 'text')
             this._commitTextEntry();
@@ -1398,7 +1399,7 @@ export default class GradiaCompanion extends Extension {
 
         if (isRapidOcrAvailable()) {
             this._toolbar.connect('ocr-trigger', () => this._performOcr());
-            this._toolbar.connect('ocr-clear', () => this._clearOcrSelection());
+            this._toolbar.connect('ocr-clear', () => this._clearOcrSelection(true));
         } else {
             this._toolbar._ocrButton.reactive = false;
             this._toolbar._ocrButton.opacity = 80;
@@ -1524,15 +1525,17 @@ export default class GradiaCompanion extends Extension {
     }
 
     async _performOcr() {
-        if (this._ocrBlockData) {
-            this._clearOcrSelection();
+        if (this._ocrBlockData)
             return;
-        }
         try {
             this._toolbar.setOcrProcessing();
             this._toolbar._clearToolSelection();
             this._clearAllSelections();
             this._hideTrashButton();
+
+            // Hide annotation strokes during OCR
+            for (const canvas of this._canvases)
+                canvas.hide();
 
             const ui = Main.screenshotUI;
             let originX = 0, originY = 0;
@@ -1993,7 +1996,7 @@ export default class GradiaCompanion extends Extension {
         this._renderHighlights();
     }
 
-    _clearOcrSelection() {
+    _clearOcrSelection(restoreCanvas = false) {
         this._clearOcrHighlight();
         this._hideOcrRect();
         if (this._ocrOverlay) {
@@ -2005,6 +2008,10 @@ export default class GradiaCompanion extends Extension {
             this._ocrCopyBtn = null;
         }
         this._ocrBlockData = null;
+        if (restoreCanvas) {
+            for (const canvas of this._canvases)
+                canvas.show();
+        }
         if (this._toolbar)
             this._toolbar.setOcrIdle();
     }
