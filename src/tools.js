@@ -277,3 +277,7 @@ export const TOOLS = [
 export const TOOL_SHORTCUTS = Object.fromEntries(
     TOOLS.flatMap(t => t.keybindings.map(key => [key, t.id]))
 );
+
+export function getToolDef(id) {
+    return TOOLS.find(t => t.id === id) ?? null;
+}
