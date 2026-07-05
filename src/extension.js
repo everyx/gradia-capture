@@ -329,11 +329,8 @@ export default class GradiaCompanion extends Extension {
                 reactive: true,
             });
             this._trashButton.connect('clicked', () => {
-                const s = this._annotations.selected;
-                if (s) {
-                    s.canvas.deleteSelectedStroke();
+                if (this._annotations.deleteSelected())
                     this._hideTrashButton();
-                }
             });
             primaryBin.insert_child_below(this._trashButton, Main.screenshotUI._panel);
         }
