@@ -26,13 +26,6 @@ export class MonitorManager {
 
     forEachOverlay(fn) { this._overlays.forEach(fn); }
 
-    forEachCanvasReverse(fn) {
-        for (let i = this._canvases.length - 1; i >= 0; i--) {
-            if (fn(this._canvases[i]))
-                break;
-        }
-    }
-
     createForBins(bins, canvasFactory, overlayFactory) {
         for (const bin of bins) {
             this._bins.push(bin);
