@@ -7,6 +7,7 @@ import {Slider} from 'resource:///org/gnome/shell/ui/slider.js';
 
 import { TOOLS } from './tools.js';
 import { attachTooltip } from './tooltip.js';
+import { PopupMenu } from './popupMenu.js';
 
 export const TRASH_BUTTON_RADIUS = 16;
 
@@ -37,25 +38,19 @@ function makeIcon(spec, extensionPath = '') {
 
 const LINE_WIDTH_MIN = 1;
 const LINE_WIDTH_MAX = 16;
+const BLUR_LINE_WIDTH_MAX = 64;
 
 export const ColorMenu = GObject.registerClass({
     Signals: {
         'color-picked': { param_types: [GObject.TYPE_STRING] },
     },
-}, class ColorMenu extends St.BoxLayout {
+}, class ColorMenu extends PopupMenu {
     _init(params = {}) {
         const { extensionPath = '', ...rest } = params;
         this._extensionPath = extensionPath;
         this._selectedHex = null;
 
-        super._init({
-            style_class: 'screenshot-ui-panel gradia-color-menu',
-            x_expand: false,
-            y_expand: false,
-            reactive: true,
-            visible: false,
-            ...rest,
-        });
+        super._init('gradia-color-menu', rest);
     }
 
     setSelectedHex(hex) {
@@ -76,7 +71,7 @@ export const ColorMenu = GObject.registerClass({
 
     _addSwatch(hex, name) {
         const ring = new St.Button({
-            style_class: 'gradia-ring-button',
+            style_class: 'screenshot-ui-type-button gradia-option-button',
             style: `border-color: transparent;`,
             y_align: Clutter.ActorAlign.CENTER,
             layout_manager: new Clutter.BinLayout(),
@@ -92,83 +87,101 @@ export const ColorMenu = GObject.registerClass({
         this.add_child(ring);
         attachTooltip(ring, name);
     }
+});
 
-    reposition(ctx) {
-        if (!this.visible)
-            return;
-        const { colorButton, toolbar, selectionRect, monitorRect, primaryBin } = ctx;
-        if (!primaryBin || !colorButton || !toolbar)
-            return;
+const BLUR_MODES = ['brush', 'selection'];
 
-        const [cbSX, cbSY] = colorButton.get_transformed_position();
-        const [tbSX, tbSY] = toolbar.get_transformed_position();
-        const [, tbH] = toolbar.get_size();
-        if (cbSX == null || tbSX == null)
-            return;
+export const BlurMenu = GObject.registerClass({
+    Signals: {
+        'mode-changed': { param_types: [GObject.TYPE_STRING] },
+        'block-size-changed': { param_types: [GObject.TYPE_INT] },
+    },
+}, class BlurMenu extends PopupMenu {
+    _init(params = {}) {
+        const { extensionPath = '', ...rest } = params;
+        this._extensionPath = extensionPath;
+        this._selectedMode = 'brush';
+        this._selectedSize = 16;
 
-        const [, menuW] = this.get_preferred_width(-1);
-        const [, menuH] = this.get_preferred_height(menuW);
-        if (menuW <= 0 || menuH <= 0)
-            return;
+        super._init('gradia-blur-menu', rest);
+    }
 
-        const [okC, localCbX, localTbTop] = primaryBin.transform_stage_point(cbSX, tbSY);
-        if (!okC) return;
-        const localTbBottom = localTbTop + tbH;
+    setMode(mode) {
+        this._selectedMode = mode;
+        for (const btn of this._modeBtns || [])
+            btn.checked = btn._mode === mode;
+    }
 
-        const [okL, localMonLeft, localMonTop] = primaryBin.transform_stage_point(
-            monitorRect.x, monitorRect.y);
-        const [okB, _bx, localMonBottom] = primaryBin.transform_stage_point(
-            monitorRect.x, monitorRect.y + monitorRect.height);
-        const [okR, localMonRight] = primaryBin.transform_stage_point(
-            monitorRect.x + monitorRect.width, monitorRect.y);
-        if (!okL || !okB || !okR)
-            return;
-
-        let menuX = localCbX;
-        if (menuX + menuW > localMonRight)
-            menuX = localMonRight - menuW;
-        if (menuX < localMonLeft)
-            menuX = localMonLeft;
-        menuX = Math.round(menuX);
-
-        const toolbarTop = localTbTop;
-        const toolbarBottom = localTbBottom;
-
-        let preferAbove = true;
-        if (selectionRect) {
-            const [okS, _sx, localSelTop] = primaryBin.transform_stage_point(
-                selectionRect.x, selectionRect.y);
-            const [okS2, _sx2, localSelBottom] = primaryBin.transform_stage_point(
-                selectionRect.x, selectionRect.y + selectionRect.height);
-            if (okS && okS2) {
-                if (toolbarBottom <= localSelTop)
-                    preferAbove = true;
-                else if (toolbarTop >= localSelBottom)
-                    preferAbove = false;
-                else {
-                    const spaceAbove = toolbarTop - localMonTop;
-                    const spaceBelow = localMonBottom - toolbarBottom;
-                    preferAbove = spaceAbove >= spaceBelow;
-                }
-            }
+    setBlockSize(size) {
+        this._selectedSize = size;
+        if (this._sizeSlider) {
+            const min = 4, max = 32;
+            this._sizeSlider.value = (size - min) / (max - min);
         }
+        if (this._sizeLabel)
+            this._sizeLabel.text = String(size);
+    }
 
-        const yAbove = toolbarTop - menuH;
-        const yBelow = toolbarBottom;
-        const candidates = preferAbove ? [yAbove, yBelow] : [yBelow, yAbove];
+    show() {
+        this.destroy_all_children();
+        this._buildContent();
+        super.show();
+        this.setMode(this._selectedMode);
+        this.setBlockSize(this._selectedSize);
+    }
 
-        let menuY = null;
-        for (const y of candidates) {
-            if (y >= localMonTop && y + menuH <= localMonBottom) {
-                menuY = y;
-                break;
-            }
+    _buildContent() {
+        const min = 4, max = 32;
+
+        this._modeBtns = [];
+        const modeRow = new St.BoxLayout({ style: 'spacing: 2px;' });
+
+        for (const mode of BLUR_MODES) {
+            const child = mode === 'brush'
+                ? new St.Widget({
+                    style_class: 'gradia-swatch',
+                    style: 'background-color: #ffffff;',
+                })
+                : new St.Icon({
+                    gicon: Gio.Icon.new_for_string(`${this._extensionPath}/icons/selection-opaque-3-symbolic.svg`),
+                    style: 'icon-size: 16px;',
+                });
+
+            const btn = new St.Button({
+                style_class: 'screenshot-ui-type-button gradia-option-button',
+                style: 'border-color: transparent;',
+                y_align: Clutter.ActorAlign.CENTER,
+                layout_manager: new Clutter.BinLayout(),
+                toggle_mode: true,
+                reactive: true,
+                child,
+            });
+            btn._mode = mode;
+            btn.connect('clicked', () => {
+                this.setMode(mode);
+                this.emit('mode-changed', mode);
+            });
+            this._modeBtns.push(btn);
+            modeRow.add_child(btn);
+            attachTooltip(btn, mode === 'brush' ? '画笔' : '选区');
         }
-        if (menuY === null)
-            menuY = Math.max(localMonTop, Math.min(preferAbove ? yAbove : yBelow, localMonBottom - menuH));
-        menuY = Math.round(menuY);
+        this.add_child(modeRow);
 
-        this.set_position(menuX, menuY);
+        this._sizeLabel = new St.Label({
+            text: String(this._selectedSize),
+            style: 'width: 20px; text-align: center; font-size: 11px;',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._sizeSlider = new Slider((this._selectedSize - min) / (max - min));
+        this._sizeSlider.style = 'width: 60px;';
+        this._sizeSlider.y_align = Clutter.ActorAlign.CENTER;
+        this._sizeSlider.connect('notify::value', () => {
+            const size = min + Math.round(this._sizeSlider.value * (max - min) / 2) * 2;
+            this.setBlockSize(size);
+            this.emit('block-size-changed', size);
+        });
+        this.add_child(this._sizeSlider);
+        this.add_child(this._sizeLabel);
     }
 });
 
@@ -181,6 +194,8 @@ export const Toolbar = GObject.registerClass({
         'clear': {},
         'ocr-trigger': {},
         'ocr-clear': {},
+        'blur-mode-changed': { param_types: [GObject.TYPE_STRING] },
+        'block-size-changed': { param_types: [GObject.TYPE_INT] },
     },
 }, class Toolbar extends St.BoxLayout {
     _init(params = {}) {
@@ -203,8 +218,12 @@ export const Toolbar = GObject.registerClass({
         this._selectedColor = COLORS[1].hex;
         this._selectedTool = TOOLS[0].id;
         this._lineWidth = 4;
+        this._blurMode = 'brush';
+        this._blurBlockSize = 16;
         this._toolButtons = [];
-        this._stagePressId = 0;
+        this._blurToolBtn = null;
+        this._toolEntries = new Map();
+        this._popupStagePressIds = new Map();
 
         this._buildToolButtons();
         this._addSeparator();
@@ -217,25 +236,92 @@ export const Toolbar = GObject.registerClass({
         this._buildOcrButton();
 
         this._buildColorMenu();
+        this._buildBlurMenu();
 
         this._restoreToolEntry(this._selectedTool);
         this._updateDrawingControlsSensitivity();
 
         this.connect('notify::visible', () => {
-            if (!this.visible)
-                this._hideColorMenu();
+            if (!this.visible) {
+                this._hidePopup(this._colorMenu);
+                this._hidePopup(this._blurMenu);
+            }
         });
         this.connect('destroy', () => this._onDestroy());
     }
 
     _onDestroy() {
-        this._disconnectStagePress();
+        for (const [popup] of this._popupStagePressIds)
+            this._hidePopup(popup);
         if (this._colorPickerId && this._colorMenu) {
             this._colorMenu.disconnect(this._colorPickerId);
             this._colorPickerId = 0;
             this._colorMenu.destroy();
         }
         this._colorMenu = null;
+        if (this._blurMenu) {
+            this._blurMenu.destroy();
+            this._blurMenu = null;
+        }
+    }
+
+    _buildBlurMenu() {
+        this._blurMenu = new BlurMenu({ extensionPath: this._extensionPath });
+        this._blurMenu.connect('mode-changed', (_m, mode) => {
+            this._blurMode = mode;
+            this.emit('blur-mode-changed', mode);
+            this._saveCurrentToolEntry();
+            this._updateDrawingControlsSensitivity();
+        });
+        this._blurMenu.connect('block-size-changed', (_m, size) => {
+            this._blurBlockSize = size;
+            this.emit('block-size-changed', size);
+            this._saveCurrentToolEntry();
+        });
+        if (this._primaryBin)
+            this._primaryBin.add_child(this._blurMenu);
+    }
+
+    _showPopup(popup, triggerBtn) {
+        popup.opacity = 0;
+        popup.show();
+        popup.reposition({ triggerBtn, toolbar: this, ...this._lastReposition });
+        popup.opacity = 255;
+        const cb = popup.connect('notify::allocation', () => {
+            popup.disconnect(cb);
+            popup.reposition({ triggerBtn, toolbar: this, ...this._lastReposition });
+        });
+        this._popupStagePressIds.set(popup,
+            global.stage.connect('button-press-event', (stage, event) => {
+                const target = event.get_source();
+                if (target && (popup.contains(target) || triggerBtn?.contains(target)))
+                    return Clutter.EVENT_PROPAGATE;
+                this._hidePopup(popup);
+                return Clutter.EVENT_STOP;
+            })
+        );
+    }
+
+    _hidePopup(popup) {
+        const id = this._popupStagePressIds.get(popup);
+        if (id !== undefined) {
+            global.stage.disconnect(id);
+            this._popupStagePressIds.delete(popup);
+        }
+        popup.hide();
+    }
+
+    _togglePopup(popup, triggerBtn) {
+        if (popup.visible)
+            this._hidePopup(popup);
+        else
+            this._showPopup(popup, triggerBtn);
+    }
+
+    _repositionPopup(popup, triggerBtn) {
+        if (!popup?.visible || !this._lastReposition)
+            return;
+        popup.reposition({ triggerBtn, toolbar: this, ...this._lastReposition });
     }
 
     _currentToolIsDrawing() {
@@ -246,18 +332,24 @@ export const Toolbar = GObject.registerClass({
         const drawing = this._currentToolIsDrawing();
         const hasSelection = this._hasSelection?.() ?? false;
         const enabled = drawing || hasSelection;
+        const isBlur = this._selectedTool === 'blur';
+        const isBlurSelection = isBlur && this._blurMode === 'selection';
 
-        this._colorButton.reactive = enabled;
-        this._colorButton.opacity = enabled ? 255 : 80;
-        this._slider.reactive = enabled;
-        this._slider.opacity = enabled ? 255 : 80;
+        this._colorButton.reactive = enabled && !isBlur;
+        this._colorButton.opacity = enabled && !isBlur ? 255 : 80;
+        this._slider.reactive = enabled && !isBlurSelection;
+        this._slider.opacity = enabled && !isBlurSelection ? 255 : 80;
 
         if (!enabled)
-            this._hideColorMenu();
+            this._hidePopup(this._colorMenu);
     }
 
     _saveCurrentToolEntry() {
         this._settings?.saveToolEntry(this._selectedTool, this._selectedColor, this._lineWidth);
+        this._toolEntries?.set(this._selectedTool, {
+            blurMode: this._blurMode,
+            blockSize: this._blurBlockSize,
+        });
     }
 
     _restoreToolEntry(toolId) {
@@ -265,6 +357,30 @@ export const Toolbar = GObject.registerClass({
         const { color, lineWidth } = this._settings.getToolEntry(toolId, this._selectedColor, this._lineWidth);
         this._applyColor(color);
         this._applyLineWidth(lineWidth);
+
+        if (toolId === 'blur') {
+            const blurState = this._toolEntries?.get(toolId);
+            if (blurState) {
+                this._blurMode = blurState.blurMode ?? 'brush';
+                this._blurBlockSize = blurState.blockSize ?? 16;
+            }
+            if (this._blurMenu) {
+                this._blurMenu.setMode(this._blurMode);
+                this._blurMenu.setBlockSize(this._blurBlockSize);
+            }
+        }
+    }
+
+    _lineWidthMax() {
+        return this._selectedTool === 'blur' ? BLUR_LINE_WIDTH_MAX : LINE_WIDTH_MAX;
+    }
+
+    _sliderValueToWidth(v) {
+        return Math.round(LINE_WIDTH_MIN + v * (this._lineWidthMax() - LINE_WIDTH_MIN));
+    }
+
+    _widthToSliderValue(w) {
+        return (w - LINE_WIDTH_MIN) / (this._lineWidthMax() - LINE_WIDTH_MIN);
     }
 
     _applyColor(hex) {
@@ -278,7 +394,9 @@ export const Toolbar = GObject.registerClass({
 
     _applyLineWidth(width) {
         this._lineWidth = width;
-        this._slider.value = (width - LINE_WIDTH_MIN) / (LINE_WIDTH_MAX - LINE_WIDTH_MIN);
+        this._updatingSlider = true;
+        this._slider.value = this._widthToSliderValue(width);
+        this._updatingSlider = false;
         this.emit('line-width-changed', width);
     }
 
@@ -301,6 +419,9 @@ export const Toolbar = GObject.registerClass({
             btn.connect('clicked', () => this._onToolClicked(tool.id));
             this.add_child(btn);
             this._toolButtons.push(btn);
+
+            if (tool.id === 'blur')
+                this._blurToolBtn = btn;
 
             btn._tooltip = attachTooltip(btn, tool.name);
 
@@ -336,7 +457,7 @@ export const Toolbar = GObject.registerClass({
         content.add_child(caret);
         button.add_child(content);
 
-        button.connect('clicked', () => this._toggleColorMenu());
+        button.connect('clicked', () => this._togglePopup(this._colorMenu, this._colorButton));
 
         this.add_child(button);
         this._colorButton = button;
@@ -351,56 +472,10 @@ export const Toolbar = GObject.registerClass({
         this._colorPickerId = this._colorMenu.connect('color-picked', (_m, hex) => {
             this._applyColor(hex);
             this._saveCurrentToolEntry();
-            this._hideColorMenu();
+            this._hidePopup(this._colorMenu);
         });
         if (this._primaryBin)
             this._primaryBin.add_child(this._colorMenu);
-    }
-
-    _repositionColorMenu() {
-        if (!this._colorMenu?.visible || !this._lastReposition)
-            return;
-        this._colorMenu.reposition({
-            colorButton: this._colorButton,
-            toolbar: this,
-            selectionRect: this._lastReposition.selectionRect,
-            monitorRect: this._lastReposition.monitorRect,
-            primaryBin: this._lastReposition.primaryBin,
-        });
-    }
-
-    _toggleColorMenu() {
-        if (this._colorMenu.visible)
-            this._hideColorMenu();
-        else
-            this._showColorMenu();
-    }
-
-    _showColorMenu() {
-        this._colorMenu.show();
-        this._repositionColorMenu();
-        if (this._stagePressId === 0) {
-            this._stagePressId = global.stage.connect('button-press-event', (stage, event) => {
-                const target = event.get_source();
-                if (target && (this._colorMenu.contains(target) || this._colorButton.contains(target)))
-                    return Clutter.EVENT_PROPAGATE;
-                this._hideColorMenu();
-                return Clutter.EVENT_STOP;
-            });
-        }
-    }
-
-    _disconnectStagePress() {
-        if (this._stagePressId !== 0) {
-            global.stage.disconnect(this._stagePressId);
-            this._stagePressId = 0;
-        }
-    }
-
-    _hideColorMenu() {
-        this._disconnectStagePress();
-        if (this._colorMenu)
-            this._colorMenu.hide();
     }
 
     _buildLineWidthSlider() {
@@ -408,7 +483,8 @@ export const Toolbar = GObject.registerClass({
         this._slider.style = 'width: 80px;';
         this._slider.y_align = Clutter.ActorAlign.CENTER;
         this._slider.connect('notify::value', () => {
-            this._lineWidth = LINE_WIDTH_MIN + this._slider.value * (LINE_WIDTH_MAX - LINE_WIDTH_MIN);
+            if (this._updatingSlider) return;
+            this._lineWidth = this._sliderValueToWidth(this._slider.value);
             this.emit('line-width-changed', this._lineWidth);
             this._saveCurrentToolEntry();
         });
@@ -505,7 +581,9 @@ export const Toolbar = GObject.registerClass({
         if (btn && !btn.reactive)
             return;
 
-        this._hideColorMenu();
+        const wasBlur = this._selectedTool === 'blur';
+
+        this._hidePopup(this._colorMenu);
         this._saveCurrentToolEntry();
         this._selectedTool = id;
         for (const btn of this._toolButtons)
@@ -513,6 +591,15 @@ export const Toolbar = GObject.registerClass({
         this.emit('tool-changed', id);
         this._restoreToolEntry(id);
         this._updateDrawingControlsSensitivity();
+
+        if (id === 'blur') {
+            if (wasBlur)
+                this._togglePopup(this._blurMenu, this._blurToolBtn);
+            else
+                this._showPopup(this._blurMenu, this._blurToolBtn);
+        } else {
+            this._hidePopup(this._blurMenu);
+        }
     }
 
     _clearToolSelection() {
@@ -531,7 +618,7 @@ export const Toolbar = GObject.registerClass({
     scrollLineWidth(direction) {
         if (!this._slider.reactive)
             return;
-        const step = 1 / (LINE_WIDTH_MAX - LINE_WIDTH_MIN);
+        const step = 1 / (this._lineWidthMax() - LINE_WIDTH_MIN);
         if (direction === Clutter.ScrollDirection.UP)
             this._slider.value = Math.min(1, this._slider.value + step);
         else if (direction === Clutter.ScrollDirection.DOWN)
@@ -539,13 +626,15 @@ export const Toolbar = GObject.registerClass({
     }
 
     hideColorMenu() {
-        this._hideColorMenu();
+        this._hidePopup(this._colorMenu);
     }
 
     reposition({ selectionRect, monitorRect, primaryBin }) {
         this._primaryBin = primaryBin ?? this._primaryBin;
         if (this._colorMenu && this._primaryBin && !this._colorMenu.get_parent())
             this._primaryBin.add_child(this._colorMenu);
+        if (this._blurMenu && this._primaryBin && !this._blurMenu.get_parent())
+            this._primaryBin.add_child(this._blurMenu);
 
         const [, natW] = this.get_preferred_width(-1);
         const natH = this.get_preferred_height(-1)[1];
@@ -612,7 +701,9 @@ export const Toolbar = GObject.registerClass({
             primaryBin,
         };
         if (this._colorMenu?.visible)
-            this._repositionColorMenu();
+            this._repositionPopup(this._colorMenu, this._colorButton);
+        if (this._blurMenu?.visible)
+            this._repositionPopup(this._blurMenu, this._blurToolBtn);
     }
 
     get selectedTool() { return this._selectedTool; }

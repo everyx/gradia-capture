@@ -1,7 +1,12 @@
 import Cairo from 'gi://cairo';
+import GdkPixbuf from 'gi://GdkPixbuf';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
 import { getToolDef } from './tools.js';
+import { pixelatePixbufAlongStroke, pixelatePixbufRect } from './pixelate.js';
 
 export class ScreenshotCapture {
     constructor({ annotations, textEntryManager, toolbar, settings, isRecordingMode }) {
@@ -10,7 +15,7 @@ export class ScreenshotCapture {
         this._toolbar = toolbar;
         this._settings = settings;
         this._isRecordingMode = isRecordingMode ?? (() => false);
-
+        this._cachedFullPixbuf = null;
         this.captureGeometry = null;
         this.captureScale = 1;
     }
@@ -197,6 +202,86 @@ export class ScreenshotCapture {
         return { windows: entries };
     }
 
+    async captureRegion(stageRect) {
+        const ui = Main.screenshotUI;
+        let texX, texY = 0;
+
+        let needCapture = false;
+        if (!this._cachedFullPixbuf)
+            needCapture = true;
+
+        if (needCapture) {
+            let texture;
+            if (ui._windowButton.checked) {
+                const win = ui._windowSelectors
+                    .flatMap(s => s.windows())
+                    .find(w => w.checked);
+                if (!win) return null;
+                texture = win.windowContent.get_texture();
+                texX = win.boundingBox.x;
+                texY = win.boundingBox.y;
+            } else {
+                const content = ui._stageScreenshot?.get_content();
+                if (!content) return null;
+                texture = content.get_texture();
+                if (!texture) return null;
+                texX = 0;
+                texY = 0;
+            }
+
+            if (!texture) return null;
+            const stream = Gio.MemoryOutputStream.new_resizable();
+            const full = await Shell.Screenshot.composite_to_stream(
+                texture, 0, 0, -1, -1, 1, null, 0, 0, 1, stream
+            );
+            stream.close(null);
+            if (!full) return null;
+            this._cachedFullPixbuf = full;
+        }
+
+        const ds = ui._scale || 1;
+        const cx = Math.round(stageRect.x * ds);
+        const cy = Math.round(stageRect.y * ds);
+        const cw = Math.round(stageRect.w * ds);
+        const ch = Math.round(stageRect.h * ds);
+
+        const fw = this._cachedFullPixbuf.get_width();
+        const fh = this._cachedFullPixbuf.get_height();
+        if (cx >= fw || cy >= fh || cx + cw <= 0 || cy + ch <= 0) return null;
+        const cx2 = Math.max(0, Math.min(cx, fw - 1));
+        const cy2 = Math.max(0, Math.min(cy, fh - 1));
+        const cw2 = Math.min(cw, fw - cx2);
+        const ch2 = Math.min(ch, fh - cy2);
+        if (cw2 <= 0 || ch2 <= 0) return null;
+
+        const full = this._cachedFullPixbuf;
+        const fullPixels = full.get_pixels();
+        const fullRstride = full.get_rowstride();
+        const nch = full.get_n_channels();
+        const correctStride = cw2 * nch;
+        const newData = new Uint8Array(cw2 * ch2 * nch);
+
+        for (let y = 0; y < ch2; y++) {
+            const srcBase = (cy2 + y) * fullRstride + cx2 * nch;
+            const dstBase = y * correctStride;
+            for (let x = 0; x < cw2; x++) {
+                const si = srcBase + x * nch;
+                const di = dstBase + x * nch;
+                newData[di] = fullPixels[si];
+                newData[di + 1] = fullPixels[si + 1];
+                newData[di + 2] = fullPixels[si + 2];
+                if (nch >= 4) newData[di + 3] = fullPixels[si + 3];
+            }
+        }
+
+        const bytes = GLib.Bytes.new(newData);
+        const region = GdkPixbuf.Pixbuf.new_from_bytes(
+            bytes, GdkPixbuf.Colorspace.RGB, nch >= 4,
+            full.get_bits_per_sample(), cw2, ch2, correctStride
+        );
+        return region;
+    }
+
     _compositeStrokesOntoPixbuf(bytes, pixbuf, data) {
         const { selX, selY, selW, selH, strokes, stageScale } = data;
         if (selW <= 0 || selH <= 0)
@@ -207,22 +292,59 @@ export class ScreenshotCapture {
         const scaleX = imgWidth / selW;
         const scaleY = imgHeight / selH;
 
-        const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, imgWidth, imgHeight);
-        const cr = new Cairo.Context(surface);
-        imports.gi.Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0);
-        cr.paint();
-
+        const blurStrokes = [];
+        const annotStrokes = [];
         for (const stroke of strokes) {
             const tool = getToolDef(stroke.toolId);
-            if (!tool?.render)
-                continue;
+            if (!tool) continue;
+            if (stroke.toolId === 'blur')
+                blurStrokes.push(stroke);
+            else
+                annotStrokes.push(stroke);
+        }
+
+        let basePixbuf = pixbuf;
+        for (const stroke of blurStrokes) {
+            const converted = stroke.stagePoints.map(p => ({
+                x: (p.x / stageScale - selX) * scaleX,
+                y: (p.y / stageScale - selY) * scaleY,
+            }));
+            const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
+            const blockSize = stroke.blockSize || 16;
+
+            if ((stroke.blurMode || 'brush') === 'selection') {
+                if (converted.length >= 2) {
+                    basePixbuf = pixelatePixbufRect(basePixbuf, converted[0], converted[converted.length - 1], blockSize);
+                }
+            } else {
+                basePixbuf = pixelatePixbufAlongStroke(basePixbuf, converted, lw, blockSize);
+            }
+
+            if (!basePixbuf)
+                return null;
+        }
+
+        if (annotStrokes.length === 0)
+            return { pixbuf: basePixbuf };
+
+        let surface = null;
+        let cr = null;
+        for (const stroke of annotStrokes) {
+            const tool = getToolDef(stroke.toolId);
+            if (!tool || !tool.render) continue;
 
             const converted = stroke.stagePoints.map(p => ({
                 x: (p.x / stageScale - selX) * scaleX,
                 y: (p.y / stageScale - selY) * scaleY,
             }));
-
             const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
+
+            if (!cr) {
+                surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, imgWidth, imgHeight);
+                cr = new Cairo.Context(surface);
+                imports.gi.Gdk.cairo_set_source_pixbuf(cr, basePixbuf, 0, 0);
+                cr.paint();
+            }
 
             tool.render(cr, {
                 color: stroke.color,
@@ -232,13 +354,16 @@ export class ScreenshotCapture {
             }, lw);
         }
 
-        cr.$dispose();
+        if (cr) {
+            cr.$dispose();
+            cr = null;
+            const result = imports.gi.Gdk.pixbuf_get_from_surface(surface, 0, 0, imgWidth, imgHeight);
+            surface = null;
+            if (result)
+                return { pixbuf: result };
+        }
 
-        const newPixbuf = imports.gi.Gdk.pixbuf_get_from_surface(surface, 0, 0, imgWidth, imgHeight);
-        if (!newPixbuf)
-            return null;
-
-        return { pixbuf: newPixbuf };
+        return { pixbuf: basePixbuf };
     }
 
     _buildStrokeData() {

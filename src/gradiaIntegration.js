@@ -1,5 +1,6 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import GioUnix from 'gi://GioUnix';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -53,7 +54,7 @@ export function runRapidOcr(file, extensionPath) {
 }
 
 export function isGradiaInstalled() {
-    return Gio.DesktopAppInfo.new(GRADIA_DESKTOP_ID) !== null;
+    return GioUnix.DesktopAppInfo.new(GRADIA_DESKTOP_ID) !== null;
 }
 
 export function launchGradiaForScreenshot(file) {

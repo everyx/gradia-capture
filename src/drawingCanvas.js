@@ -28,6 +28,12 @@ export const DrawingCanvas = GObject.registerClass(
             this._dragGrab = null;
             this._stampCounter = 1;
             this._selectedStroke = null;
+            this._blurMode = 'brush';
+            this._blurBlockSize = 16;
+            this._showCursor = false;
+            this._cursorX = 0;
+            this._cursorY = 0;
+            this._cursorRadius = 8;
 
             this._scaleX = 1;
             this._scaleY = 1;
@@ -45,6 +51,23 @@ export const DrawingCanvas = GObject.registerClass(
                 this._selectedStroke = null;
         }
         setStrokeWidth(w) { this._strokeWidth = w; }
+
+        setBlurMode(mode) { this._blurMode = mode; }
+        setBlockSize(size) { this._blurBlockSize = size; }
+
+        showCursor(r) { this._showCursor = true; this._cursorRadius = r; this._updateCursorStyle(); this.queue_repaint(); }
+        hideCursor(cursorType) { this._showCursor = false; this._customCursorType = cursorType; this._updateCursorStyle(); this.queue_repaint(); }
+        moveCursor(x, y) { this._cursorX = x; this._cursorY = y; this.queue_repaint(); }
+
+        _updateCursorStyle() {
+            if (!this._overlay)
+                return;
+            const cursorType = this._showCursor
+                ? Clutter.CursorType.NONE
+                : (this._customCursorType ?? Clutter.CursorType.DEFAULT);
+            this._overlay.set_cursor_type(cursorType);
+            this.set_cursor_type(cursorType);
+        }
 
         clear() {
             this._strokes = [];
@@ -157,6 +180,11 @@ export const DrawingCanvas = GObject.registerClass(
                 ...extra,
             };
 
+            if (this._toolId === 'blur') {
+                this._currentStroke.blurMode = this._blurMode;
+                this._currentStroke.blockSize = this._blurBlockSize;
+            }
+
             if (tool.isStamp) {
                 this._currentStroke.counter = this._stampCounter;
                 this._finishStamp();
@@ -164,6 +192,7 @@ export const DrawingCanvas = GObject.registerClass(
             }
 
             this._drawing = true;
+            this._applyDragCursor();
             this._dragGrab = global.stage.grab(this);
         }
 
@@ -179,9 +208,11 @@ export const DrawingCanvas = GObject.registerClass(
             if (!this._drawing)
                 return;
 
+            this._applyDragCursor();
+
             const tool = getToolDef(this._toolId);
 
-            if (tool?.id === 'freehand') {
+            if (tool?.id === 'freehand' || (tool?.id === 'blur' && this._currentStroke?.blurMode === 'brush')) {
                 this._currentStroke.stagePoints.push({ x: stageX, y: stageY });
             } else {
                 if (this._currentStroke.stagePoints.length === 1)
@@ -190,23 +221,40 @@ export const DrawingCanvas = GObject.registerClass(
                     this._currentStroke.stagePoints[this._currentStroke.stagePoints.length - 1] = { x: stageX, y: stageY };
             }
 
+            this._cursorX = stageX;
+            this._cursorY = stageY;
             this.queue_repaint();
         }
 
         _endDrawing() {
-            if (this._currentStroke && this._currentStroke.stagePoints.length > 1)
+            if (this._currentStroke && this._currentStroke.stagePoints.length > 1) {
                 this._strokes.push(this._currentStroke);
+                if (this._onStrokeCommitted)
+                    this._onStrokeCommitted(this._currentStroke);
+            }
 
             this._currentStroke = null;
             this._drawing = false;
             this._dragButton = 0;
 
             if (this._dragGrab) {
+                this._restoreDragCursor();
                 this._dragGrab.dismiss();
                 this._dragGrab = null;
             }
 
             this.queue_repaint();
+        }
+
+        _applyDragCursor() {
+            if (this._toolId === 'blur' && this._blurMode === 'selection')
+                this.set_cursor_type(Clutter.CursorType.CROSSHAIR);
+            else
+                this.set_cursor_type(Clutter.CursorType.NONE);
+        }
+
+        _restoreDragCursor() {
+            this.set_cursor_type(Clutter.CursorType.DEFAULT);
         }
 
         vfunc_button_press_event(event) {
@@ -275,12 +323,56 @@ export const DrawingCanvas = GObject.registerClass(
             if (this._currentStroke)
                 allStrokes.push(this._currentStroke);
 
+            const ss = global.stage.scale_factor || 1;
+
+            for (const stroke of allStrokes) {
+                if (stroke.toolId !== 'blur') continue;
+
+                if (stroke.previewSurface) {
+                    const ox = stroke.previewOrigin.x;
+                    const oy = stroke.previewOrigin.y;
+                    const tl = this._stageToLocal(ox, oy);
+                    if (tl) {
+                        cr.save();
+                        cr.translate(tl.x, tl.y);
+                        cr.scale(1 / ss, 1 / ss);
+                        cr.setSourceSurface(stroke.previewSurface, 0, 0);
+                        cr.paint();
+                        cr.restore();
+                    }
+                } else if (stroke.previewBlocks) {
+                    const ox = stroke.previewOrigin.x;
+                    const oy = stroke.previewOrigin.y;
+                    for (const block of stroke.previewBlocks) {
+                        const tl = this._stageToLocal(ox + block.x, oy + block.y);
+                        if (tl) {
+                            cr.setSourceRGBA(block.r, block.g, block.b, 1.0);
+                            cr.rectangle(tl.x, tl.y, block.width / ss, block.height / ss);
+                            cr.fill();
+                        }
+                    }
+                } else {
+                    const tool = getToolDef(stroke.toolId);
+                    if (tool?.render) {
+                        const localPoints = stroke.stagePoints
+                            .map(sp => this._stageToLocal(sp.x, sp.y))
+                            .filter(p => p !== null);
+                        tool.render(cr, {
+                            color: stroke.color,
+                            points: localPoints,
+                            blurMode: stroke.blurMode,
+                            blockSize: stroke.blockSize,
+                        }, stroke.strokeWidth);
+                    }
+                }
+            }
+
             let stampCounter = 1;
 
             for (const stroke of allStrokes) {
                 const tool = getToolDef(stroke.toolId);
-                if (!tool?.render)
-                    continue;
+                if (!tool?.render) continue;
+                if (stroke.toolId === 'blur') continue;
 
                 const localPoints = stroke.stagePoints
                     .map(sp => this._stageToLocal(sp.x, sp.y))
@@ -291,6 +383,8 @@ export const DrawingCanvas = GObject.registerClass(
                     points: localPoints,
                     counter: stroke.toolId === 'stamp' ? stampCounter++ : stroke.counter,
                     text: stroke.text,
+                    blurMode: stroke.blurMode,
+                    blockSize: stroke.blockSize,
                 }, stroke.strokeWidth);
             }
 
@@ -309,6 +403,25 @@ export const DrawingCanvas = GObject.registerClass(
                     }
                 }
             }
+
+            if (this._showCursor) {
+                const ss = global.stage.scale_factor || 1;
+                const [ok, lx, ly] = this.transform_stage_point(this._cursorX, this._cursorY);
+                if (ok) {
+                    const r = this._cursorRadius / ss;
+
+                    // black fill + white border (GNOME default style)
+                    cr.setSourceRGBA(0, 0, 0, 0.7);
+                    cr.arc(lx, ly, r, 0, 2 * Math.PI);
+                    cr.fill();
+
+                    cr.setSourceRGBA(1, 1, 1, 0.85);
+                    cr.setLineWidth(1.5);
+                    cr.arc(lx, ly, r, 0, 2 * Math.PI);
+                    cr.stroke();
+                }
+            }
+
             cr.$dispose();
         }
     });
@@ -323,6 +436,7 @@ export const DrawingInputOverlay = GObject.registerClass(
                 ...params,
             });
             this._canvas = canvas;
+            canvas._overlay = this;
         }
 
         vfunc_button_press_event(event) {

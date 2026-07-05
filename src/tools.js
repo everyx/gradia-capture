@@ -38,6 +38,35 @@ function standardHitTest(stroke, sx, sy) {
     return rectHit(this.bounds(stroke), sx, sy);
 }
 
+const PIXELATE_BLOCK_SIZE = 16;
+
+let _patternCache = null;
+
+function createPixelatePattern(blockSize) {
+    const size = blockSize || PIXELATE_BLOCK_SIZE;
+    if (_patternCache && _patternCache._size === size)
+        return _patternCache;
+
+    const ts = size * 2;
+    const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, ts, ts);
+    const cr = new Cairo.Context(surface);
+
+    cr.setSourceRGB(1, 1, 1);
+    cr.paint();
+    cr.setSourceRGB(0, 0, 0);
+    cr.rectangle(0, 0, size, size);
+    cr.rectangle(size, size, size, size);
+    cr.fill();
+    cr.$dispose();
+
+    const pattern = new Cairo.SurfacePattern(surface);
+    pattern.setExtend(Cairo.Extend.REPEAT);
+    pattern.setFilter(Cairo.Filter.NEAREST);
+    pattern._size = size;
+    _patternCache = pattern;
+    return pattern;
+}
+
 export const TOOLS = [
     {
         id: 'select',
@@ -270,6 +299,39 @@ export const TOOLS = [
             cr.setSourceRGBA(textColor.r, textColor.g, textColor.b, 1.0);
             cr.moveTo(pt.x - extents.width / 2 - extents.x, pt.y - extents.height / 2 - extents.y);
             PangoCairo.show_layout(cr, layout);
+        },
+    },
+    {
+        id: 'blur',
+        name: 'Blur',
+        icon: 'icons/blur-symbolic.svg',
+        keybindings: [Clutter.KEY_0, Clutter.KEY_agrave, Clutter.KEY_m],
+        isDrawing: true,
+        beginStroke: () => ({}),
+        bounds: makeStrokeBounds(s => SELECTION_PADDING + (s.strokeWidth ?? 8) / 2),
+        hitTest: standardHitTest,
+        render(cr, stroke, lineWidth) {
+            if (stroke.points.length < 2) return;
+            const bs = stroke.blockSize || PIXELATE_BLOCK_SIZE;
+            const pattern = createPixelatePattern(bs);
+            cr.save();
+            cr.setSource(pattern);
+
+            if (stroke.blurMode === 'selection') {
+                const p0 = stroke.points[0], p1 = stroke.points[stroke.points.length - 1];
+                cr.rectangle(Math.min(p0.x, p1.x), Math.min(p0.y, p1.y), Math.abs(p1.x - p0.x), Math.abs(p1.y - p0.y));
+                cr.fill();
+            } else {
+                cr.setLineWidth(lineWidth);
+                cr.setLineCap(Cairo.LineCap.ROUND);
+                cr.setLineJoin(Cairo.LineJoin.ROUND);
+                cr.moveTo(stroke.points[0].x, stroke.points[0].y);
+                for (let i = 1; i < stroke.points.length; i++)
+                    cr.lineTo(stroke.points[i].x, stroke.points[i].y);
+                cr.stroke();
+            }
+
+            cr.restore();
         },
     },
 ];

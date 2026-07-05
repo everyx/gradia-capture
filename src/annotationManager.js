@@ -13,6 +13,8 @@ export class AnnotationManager {
                     counter: s.counter,
                     strokeWidth: s.strokeWidth,
                     text: s.text,
+                    blurMode: s.blurMode,
+                    blockSize: s.blockSize,
                     stagePoints: s.stagePoints.map(p => ({ x: p.x, y: p.y })),
                 });
             }

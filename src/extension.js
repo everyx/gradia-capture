@@ -18,6 +18,7 @@ import { MonitorManager } from './monitorManager.js';
 import { AnnotationManager } from './annotationManager.js';
 import { TextEntryManager } from './textEntryManager.js';
 import { destroyActiveToast } from './screenshotToast.js';
+import { getAffectedPreviewSurface, getRectBlocks } from './pixelate.js';
 import { SelectionClearer } from './selectionClearPatch.js';
 
 export function setAreaSelectorHandlesVisible(selector, visible) {
@@ -169,6 +170,95 @@ export default class GradiaCompanion extends Extension {
         this._toolbar?._toolButtons.find(b => b._toolId === toolId)
             ?.disconnect(this[prop]);
         this[prop] = 0;
+    }
+
+    async _onBlurStrokeCommitted(canvas, stroke) {
+        if (stroke.toolId !== 'blur')
+            return;
+
+        const mode = stroke.blurMode || 'brush';
+
+        const xs = stroke.stagePoints.map(p => p.x);
+        const ys = stroke.stagePoints.map(p => p.y);
+        const minX = Math.min(...xs);
+        const minY = Math.min(...ys);
+        const maxX = Math.max(...xs);
+        const maxY = Math.max(...ys);
+
+        const blockSize = stroke.blockSize || 16;
+        const lw = stroke.strokeWidth || 4;
+
+        let pad = 0;
+        if (mode === 'brush') {
+            pad = Math.ceil(lw / 2 + blockSize / 2);
+        }
+
+        const regionX = Math.round(Math.max(0, minX - pad));
+        const regionY = Math.round(Math.max(0, minY - pad));
+        const regionW = Math.max(1, Math.round(maxX + pad) - regionX);
+        const regionH = Math.max(1, Math.round(maxY + pad) - regionY);
+
+        const stageRect = {
+            x: regionX,
+            y: regionY,
+            w: regionW,
+            h: regionH,
+        };
+
+        const pixbuf = await this._screenshotCapture.captureRegion(stageRect).catch(e => {
+            return null;
+        });
+        if (!pixbuf) {
+            return;
+        }
+
+        const converted = stroke.stagePoints.map(p => ({
+            x: p.x - regionX,
+            y: p.y - regionY,
+        }));
+
+        if (mode === 'selection') {
+            if (converted.length >= 2) {
+                const p0 = converted[0], p1 = converted[converted.length - 1];
+                const ds = Main.screenshotUI._scale || 1;
+                const pp0 = { x: p0.x * ds, y: p0.y * ds };
+                const pp1 = { x: p1.x * ds, y: p1.y * ds };
+                const raw = getRectBlocks(pixbuf, pp0, pp1, Math.round(blockSize * ds));
+                const blocks = raw.map(b => ({
+                    x: b.x / ds, y: b.y / ds,
+                    width: b.width / ds, height: b.height / ds,
+                    r: b.r, g: b.g, b: b.b,
+                }));
+                if (blocks.length > 0) {
+                    stroke.previewBlocks = blocks;
+                    stroke.previewOrigin = { x: regionX, y: regionY };
+                }
+            }
+        } else {
+            const ds = Main.screenshotUI._scale || 1;
+            const physicalPoints = converted.map(p => ({ x: p.x * ds, y: p.y * ds }));
+            const surface = getAffectedPreviewSurface(pixbuf, physicalPoints, lw * ds, Math.round(blockSize * ds));
+            if (surface) {
+                stroke.previewSurface = surface;
+                stroke.previewOrigin = { x: regionX, y: regionY };
+            }
+        }
+
+        canvas.queue_repaint();
+    }
+
+    _updateBrushCursor() {
+        const tool = this._toolbar?.selectedTool;
+        const mode = this._toolbar?._blurMode;
+        const lw = this._toolbar?.lineWidth || 8;
+        this._monitors.forEachCanvas(c => {
+            if (tool === 'blur' && mode === 'brush')
+                c.showCursor(lw / 2);
+            else if (tool === 'blur' && mode === 'selection')
+                c.hideCursor(Clutter.CursorType.CROSSHAIR);
+            else
+                c.hideCursor();
+        });
     }
 
     _setTool(id) {
@@ -349,8 +439,14 @@ export default class GradiaCompanion extends Extension {
                 });
 
                 overlay.connect('motion-event', (_actor, event) => {
-                    if (this._toolbar?.selectedTool === 'drag' && this._dragTool) {
-                        const [stageX, stageY] = event.get_coords();
+                    const [stageX, stageY] = event.get_coords();
+                    const tool = this._toolbar?.selectedTool;
+                    const mode = this._toolbar?._blurMode;
+
+                    if (tool === 'blur' && mode === 'brush')
+                        canvas.moveCursor(stageX, stageY);
+
+                    if (tool === 'drag' && this._dragTool) {
                         this._dragTool.motion(stageX, stageY);
                         this._updateTrashButton();
                         return Clutter.EVENT_STOP;
@@ -420,6 +516,7 @@ export default class GradiaCompanion extends Extension {
             c.setColor(this._toolbar.selectedColor);
             c.setTool(this._toolbar.selectedTool);
             c.setStrokeWidth(this._toolbar.lineWidth);
+            c._onStrokeCommitted = (stroke) => this._onBlurStrokeCommitted(c, stroke);
         });
 
         this._primaryBin = primaryBin;
@@ -472,6 +569,7 @@ export default class GradiaCompanion extends Extension {
         this._toolbar.connect('tool-changed', (_toolbar, id) => {
             this._setTool(id);
             this._toolbar._updateUndoClearSensitivity();
+            this._updateBrushCursor();
         });
 
         const dragBtn = this._toolbar._toolButtons.find(b => b._toolId === 'drag');
@@ -520,6 +618,7 @@ export default class GradiaCompanion extends Extension {
             }
 
             this._textEntryManager?.updateLineWidth(width);
+            this._updateBrushCursor();
         });
 
         this._toolbar._hasSelection = () => !!this._annotations.selected;
@@ -562,6 +661,15 @@ export default class GradiaCompanion extends Extension {
                 this._toolbar._updateUndoClearSensitivity();
             });
         }
+
+        this._toolbar.connect('blur-mode-changed', (_tb, mode) => {
+            this._monitors.forEachCanvas(c => c.setBlurMode(mode));
+            this._toolbar._updateUndoClearSensitivity();
+            this._updateBrushCursor();
+        });
+        this._toolbar.connect('block-size-changed', (_tb, size) => {
+            this._monitors.forEachCanvas(c => c.setBlockSize(size));
+        });
     }
 
 
