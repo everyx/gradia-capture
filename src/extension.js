@@ -243,6 +243,7 @@ export default class GradiaCompanion extends Extension {
         this._selectionHintLabel?.set({ visible: selectionMode && !recordingMode });
 
         this._repositionToolbar();
+        this._toolbar?._updateUndoClearSensitivity();
     }
 
     _repositionToolbar() {
@@ -521,8 +522,11 @@ export default class GradiaCompanion extends Extension {
         });
 
         this._toolbar._hasSelection = () => !!this._annotations.selected;
+        this._toolbar._hasVisibleCanvas = () => this._monitors?.allCanvasesVisible() ?? true;
 
         this._toolbar.connect('undo', () => {
+            if (!this._monitors?.allCanvasesVisible())
+                return;
             if (this._textEntryManager?.isActive) {
                 this._textEntryManager.cancel();
                 return;
@@ -537,6 +541,8 @@ export default class GradiaCompanion extends Extension {
         });
 
         this._toolbar.connect('clear', () => {
+            if (!this._monitors?.allCanvasesVisible())
+                return;
             this._textEntryManager?.cancel();
             this._annotations.clear();
             this._hideTrashButton();
@@ -548,9 +554,12 @@ export default class GradiaCompanion extends Extension {
                 this._hideTrashButton();
                 this._toolbar._clearToolSelection();
                 this._ocrSelector?.activate();
-
+                this._toolbar._updateUndoClearSensitivity();
             });
-            this._toolbar.connect('ocr-clear', () => this._ocrSelector.deactivate(true));
+            this._toolbar.connect('ocr-clear', () => {
+                this._ocrSelector.deactivate(true);
+                this._toolbar._updateUndoClearSensitivity();
+            });
         }
     }
 

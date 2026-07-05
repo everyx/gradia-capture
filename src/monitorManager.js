@@ -59,6 +59,10 @@ export class MonitorManager {
         return null;
     }
 
+    allCanvasesVisible() {
+        return this._canvases.every(c => c.visible && c.opacity > 0);
+    }
+
     clearSelections(exceptCanvas = null) {
         for (const canvas of this._canvases) {
             if (canvas !== exceptCanvas)

@@ -442,6 +442,14 @@ export const Toolbar = GObject.registerClass({
             this._ocrButton.set_child(this._ocrIcon);
     }
 
+    _updateUndoClearSensitivity() {
+        const visible = this._hasVisibleCanvas?.() ?? true;
+        this._undoBtn.reactive = visible;
+        this._undoBtn.opacity = visible ? 255 : 80;
+        this._clearBtn.reactive = visible;
+        this._clearBtn.opacity = visible ? 255 : 80;
+    }
+
     _buildOcrButton() {
         const btn = new St.Button({
             child: makeIcon('scanner-symbolic', this._extensionPath),
