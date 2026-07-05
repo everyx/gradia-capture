@@ -129,7 +129,7 @@ export class ShortcutDispatcher {
             this._scrollId = 0;
         }
 
-        this._disconnectDragBehavior();
+        this._disconnectDragBehavior(ui);
     }
 
     _connectDragBehavior(ui) {
@@ -149,8 +149,8 @@ export class ShortcutDispatcher {
         });
     }
 
-    _disconnectDragBehavior() {
-        const selector = Main.screenshotUI?._areaSelector;
+    _disconnectDragBehavior(ui) {
+        const selector = ui?._areaSelector;
         if (!selector)
             return;
 
