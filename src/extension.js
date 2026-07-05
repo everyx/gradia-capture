@@ -4,9 +4,9 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 
-import { Toolbar, TRASH_BUTTON_RADIUS } from './topBar.js';
+import { Toolbar, TRASH_BUTTON_RADIUS } from './toolbar.js';
 import { TOOL_SHORTCUTS, getToolDef } from './tools.js';
-import { DrawingCanvas, DrawingInputOverlay } from './canvas.js';
+import { DrawingCanvas, DrawingInputOverlay } from './drawingCanvas.js';
 import { GradiaSettings } from './settings.js';
 import { ResolutionOverlay } from './resolutionOverlay.js';
 import { ScreenshotCapture } from './screenshotCapture.js';
@@ -18,7 +18,7 @@ import { MonitorManager } from './monitorManager.js';
 import { AnnotationManager } from './annotationManager.js';
 import { TextEntryManager } from './textEntryManager.js';
 import { destroyActiveToast } from './screenshotToast.js';
-import { SelectionClearer } from './selectionClearer.js';
+import { SelectionClearer } from './selectionClearPatch.js';
 
 export function setAreaSelectorHandlesVisible(selector, visible) {
     const handles = [
