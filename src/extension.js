@@ -52,6 +52,9 @@ export default class GradiaCompanion extends Extension {
         this._textEntry = null;
         this._pendingTextStroke = null;
         this._textEntryResizeIdle = 0;
+        this._textDeactivateId = 0;
+        this._dragDeactivateId = 0;
+        this._idleSourceId = 0;
 
         this._captureGeometry = null;
         this._captureScale = 1;
@@ -578,16 +581,30 @@ export default class GradiaCompanion extends Extension {
                 this._commitTextEntry();
         });
 
+
+
+        const textBtn = this._toolbar._toolButtons.find(b => b._toolId === 'text');
+        if (textBtn) {
+            this._textDeactivateId = textBtn.connect('notify::checked', () => {
+                if (!textBtn.checked) this._commitTextEntry();
+            });
+        }
+
         entry.grab_key_focus();
     }
 
     _teardownTextEntry() {
         this._committingText = true;
+        if (this._textDeactivateId) {
+            this._toolbar._toolButtons.find(b => b._toolId === 'text')
+                ?.disconnect(this._textDeactivateId);
+            this._textDeactivateId = 0;
+        }
         if (this._textEntryResizeIdle) {
             GLib.source_remove(this._textEntryResizeIdle);
             this._textEntryResizeIdle = 0;
         }
-        this._textEntry.destroy();
+        this._textEntry?.destroy();
         this._textEntry = null;
         this._pendingTextStroke = null;
         this._textTargetCanvas = null;
@@ -665,14 +682,6 @@ export default class GradiaCompanion extends Extension {
     _setTool(id) {
         if (this._ocrSelector?.isActive) {
             this._ocrSelector.deactivate(true);
-        }
-
-        if (id !== 'text')
-            this._commitTextEntry();
-
-        if (id !== 'drag') {
-            this._monitors.clearSelections();
-            this._hideTrashButton();
         }
 
         const drawing = this._isDrawingTool(id);
@@ -903,6 +912,16 @@ export default class GradiaCompanion extends Extension {
         this._toolbar.connect('tool-changed', (_toolbar, id) => {
             this._setTool(id);
         });
+
+        const dragBtn = this._toolbar._toolButtons.find(b => b._toolId === 'drag');
+        if (dragBtn) {
+            this._dragDeactivateId = dragBtn.connect('notify::checked', () => {
+                if (!dragBtn.checked) {
+                    this._monitors.clearSelections();
+                    this._hideTrashButton();
+                }
+            });
+        }
 
         this._toolbar.connect('color-changed', (_toolbar, hex) => {
             this._monitors.forEachCanvas(c => c.setColor(hex));
@@ -1169,6 +1188,11 @@ export default class GradiaCompanion extends Extension {
         }
 
         if (this._toolbar) {
+            if (this._dragDeactivateId) {
+                this._toolbar._toolButtons.find(b => b._toolId === 'drag')
+                    ?.disconnect(this._dragDeactivateId);
+                this._dragDeactivateId = 0;
+            }
             this._toolbar.destroy();
             this._toolbar = null;
         }
