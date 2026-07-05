@@ -46,13 +46,12 @@ export class AnnotationManager {
     }
 
     undo() {
-        this._monitors.forEachCanvasReverse(c => {
-            if (c.hasStrokes()) {
-                c.undo();
-                return true;
+        for (let i = this._monitors.length - 1; i >= 0; i--) {
+            if (this._monitors.getCanvas(i).hasStrokes()) {
+                this._monitors.getCanvas(i).undo();
+                return;
             }
-            return false;
-        });
+        }
     }
 
     clear() {
