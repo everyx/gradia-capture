@@ -15,6 +15,7 @@ import { isRapidOcrAvailable, createSettingsButton } from './gradiaIntegration.j
 import { OcrSelector } from './ocrSelector.js';
 import { MonitorManager } from './monitorManager.js';
 import { AnnotationManager } from './annotationManager.js';
+import { TextEntryManager } from './textEntryManager.js';
 import { destroyActiveToast } from './screenshotToast.js';
 import { SelectionClearer } from './selectionClearer.js';
 
@@ -49,12 +50,8 @@ export default class GradiaCompanion extends Extension {
         this._toolbar = null;
         this._monitors = null;
         this._annotations = null;
-        this._textEntry = null;
-        this._pendingTextStroke = null;
-        this._textEntryResizeIdle = 0;
-        this._textDeactivateId = 0;
+        this._textEntryManager = null;
         this._dragDeactivateId = 0;
-        this._idleSourceId = 0;
 
         this._captureGeometry = null;
         this._captureScale = 1;
@@ -197,7 +194,7 @@ export default class GradiaCompanion extends Extension {
 
     async _captureScreenshot({ copyOnly = false, ocr = false, externalSave = false } = {}) {
         const ui = Main.screenshotUI;
-        this._commitTextEntry();
+        this._textEntryManager?.commit();
         if (ocr)
             copyOnly = false;
 
@@ -456,186 +453,6 @@ export default class GradiaCompanion extends Extension {
         return { pixbuf: newPixbuf };
     }
 
-    _updateTextEntryStyle() {
-        if (!this._textEntry)
-            return;
-        const fs = Math.max(8, Math.round(this._toolbar.lineWidth * 3));
-        const col = this._toolbar.selectedColor;
-        this._textEntry.style = `
-            color: ${col};
-            caret-color: ${col};
-            font-size: ${fs}px;
-            font-family: "Sans";
-        `;
-        if (this._textEntryResizeIdle) {
-            GLib.source_remove(this._textEntryResizeIdle);
-            this._textEntryResizeIdle = 0;
-        }
-        this._textEntryResizeIdle = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            this._textEntryResizeIdle = 0;
-            const clutterText = this._textEntry.get_clutter_text();
-            const node = this._textEntry.get_theme_node();
-            const vExtra =
-                node.get_padding(St.Side.TOP) +
-                node.get_padding(St.Side.BOTTOM) +
-                node.get_border_width(St.Side.TOP) +
-                node.get_border_width(St.Side.BOTTOM);
-            const [, naturalHeight] = clutterText.get_preferred_height(-1);
-            this._textEntry.set_height(naturalHeight + vExtra);
-            return GLib.SOURCE_REMOVE;
-        });
-    }
-
-    _spawnTextEntry(stageX, stageY) {
-        if (this._textEntry) {
-            this._commitTextEntry();
-            return;
-        }
-
-        const ui = Main.screenshotUI;
-        const primaryBin = ui._primaryMonitorBin;
-        if (!primaryBin)
-            return;
-
-        const [ok, localX, localY] = primaryBin.transform_stage_point(stageX, stageY);
-        if (!ok)
-            return;
-
-        this._textTargetCanvas = this._monitors.canvasForStagePoint(stageX, stageY);
-
-        this._pendingTextStroke = {
-            color: this._toolbar.selectedColor,
-            toolId: 'text',
-            strokeWidth: this._toolbar.lineWidth,
-            stagePoints: [{ x: stageX, y: stageY }],
-            text: '',
-        };
-
-        const entry = new St.Entry({
-            style_class: 'gradia-text-entry',
-            reactive: true,
-            can_focus: true,
-        });
-
-        entry.set_x_expand(false);
-        primaryBin.add_child(entry);
-        this._textEntry = entry;
-        this._updateTextEntryStyle();
-
-        const allocId = entry.connect('notify::allocation', () => {
-            entry.disconnect(allocId);
-
-            const node = entry.get_theme_node();
-            const paddingTop = node.get_padding(St.Side.TOP);
-            const paddingLeft = node.get_padding(St.Side.LEFT);
-            const borderTop = node.get_border_width(St.Side.TOP);
-            const borderLeft = node.get_border_width(St.Side.LEFT);
-
-            entry.set_position(
-                localX - borderLeft - paddingLeft,
-                localY - borderTop - paddingTop
-            );
-        });
-
-        const clutterText = entry.get_clutter_text();
-        clutterText.single_line_mode = false;
-
-        clutterText.connect('text-changed', () => {
-            if (this._textEntryResizeIdle) {
-                GLib.source_remove(this._textEntryResizeIdle);
-                this._textEntryResizeIdle = 0;
-            }
-            this._textEntryResizeIdle = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                this._textEntryResizeIdle = 0;
-                const fs = Math.max(8, Math.round(this._toolbar.lineWidth * 3));
-                const [, naturalWidth] = clutterText.get_preferred_width(-1);
-                entry.set_width(Math.max(fs * 4, naturalWidth + fs));
-
-                const node = entry.get_theme_node();
-                const vExtra =
-                    node.get_padding(St.Side.TOP) +
-                    node.get_padding(St.Side.BOTTOM) +
-                    node.get_border_width(St.Side.TOP) +
-                    node.get_border_width(St.Side.BOTTOM);
-                const [, naturalHeight] = clutterText.get_preferred_height(-1);
-                entry.set_height(naturalHeight + vExtra);
-                return GLib.SOURCE_REMOVE;
-            });
-        });
-
-        clutterText.connect('key-press-event', (_actor, event) => {
-            const sym = event.get_key_symbol();
-            if (sym === Clutter.KEY_Return || sym === Clutter.KEY_KP_Enter) {
-                if (event.get_state() & Clutter.ModifierType.SHIFT_MASK)
-                    return Clutter.EVENT_PROPAGATE; // insert newline
-                return this._commitTextEntry(), Clutter.EVENT_STOP;
-            }
-            if (sym === Clutter.KEY_Escape)
-                return this._cancelTextEntry(), Clutter.EVENT_STOP;
-            return Clutter.EVENT_PROPAGATE;
-        });
-
-        this._committingText = false;
-        clutterText.connect('notify::has-key-focus', () => {
-            if (!clutterText.has_key_focus() && !this._committingText)
-                this._commitTextEntry();
-        });
-
-
-
-        const textBtn = this._toolbar._toolButtons.find(b => b._toolId === 'text');
-        if (textBtn) {
-            this._textDeactivateId = textBtn.connect('notify::checked', () => {
-                if (!textBtn.checked) this._commitTextEntry();
-            });
-        }
-
-        entry.grab_key_focus();
-    }
-
-    _teardownTextEntry() {
-        this._committingText = true;
-        this._disconnectToolDeactivate('text', '_textDeactivateId');
-        if (this._textEntryResizeIdle) {
-            GLib.source_remove(this._textEntryResizeIdle);
-            this._textEntryResizeIdle = 0;
-        }
-        this._textEntry?.destroy();
-        this._textEntry = null;
-        this._pendingTextStroke = null;
-        this._textTargetCanvas = null;
-
-        if (this._idleSourceId)
-            GLib.source_remove(this._idleSourceId);
-
-        this._idleSourceId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            this._idleSourceId = 0;
-            this._committingText = false;
-            Main.screenshotUI.grab_key_focus();
-            return GLib.SOURCE_REMOVE;
-        });
-    }
-
-    _commitTextEntry() {
-        if (!this._textEntry)
-            return;
-
-        const text = this._textEntry.get_text()?.trim() ?? '';
-        if (text.length > 0 && this._pendingTextStroke) {
-            this._pendingTextStroke.text = text;
-            this._textTargetCanvas?.commitTextStroke(this._pendingTextStroke);
-        }
-
-        this._teardownTextEntry();
-    }
-
-    _cancelTextEntry() {
-        if (!this._textEntry)
-            return;
-
-        this._teardownTextEntry();
-    }
-
     _buildStrokeData() {
         const ui = Main.screenshotUI;
 
@@ -871,7 +688,7 @@ export default class GradiaCompanion extends Extension {
 
                     if (tool === 'text') {
                         const [stageX, stageY] = event.get_coords();
-                        this._spawnTextEntry(stageX, stageY);
+                        this._textEntryManager?.activate(stageX, stageY);
                         return Clutter.EVENT_STOP;
                     }
 
@@ -911,6 +728,7 @@ export default class GradiaCompanion extends Extension {
             return;
 
         this._toolbar = new Toolbar({ extensionPath: this.path, gradiaSettings: this._gradiaSettings, primaryBin });
+        this._textEntryManager = new TextEntryManager(this._toolbar, this._monitors);
 
         this._toolbar.connect('tool-changed', (_toolbar, id) => {
             this._setTool(id);
@@ -935,17 +753,14 @@ export default class GradiaCompanion extends Extension {
                 sel.canvas.queue_repaint();
             }
 
-            if (this._pendingTextStroke) {
-                this._pendingTextStroke.color = hex;
-                this._updateTextEntryStyle();
-            }
+            this._textEntryManager?.updateColor(hex);
         });
 
         this._toolbar.connect('line-width-changed', (_toolbar, width) => {
             this._monitors.forEachCanvas(c => {
                 c.setStrokeWidth(width);
 
-                if (this._pendingTextStroke && this._toolbar.selectedTool === 'text')
+                if (this._textEntryManager?.hasPending && this._toolbar.selectedTool === 'text')
                     return;
 
                 const strokes = c.strokes;
@@ -964,17 +779,14 @@ export default class GradiaCompanion extends Extension {
                 this._updateTrashButton();
             }
 
-            if (this._pendingTextStroke) {
-                this._pendingTextStroke.strokeWidth = width;
-                this._updateTextEntryStyle();
-            }
+            this._textEntryManager?.updateLineWidth(width);
         });
 
         this._toolbar._hasSelection = () => !!this._annotations.selected;
 
         this._toolbar.connect('undo', () => {
-            if (this._textEntry) {
-                this._cancelTextEntry();
+            if (this._textEntryManager?.isActive) {
+                this._textEntryManager.cancel();
                 return;
             }
             if (this._toolbar.selectedTool === 'drag') {
@@ -987,7 +799,7 @@ export default class GradiaCompanion extends Extension {
         });
 
         this._toolbar.connect('clear', () => {
-            this._cancelTextEntry();
+            this._textEntryManager?.cancel();
             this._annotations.clear();
             this._hideTrashButton();
         });
@@ -1135,13 +947,8 @@ export default class GradiaCompanion extends Extension {
 
 
     _removeUI() {
-        this._cancelTextEntry();
+        this._textEntryManager?.destroy();
         this._destroyTrashButton();
-
-        if (this._idleSourceId) {
-            GLib.source_remove(this._idleSourceId);
-            this._idleSourceId = 0;
-        }
 
         if (this._ocrSelector) {
             this._ocrSelector.destroy();
@@ -1191,7 +998,6 @@ export default class GradiaCompanion extends Extension {
         }
 
         if (this._toolbar) {
-            this._disconnectToolDeactivate('text', '_textDeactivateId');
             this._disconnectToolDeactivate('drag', '_dragDeactivateId');
             this._toolbar.destroy();
             this._toolbar = null;
