@@ -730,6 +730,69 @@ export default class GradiaCompanion extends Extension {
         this._toolbar = new Toolbar({ extensionPath: this.path, gradiaSettings: this._gradiaSettings, primaryBin });
         this._textEntryManager = new TextEntryManager(this._toolbar, this._monitors);
 
+        this._ocrSelector = new OcrSelector({
+            toolbar: this._toolbar,
+            canvases: this._monitors.canvases,
+            extensionPath: this.path,
+            screenshotFn: async () => {
+                const file = await this._captureScreenshot({ ocr: true });
+                return { file, scale: this._captureScale || 1 };
+            },
+        });
+
+        this._wireSignals();
+
+        if (!isRapidOcrAvailable()) {
+            this._toolbar._ocrButton.reactive = false;
+            this._toolbar._ocrButton.opacity = 80;
+        }
+
+        this._settingsButton = createSettingsButton(() => {
+            Main.screenshotUI.close();
+            this.openPreferences();
+        });
+        ui._showPointerButtonContainer.insert_child_below(this._settingsButton, ui._showPointerButton);
+
+        this._monitors.forEachCanvas(c => {
+            c.setColor(this._toolbar.selectedColor);
+            c.setTool(this._toolbar.selectedTool);
+            c.setStrokeWidth(this._toolbar.lineWidth);
+        });
+
+        this._primaryBin = primaryBin;
+        primaryBin.add_child(this._toolbar);
+        this._repositionToolbar();
+
+        this._resolutionOverlay = new ResolutionOverlay(primaryBin);
+
+        if (this._settings.get_boolean('clear-selection')) {
+            this._selectionClearer.patch(ui._areaSelector);
+
+            this._selectionHintLabel = new St.Label({
+                text: 'Drag to Make a Selection',
+                style_class: 'screenshot-ui-panel gradia-hint-label',
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER,
+                x_expand: true,
+                y_expand: true,
+            });
+            primaryBin.add_child(this._selectionHintLabel);
+
+          const hideLabelId = ui._areaSelector.connect('drag-started', () => {
+              this._selectionHintLabel?.ease({
+                  opacity: 0, duration: 200,
+                  mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                  onComplete: () => this._selectionHintLabel?.hide(),
+              });
+              ui._areaSelector.disconnect(hideLabelId);
+          });
+        }
+
+        this._setTool('select');
+        this._updateVisibilityForMode();
+    }
+
+    _wireSignals() {
         this._toolbar.connect('tool-changed', (_toolbar, id) => {
             this._setTool(id);
         });
@@ -804,16 +867,6 @@ export default class GradiaCompanion extends Extension {
             this._hideTrashButton();
         });
 
-        this._ocrSelector = new OcrSelector({
-            toolbar: this._toolbar,
-            canvases: this._monitors.canvases,
-            extensionPath: this.path,
-            screenshotFn: async () => {
-                const file = await this._captureScreenshot({ ocr: true });
-                return { file, scale: this._captureScale || 1 };
-            },
-        });
-
         if (isRapidOcrAvailable()) {
             this._toolbar.connect('ocr-trigger', () => {
                 this._monitors.clearSelections();
@@ -822,28 +875,7 @@ export default class GradiaCompanion extends Extension {
                 this._ocrSelector.activate();
             });
             this._toolbar.connect('ocr-clear', () => this._ocrSelector.deactivate(true));
-        } else {
-            this._toolbar._ocrButton.reactive = false;
-            this._toolbar._ocrButton.opacity = 80;
         }
-
-        this._settingsButton = createSettingsButton(() => {
-            Main.screenshotUI.close();
-            this.openPreferences();
-        });
-        ui._showPointerButtonContainer.insert_child_below(this._settingsButton, ui._showPointerButton);
-
-        this._monitors.forEachCanvas(c => {
-            c.setColor(this._toolbar.selectedColor);
-            c.setTool(this._toolbar.selectedTool);
-            c.setStrokeWidth(this._toolbar.lineWidth);
-        });
-
-        this._primaryBin = primaryBin;
-        primaryBin.add_child(this._toolbar);
-        this._repositionToolbar();
-
-        this._resolutionOverlay = new ResolutionOverlay(primaryBin);
 
         this._keyPressId = Main.screenshotUI.connect('key-press-event', (_actor, event) => {
             const sym = event.get_key_symbol();
@@ -906,31 +938,9 @@ export default class GradiaCompanion extends Extension {
             return Clutter.EVENT_PROPAGATE;
         });
 
+        const ui = Main.screenshotUI;
         for (const [prop, id] of MODE_BUTTONS) {
             this[id] = ui[prop].connect('notify::checked', () => this._updateVisibilityForMode());
-        }
-
-        if (this._settings.get_boolean('clear-selection')) {
-            this._selectionClearer.patch(ui._areaSelector);
-
-            this._selectionHintLabel = new St.Label({
-                text: 'Drag to Make a Selection',
-                style_class: 'screenshot-ui-panel gradia-hint-label',
-                x_align: Clutter.ActorAlign.CENTER,
-                y_align: Clutter.ActorAlign.CENTER,
-                x_expand: true,
-                y_expand: true,
-            });
-            primaryBin.add_child(this._selectionHintLabel);
-
-          const hideLabelId = ui._areaSelector.connect('drag-started', () => {
-              this._selectionHintLabel?.ease({
-                  opacity: 0, duration: 200,
-                  mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                  onComplete: () => this._selectionHintLabel?.hide(),
-              });
-              ui._areaSelector.disconnect(hideLabelId);
-          });
         }
 
         this._connectDragBehavior();
@@ -939,11 +949,7 @@ export default class GradiaCompanion extends Extension {
             this._toolbar.scrollLineWidth(event.get_scroll_direction());
             return Clutter.EVENT_PROPAGATE;
         });
-
-        this._setTool('select');
-        this._updateVisibilityForMode();
     }
-
 
 
     _removeUI() {
