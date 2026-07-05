@@ -417,15 +417,21 @@ export const Toolbar = GObject.registerClass({
 
     setOcrProcessing() {
         this._ocrDone = false;
-        this._ocrButton.opacity = 180;
         this._ocrButton.reactive = false;
-        const spinner = new St.Widget({ style: 'width: 16px; height: 16px;' });
-        spinner.set_content(new St.SpinnerContent());
-        this._ocrButton.set_child(spinner);
+        if (this._ocrIcon)
+            this._ocrButton.set_child(this._ocrIcon);
+        this._ocrButton.remove_all_transitions();
+        this._ocrButton.ease_property('opacity', 128, {
+            duration: 500,
+            mode: Clutter.AnimationMode.EASE_IN_OUT_QUAD,
+            repeat_count: -1,
+            auto_reverse: true,
+        });
     }
 
     setOcrDone() {
         this._ocrDone = true;
+        this._ocrButton.remove_all_transitions();
         this._ocrButton.opacity = 255;
         this._ocrButton.reactive = true;
         this._ocrButton.add_style_pseudo_class('checked');
@@ -435,8 +441,9 @@ export const Toolbar = GObject.registerClass({
 
     setOcrIdle() {
         this._ocrDone = false;
-        this._ocrButton.reactive = true;
+        this._ocrButton.remove_all_transitions();
         this._ocrButton.opacity = 255;
+        this._ocrButton.reactive = true;
         this._ocrButton.remove_style_pseudo_class('checked');
         if (this._ocrIcon)
             this._ocrButton.set_child(this._ocrIcon);
