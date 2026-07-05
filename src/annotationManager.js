@@ -25,11 +25,11 @@ export class AnnotationManager {
     }
 
     get hasStrokes() {
-        let found = false;
-        this._monitors.forEachCanvas(c => {
-            if (c.hasStrokes()) found = true;
-        });
-        return found;
+        for (let i = 0; i < this._monitors.length; i++) {
+            if (this._monitors.getCanvas(i).hasStrokes())
+                return true;
+        }
+        return false;
     }
 
     selectAt(stageX, stageY) {
