@@ -471,6 +471,7 @@ export default class GradiaCompanion extends Extension {
     _wireSignals() {
         this._toolbar.connect('tool-changed', (_toolbar, id) => {
             this._setTool(id);
+            this._toolbar._updateUndoClearSensitivity();
         });
 
         const dragBtn = this._toolbar._toolButtons.find(b => b._toolId === 'drag');
