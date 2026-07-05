@@ -11,6 +11,7 @@ import { GradiaSettings } from './settings.js';
 import { ResolutionOverlay } from './resolutionOverlay.js';
 import { ScreenshotCapture } from './screenshotCapture.js';
 import { DragTool } from './dragTool.js';
+import { ShortcutDispatcher } from './shortcutDispatcher.js';
 import { isRapidOcrAvailable, createSettingsButton } from './gradiaIntegration.js';
 import { OcrSelector } from './ocrSelector.js';
 import { MonitorManager } from './monitorManager.js';
@@ -18,13 +19,6 @@ import { AnnotationManager } from './annotationManager.js';
 import { TextEntryManager } from './textEntryManager.js';
 import { destroyActiveToast } from './screenshotToast.js';
 import { SelectionClearer } from './selectionClearer.js';
-
-const MODE_BUTTONS = [
-    ['_windowButton',    '_windowButtonId'],
-    ['_selectionButton', '_selectionButtonId'],
-    ['_screenButton',    '_screenButtonId'],
-    ['_castButton',      '_castButtonId'],
-];
 
 export function setAreaSelectorHandlesVisible(selector, visible) {
     const handles = [
@@ -55,6 +49,7 @@ export default class GradiaCompanion extends Extension {
 
         this._screenshotCapture = null;
         this._dragTool = null;
+        this._dispatcher = null;
         this._ocrSelector = null;
         this._trashButton = null;
 
@@ -67,6 +62,8 @@ export default class GradiaCompanion extends Extension {
             self._portalMode = (mode === 2);
             if (self._screenshotCapture)
                 self._screenshotCapture.portalMode = self._portalMode;
+            if (self._dispatcher)
+                self._dispatcher.portalMode = self._portalMode;
             const result = await self._originalOpen(mode, ...rest);
             self._ensureUI();
             return result;
@@ -246,36 +243,6 @@ export default class GradiaCompanion extends Extension {
         this._selectionHintLabel?.set({ visible: selectionMode && !recordingMode });
 
         this._repositionToolbar();
-    }
-
-    _connectDragBehavior() {
-        const selector = Main.screenshotUI?._areaSelector;
-        if (!selector)
-            return;
-
-        this._dragStartedId = selector.connect('drag-started', () => {
-            if (this._toolbar)
-                this._toolbar.visible = false;
-            this._resolutionOverlay?.onDragStarted();
-        });
-
-        this._dragEndedId = selector.connect('drag-ended', () => {
-            this._repositionToolbar();
-            this._resolutionOverlay?.onDragEnded();
-        });
-    }
-
-    _disconnectDragBehavior() {
-        const selector = Main.screenshotUI?._areaSelector;
-        if (!selector)
-            return;
-
-        for (const id of ['_dragStartedId', '_dragEndedId']) {
-            if (this[id]) {
-                selector.disconnect(this[id]);
-                this[id] = null;
-            }
-        }
     }
 
     _repositionToolbar() {
@@ -460,6 +427,19 @@ export default class GradiaCompanion extends Extension {
 
         this._resolutionOverlay = new ResolutionOverlay(primaryBin);
 
+        this._dispatcher = new ShortcutDispatcher({
+            toolbar: this._toolbar,
+            ocrSelector: this._ocrSelector,
+            screenshotCapture: this._screenshotCapture,
+            dragTool: this._dragTool,
+            isRecordingMode: () => this._isRecordingMode(),
+            updateVisibilityForMode: () => this._updateVisibilityForMode(),
+            repositionToolbar: () => this._repositionToolbar(),
+            hideTrashButton: () => this._hideTrashButton(),
+            resolutionOverlay: this._resolutionOverlay,
+        });
+        this._dispatcher.connect();
+
         if (this._settings.get_boolean('clear-selection')) {
             this._selectionClearer.patch(ui._areaSelector);
 
@@ -568,82 +548,10 @@ export default class GradiaCompanion extends Extension {
                 this._hideTrashButton();
                 this._toolbar._clearToolSelection();
                 this._ocrSelector.activate();
+
             });
             this._toolbar.connect('ocr-clear', () => this._ocrSelector.deactivate(true));
         }
-
-        this._keyPressId = Main.screenshotUI.connect('key-press-event', (_actor, event) => {
-            const sym = event.get_key_symbol();
-            const mods = event.get_state();
-            const ctrl = mods & Clutter.ModifierType.CONTROL_MASK;
-
-            if (ctrl && sym === Clutter.KEY_z) {
-                this._toolbar.emit('undo');
-                return Clutter.EVENT_STOP;
-            }
-
-            if (this._ocrSelector?.isActive && ctrl && sym === Clutter.KEY_c) {
-                this._ocrSelector.copySelected();
-                return Clutter.EVENT_STOP;
-            }
-
-            if (ctrl && sym === Clutter.KEY_c) {
-                if (!this._isRecordingMode() && !this._portalMode) {
-                    this._screenshotCapture.capture({ copyOnly: true, portalMode: this._portalMode }).then(result => {
-                        if (result !== undefined)
-                            Main.screenshotUI.close();
-                    });
-                    return Clutter.EVENT_STOP;
-                }
-            }
-
-            if (ctrl && sym === Clutter.KEY_s) {
-                if (!this._isRecordingMode()) {
-                    this._screenshotCapture.capture({ externalSave: true, portalMode: this._portalMode }).then(result => {
-                        if (result !== undefined)
-                            Main.screenshotUI.close();
-                    });
-                    return Clutter.EVENT_STOP;
-                }
-            }
-
-            if (this._ocrSelector?.isActive && ctrl && sym === Clutter.KEY_a) {
-                this._ocrSelector.selectAll();
-                return Clutter.EVENT_STOP;
-            }
-
-            if (ctrl && sym === Clutter.KEY_e) {
-                this._toolbar?.emit('ocr-trigger');
-                return Clutter.EVENT_STOP;
-            }
-
-            if (this._toolbar?.selectedTool === 'drag' &&
-                (sym === Clutter.KEY_Delete || sym === Clutter.KEY_BackSpace)) {
-                if (this._dragTool.deleteSelected()) {
-                    this._hideTrashButton();
-                    return Clutter.EVENT_STOP;
-                }
-            }
-
-            if (!ctrl && sym in TOOL_SHORTCUTS) {
-                this._toolbar._onToolClicked(TOOL_SHORTCUTS[sym]);
-                return Clutter.EVENT_STOP;
-            }
-
-            return Clutter.EVENT_PROPAGATE;
-        });
-
-        const ui = Main.screenshotUI;
-        for (const [prop, id] of MODE_BUTTONS) {
-            this[id] = ui[prop].connect('notify::checked', () => this._updateVisibilityForMode());
-        }
-
-        this._connectDragBehavior();
-
-        this._scrollId = Main.screenshotUI.connect('scroll-event', (_actor, event) => {
-            this._toolbar.scrollLineWidth(event.get_scroll_direction());
-            return Clutter.EVENT_PROPAGATE;
-        });
     }
 
 
@@ -664,24 +572,11 @@ export default class GradiaCompanion extends Extension {
         this._dragTool?.destroy();
         this._dragTool = null;
 
-        const ui = Main.screenshotUI;
-
-        if (this._keyPressId) {
-            Main.screenshotUI.disconnect(this._keyPressId);
-            this._keyPressId = null;
-        }
-
-        for (const [prop, id] of MODE_BUTTONS) {
-            if (this[id]) {
-                ui[prop].disconnect(this[id]);
-                this[id] = null;
-            }
-        }
-
-        this._disconnectDragBehavior();
+        this._dispatcher?.disconnect();
+        this._dispatcher = null;
         this._selectionClearer.restore();
 
-        const selector = ui._areaSelector;
+        const selector = Main.screenshotUI?._areaSelector;
         if (selector) {
             selector.reactive = true;
             setAreaSelectorHandlesVisible(selector, true);
@@ -701,11 +596,6 @@ export default class GradiaCompanion extends Extension {
             this._disconnectToolDeactivate('drag', '_dragDeactivateId');
             this._toolbar.destroy();
             this._toolbar = null;
-        }
-
-        if (this._scrollId) {
-            Main.screenshotUI.disconnect(this._scrollId);
-            this._scrollId = null;
         }
 
         if (this._resolutionOverlay) {
