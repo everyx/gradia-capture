@@ -164,3 +164,30 @@
     font-weight: 700;
     padding: 14px 24px;
 }
+
+
+
+.gradia-ocr-highlight {
+    background-color: st-transparentize(-st-accent-color, 0.7);
+    border-radius: 2px;
+}
+
+.gradia-ocr-sel-rect {
+    background-color: st-transparentize(-st-accent-color, 0.75);
+    border: 1.5px solid st-transparentize(-st-accent-color, 0.3);
+    border-radius: 2px;
+}
+
+.gradia-ocr-copy-btn {
+    background-color: #3a3a3d;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    min-width: 32px;
+    max-width: 32px;
+    min-height: 32px;
+    max-height: 32px;
+    border-radius: 9999px;
+    padding: 0;
+}
+.gradia-ocr-copy-btn:hover {
+    background-color: #48484b;
+}

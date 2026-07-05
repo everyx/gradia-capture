@@ -179,6 +179,8 @@ export const Toolbar = GObject.registerClass({
         'line-width-changed': { param_types: [GObject.TYPE_DOUBLE] },
         'undo': {},
         'clear': {},
+        'ocr-trigger': {},
+        'ocr-clear': {},
     },
 }, class Toolbar extends St.BoxLayout {
     _init(params = {}) {
@@ -209,6 +211,8 @@ export const Toolbar = GObject.registerClass({
         this._buildColorButton();
         this._addSeparator();
         this._buildLineWidthSlider();
+        this._addSeparator();
+        this._buildOcrButton();
         this._addSeparator();
         this._buildActionButtons();
 
@@ -405,6 +409,53 @@ export const Toolbar = GObject.registerClass({
         this.add_child(this._slider);
     }
 
+    setOcrProcessing() {
+        this._ocrDone = false;
+        this._ocrButton.opacity = 180;
+        this._ocrButton.reactive = false;
+        const spinner = new St.Widget({ style: 'width: 16px; height: 16px;' });
+        spinner.set_content(new St.SpinnerContent());
+        this._ocrButton.set_child(spinner);
+    }
+
+    setOcrDone() {
+        this._ocrDone = true;
+        this._ocrButton.opacity = 255;
+        this._ocrButton.reactive = true;
+        this._ocrButton.add_style_pseudo_class('checked');
+        if (this._ocrIcon)
+            this._ocrButton.set_child(this._ocrIcon);
+    }
+
+    setOcrIdle() {
+        this._ocrDone = false;
+        this._ocrButton.reactive = true;
+        this._ocrButton.opacity = 255;
+        this._ocrButton.remove_style_pseudo_class('checked');
+        if (this._ocrIcon)
+            this._ocrButton.set_child(this._ocrIcon);
+    }
+
+    _buildOcrButton() {
+        const btn = new St.Button({
+            child: makeIcon('scanner-symbolic', this._extensionPath),
+            style_class: 'screenshot-ui-type-button gradia-square-button',
+            reactive: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        btn.connect('clicked', () => {
+            if (this._ocrDone)
+                this.emit('ocr-clear');
+            else
+                this.emit('ocr-trigger');
+        });
+        this.add_child(btn);
+        this._ocrButton = btn;
+        this._ocrIcon = btn.get_child();
+        attachTooltip(btn, 'Text Recognition');
+        this._ocrDone = false;
+    }
+
     _buildActionButtons() {
         this._undoBtn = new St.Button({
             child: makeIcon('edit-undo-symbolic', this._extensionPath),
@@ -445,6 +496,12 @@ export const Toolbar = GObject.registerClass({
             btn.checked = (btn._toolId === id);
         this.emit('tool-changed', id);
         this._restoreToolEntry(id);
+        this._updateDrawingControlsSensitivity();
+    }
+
+    _clearToolSelection() {
+        for (const btn of this._toolButtons)
+            btn.checked = false;
         this._updateDrawingControlsSensitivity();
     }
 
