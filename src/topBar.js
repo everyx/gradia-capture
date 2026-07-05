@@ -212,9 +212,9 @@ export const Toolbar = GObject.registerClass({
         this._addSeparator();
         this._buildLineWidthSlider();
         this._addSeparator();
-        this._buildOcrButton();
-        this._addSeparator();
         this._buildActionButtons();
+        this._addSeparator();
+        this._buildOcrButton();
 
         this._buildColorMenu();
 
