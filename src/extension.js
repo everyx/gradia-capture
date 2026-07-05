@@ -14,6 +14,7 @@ import { ResolutionOverlay } from './resolutionOverlay.js';
 import { isRapidOcrAvailable, createSettingsButton } from './gradiaIntegration.js';
 import { OcrSelector } from './ocrSelector.js';
 import { MonitorManager } from './monitorManager.js';
+import { AnnotationManager } from './annotationManager.js';
 import { destroyActiveToast } from './screenshotToast.js';
 import { SelectionClearer } from './selectionClearer.js';
 
@@ -47,6 +48,7 @@ export default class GradiaCompanion extends Extension {
         this._gradiaSettings = new GradiaSettings(this);
         this._toolbar = null;
         this._monitors = null;
+        this._annotations = null;
         this._textEntry = null;
         this._pendingTextStroke = null;
         this._textEntryResizeIdle = 0;
@@ -276,8 +278,7 @@ export default class GradiaCompanion extends Extension {
         if (!ui._cursor.visible)
             cursorTexture = null;
 
-        let hasStrokes = false;
-        this._monitors?.forEachCanvas(c => { if (c.hasStrokes()) hasStrokes = true; });
+        const hasStrokes = this._annotations?.hasStrokes ?? false;
         const strokeData = (hasStrokes && !ocr) ? this._buildStrokeData() : null;
 
         return await _capture(
@@ -295,7 +296,7 @@ export default class GradiaCompanion extends Extension {
     }
 
     _updateTrashButton() {
-        const sel = this._monitors.getSelectedCanvasAndStroke();
+        const sel = this._annotations.selected;
         if (!sel) {
             this._hideTrashButton();
             return;
@@ -328,7 +329,7 @@ export default class GradiaCompanion extends Extension {
                 reactive: true,
             });
             this._trashButton.connect('clicked', () => {
-                const s = this._monitors.getSelectedCanvasAndStroke();
+                const s = this._annotations.selected;
                 if (s) {
                     s.canvas.deleteSelectedStroke();
                     this._hideTrashButton();
@@ -355,25 +356,23 @@ export default class GradiaCompanion extends Extension {
     }
 
     _onDragToolPress(stageX, stageY) {
-        for (let i = this._monitors.length - 1; i >= 0; i--) {
-            const canvas = this._monitors.getCanvas(i);
-            const stroke = canvas.selectStrokeAt(stageX, stageY);
-            if (stroke) {
-                this._monitors.clearSelections(canvas);
-                this._updateTrashButton();
-                this._toolbar._syncToStroke(stroke);
-                this._toolbar._updateDrawingControlsSensitivity();
+        const result = this._annotations.selectAt(stageX, stageY);
 
-                this._dragToolActive = true;
-                this._dragToolStartX = stageX;
-                this._dragToolStartY = stageY;
-                this._dragToolCanvas = canvas;
-                this._dragToolGrab = global.stage.grab(this._monitors.getOverlay(i) ?? this._monitors.getOverlay(0));
-                return;
-            }
+        if (result) {
+            this._updateTrashButton();
+            this._toolbar._syncToStroke(result.stroke);
+            this._toolbar._updateDrawingControlsSensitivity();
+
+            this._dragToolActive = true;
+            this._dragToolStartX = stageX;
+            this._dragToolStartY = stageY;
+            this._dragToolCanvas = result.canvas;
+
+            const idx = this._monitors.canvases.indexOf(result.canvas);
+            this._dragToolGrab = global.stage.grab(this._monitors.getOverlay(idx));
+            return;
         }
 
-        this._monitors.clearSelections();
         this._hideTrashButton();
         this._dragToolActive = false;
     }
@@ -655,23 +654,9 @@ export default class GradiaCompanion extends Extension {
             }
         }
 
-        const strokes = [];
-        this._monitors.forEachCanvas(c => {
-            for (const s of c.strokes) {
-                strokes.push({
-                    color: s.color,
-                    toolId: s.toolId,
-                    counter: s.counter,
-                    strokeWidth: s.strokeWidth,
-                    text: s.text,
-                    stagePoints: s.stagePoints.map(p => ({ x: p.x, y: p.y })),
-                });
-            }
-        });
-
         return {
             selX, selY, selW, selH,
-            strokes,
+            strokes: this._annotations.strokeData,
             stageScale: global.stage.scale_factor || 1,
         };
     }
@@ -849,6 +834,7 @@ export default class GradiaCompanion extends Extension {
         const ui = Main.screenshotUI;
 
         this._monitors = new MonitorManager();
+        this._annotations = new AnnotationManager(this._monitors);
         const monitorBins = ui._monitorBins ?? [];
         const binsToUse = monitorBins.length > 0
             ? monitorBins
@@ -924,7 +910,7 @@ export default class GradiaCompanion extends Extension {
         this._toolbar.connect('color-changed', (_toolbar, hex) => {
             this._monitors.forEachCanvas(c => c.setColor(hex));
 
-            const sel = this._monitors.getSelectedCanvasAndStroke();
+            const sel = this._annotations.selected;
             if (sel) {
                 sel.stroke.color = hex;
                 sel.canvas.queue_repaint();
@@ -952,7 +938,7 @@ export default class GradiaCompanion extends Extension {
                 c.queue_repaint();
             });
 
-            const sel = this._monitors.getSelectedCanvasAndStroke();
+            const sel = this._annotations.selected;
             if (sel) {
                 sel.stroke.strokeWidth = width;
                 sel.canvas.queue_repaint();
@@ -965,7 +951,7 @@ export default class GradiaCompanion extends Extension {
             }
         });
 
-        this._toolbar._hasSelection = () => !!this._monitors.getSelectedCanvasAndStroke();
+        this._toolbar._hasSelection = () => !!this._annotations.selected;
 
         this._toolbar.connect('undo', () => {
             if (this._textEntry) {
@@ -973,27 +959,18 @@ export default class GradiaCompanion extends Extension {
                 return;
             }
             if (this._toolbar.selectedTool === 'drag') {
-                const sel = this._monitors.getSelectedCanvasAndStroke();
-                if (sel) {
-                    sel.canvas.deleteSelectedStroke();
+                if (this._annotations.deleteSelected()) {
                     this._hideTrashButton();
                     return;
                 }
             }
-            this._monitors.forEachCanvasReverse(c => {
-                if (c.hasStrokes()) {
-                    c.undo();
-                    return true;
-                }
-                return false;
-            });
+            this._annotations.undo();
         });
 
         this._toolbar.connect('clear', () => {
             this._cancelTextEntry();
-            this._monitors.clearSelections();
+            this._annotations.clear();
             this._hideTrashButton();
-            this._monitors.forEachCanvas(c => c.clear());
         });
 
         this._ocrSelector = new OcrSelector({
@@ -1084,9 +1061,7 @@ export default class GradiaCompanion extends Extension {
 
             if (this._toolbar?.selectedTool === 'drag' &&
                 (sym === Clutter.KEY_Delete || sym === Clutter.KEY_BackSpace)) {
-                const sel = this._monitors.getSelectedCanvasAndStroke();
-                if (sel) {
-                    sel.canvas.deleteSelectedStroke();
+                if (this._annotations.deleteSelected()) {
                     this._hideTrashButton();
                     return Clutter.EVENT_STOP;
                 }
@@ -1189,6 +1164,7 @@ export default class GradiaCompanion extends Extension {
 
         this._monitors?.destroy();
         this._monitors = null;
+        this._annotations = null;
 
         if (this._selectionHintLabel) {
             this._selectionHintLabel.destroy();
