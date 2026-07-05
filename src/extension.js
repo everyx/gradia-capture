@@ -595,11 +595,7 @@ export default class GradiaCompanion extends Extension {
 
     _teardownTextEntry() {
         this._committingText = true;
-        if (this._textDeactivateId) {
-            this._toolbar._toolButtons.find(b => b._toolId === 'text')
-                ?.disconnect(this._textDeactivateId);
-            this._textDeactivateId = 0;
-        }
+        this._disconnectToolDeactivate('text', '_textDeactivateId');
         if (this._textEntryResizeIdle) {
             GLib.source_remove(this._textEntryResizeIdle);
             this._textEntryResizeIdle = 0;
@@ -677,6 +673,13 @@ export default class GradiaCompanion extends Extension {
 
     _isDrawingTool(id) {
         return getToolDef(id)?.isDrawing ?? false;
+    }
+
+    _disconnectToolDeactivate(toolId, prop) {
+        if (!this[prop]) return;
+        this._toolbar?._toolButtons.find(b => b._toolId === toolId)
+            ?.disconnect(this[prop]);
+        this[prop] = 0;
     }
 
     _setTool(id) {
@@ -1188,11 +1191,8 @@ export default class GradiaCompanion extends Extension {
         }
 
         if (this._toolbar) {
-            if (this._dragDeactivateId) {
-                this._toolbar._toolButtons.find(b => b._toolId === 'drag')
-                    ?.disconnect(this._dragDeactivateId);
-                this._dragDeactivateId = 0;
-            }
+            this._disconnectToolDeactivate('text', '_textDeactivateId');
+            this._disconnectToolDeactivate('drag', '_dragDeactivateId');
             this._toolbar.destroy();
             this._toolbar = null;
         }
