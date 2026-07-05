@@ -10,6 +10,7 @@ import { DrawingCanvas, DrawingInputOverlay } from './canvas.js';
 import { GradiaSettings } from './settings.js';
 import { ResolutionOverlay } from './resolutionOverlay.js';
 import { ScreenshotCapture } from './screenshotCapture.js';
+import { DragTool } from './dragTool.js';
 import { isRapidOcrAvailable, createSettingsButton } from './gradiaIntegration.js';
 import { OcrSelector } from './ocrSelector.js';
 import { MonitorManager } from './monitorManager.js';
@@ -53,13 +54,8 @@ export default class GradiaCompanion extends Extension {
         this._dragDeactivateId = 0;
 
         this._screenshotCapture = null;
+        this._dragTool = null;
         this._ocrSelector = null;
-
-        this._dragToolActive = false;
-        this._dragToolStartX = 0;
-        this._dragToolStartY = 0;
-        this._dragToolCanvas = null;
-        this._dragToolGrab = null;
         this._trashButton = null;
 
         const self = this;
@@ -165,63 +161,6 @@ export default class GradiaCompanion extends Extension {
             this._trashButton.destroy();
             this._trashButton = null;
         }
-    }
-
-    _onDragToolPress(stageX, stageY) {
-        const result = this._annotations.selectAt(stageX, stageY);
-
-        if (result) {
-            this._updateTrashButton();
-            this._toolbar._syncToStroke(result.stroke);
-            this._toolbar._updateDrawingControlsSensitivity();
-
-            this._dragToolActive = true;
-            this._dragToolStartX = stageX;
-            this._dragToolStartY = stageY;
-            this._dragToolCanvas = result.canvas;
-
-            const idx = this._monitors.canvases.indexOf(result.canvas);
-            this._dragToolGrab = global.stage.grab(this._monitors.getOverlay(idx));
-            return;
-        }
-
-        this._hideTrashButton();
-        this._dragToolActive = false;
-    }
-
-    _onDragToolMotion(stageX, stageY) {
-        if (!this._dragToolActive || !this._dragToolCanvas)
-            return;
-
-        const dx = stageX - this._dragToolStartX;
-        const dy = stageY - this._dragToolStartY;
-
-        const stroke = this._dragToolCanvas.selectedStroke;
-        const targetCanvas = this._monitors.canvasForStagePoint(stageX, stageY);
-
-        if (targetCanvas && targetCanvas !== this._dragToolCanvas && stroke) {
-            this._dragToolCanvas.evictStroke(stroke);
-            targetCanvas.adoptStroke(stroke);
-            this._dragToolCanvas = targetCanvas;
-        }
-
-        this._dragToolCanvas.moveSelectedStroke(dx, dy);
-        this._dragToolStartX = stageX;
-        this._dragToolStartY = stageY;
-        this._updateTrashButton();
-    }
-
-    _onDragToolRelease() {
-        this._dragToolActive = false;
-        this._dragToolCanvas = null;
-
-        if (this._dragToolGrab) {
-            this._dragToolGrab.dismiss();
-            this._dragToolGrab = null;
-        }
-
-        this._updateTrashButton();
-        this._toolbar._updateDrawingControlsSensitivity();
     }
 
     _isDrawingTool(id) {
@@ -430,7 +369,11 @@ export default class GradiaCompanion extends Extension {
 
                     if (tool === 'drag') {
                         const [stageX, stageY] = event.get_coords();
-                        this._onDragToolPress(stageX, stageY);
+                        this._dragTool.press(stageX, stageY);
+                        if (this._dragTool.active)
+                            this._updateTrashButton();
+                        else
+                            this._hideTrashButton();
                         return Clutter.EVENT_STOP;
                     }
 
@@ -440,7 +383,8 @@ export default class GradiaCompanion extends Extension {
                 overlay.connect('motion-event', (_actor, event) => {
                     if (this._toolbar?.selectedTool === 'drag') {
                         const [stageX, stageY] = event.get_coords();
-                        this._onDragToolMotion(stageX, stageY);
+                        this._dragTool.motion(stageX, stageY);
+                        this._updateTrashButton();
                         return Clutter.EVENT_STOP;
                     }
                     return Clutter.EVENT_PROPAGATE;
@@ -448,7 +392,9 @@ export default class GradiaCompanion extends Extension {
 
                 overlay.connect('button-release-event', () => {
                     if (this._toolbar?.selectedTool === 'drag') {
-                        this._onDragToolRelease();
+                        this._dragTool.release();
+                        this._updateTrashButton();
+                        this._toolbar._updateDrawingControlsSensitivity();
                         return Clutter.EVENT_STOP;
                     }
                     return Clutter.EVENT_PROPAGATE;
@@ -473,6 +419,11 @@ export default class GradiaCompanion extends Extension {
             isRecordingMode: () => this._isRecordingMode(),
         });
         this._screenshotCapture.portalMode = this._portalMode;
+        this._dragTool = new DragTool({
+            toolbar: this._toolbar,
+            monitors: this._monitors,
+            annotations: this._annotations,
+        });
 
         this._ocrSelector = new OcrSelector({
             toolbar: this._toolbar,
@@ -668,7 +619,7 @@ export default class GradiaCompanion extends Extension {
 
             if (this._toolbar?.selectedTool === 'drag' &&
                 (sym === Clutter.KEY_Delete || sym === Clutter.KEY_BackSpace)) {
-                if (this._annotations.deleteSelected()) {
+                if (this._dragTool.deleteSelected()) {
                     this._hideTrashButton();
                     return Clutter.EVENT_STOP;
                 }
@@ -710,10 +661,8 @@ export default class GradiaCompanion extends Extension {
             this._settingsButton = null;
         }
 
-        if (this._dragToolGrab) {
-            this._dragToolGrab.dismiss();
-            this._dragToolGrab = null;
-        }
+        this._dragTool?.destroy();
+        this._dragTool = null;
 
         const ui = Main.screenshotUI;
 
