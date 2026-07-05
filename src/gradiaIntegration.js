@@ -37,7 +37,11 @@ export function runRapidOcr(file, extensionPath) {
                 try {
                     const [, stdout] = _p.communicate_utf8_finish(res);
                     const parsed = JSON.parse(stdout ?? '[]');
-                    resolve(Array.isArray(parsed) ? parsed : []);
+                    if (!Array.isArray(parsed)) {
+                        reject(new Error(parsed?.error ?? 'OCR produced no results'));
+                        return;
+                    }
+                    resolve(parsed);
                 } catch (e) {
                     reject(e);
                 }

@@ -4,6 +4,8 @@ import Clutter from 'gi://Clutter';
 import Cairo from 'gi://cairo';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
+import Pango from 'gi://Pango';
+import PangoCairo from 'gi://PangoCairo';
 import St from 'gi://St';
 
 import { Toolbar, TRASH_BUTTON_RADIUS } from './topBar.js';
@@ -11,8 +13,9 @@ import { TOOLS, TOOL_SHORTCUTS } from './tools.js';
 import { GradiaSettings } from './settings.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
 import { ResolutionOverlay } from './resolutionOverlay.js';
-import { isGradiaFlatpakInstalled, createOcrButton, createSettingsButton, launchGradiaOcrForFile, setOcrButtonEnabled } from './gradiaIntegration.js';
+import { isRapidOcrAvailable, runRapidOcr, createSettingsButton } from './gradiaIntegration.js';
 import { destroyActiveToast } from './screenshotToast.js';
+import { attachTooltip } from './tooltip.js';
 import { SelectionClearer } from './selectionClearer.js';
 
 const MAX_CANVAS_WIDTH = 1920;
@@ -392,6 +395,24 @@ export default class GradiaCompanion extends Extension {
         this._pendingTextStroke = null;
         this._textEntryResizeIdle = 0;
 
+        this._ocrBlockData = null;
+        this._ocrOverlay = null;
+        this._ocrCacheBlocks = null;
+        this._ocrHighlightWidgets = [];
+        this._ocrSelectedSet = new Set();
+        this._ocrSelIdx0 = -1;
+        this._ocrCursorFrozen = false;
+        this._ocrRectMode = false;
+        this._ocrSelBorder = null;
+        this._ocrCopyBtn = null;
+        this._ocrRectWidget = null;
+        this._ocrRectStart = null;
+        this._ocrRectEnd = null;
+        this._ocrToast = null;
+        this._captureGeometry = null;
+        this._captureScale = 1;
+        this._systemFont = null;
+
         this._dragToolActive = false;
         this._dragToolStartX = 0;
         this._dragToolStartY = 0;
@@ -548,6 +569,8 @@ export default class GradiaCompanion extends Extension {
         const playSound = this._settings.get_boolean('play-sound');
 
         const _capture = (texture, geometry, scale, cursor, compositeFn, windowComposite = null) => {
+            this._captureGeometry = geometry;
+            this._captureScale = scale;
             const capturePromise = captureAndStoreScreenshot(
                 texture, geometry, scale, cursor, compositeFn, windowComposite,
                 { copy: shouldCopy, save: shouldSave, externalSave, format, playSound }
@@ -1041,6 +1064,9 @@ export default class GradiaCompanion extends Extension {
     }
 
     _setTool(id) {
+        if (this._ocrBlockData)
+            this._clearOcrSelection();
+
         if (id !== 'text')
             this._commitTextEntry();
 
@@ -1116,7 +1142,7 @@ export default class GradiaCompanion extends Extension {
             this._setTool(this._toolbar?.selectedTool ?? 'select');
         }
 
-        setOcrButtonEnabled(this._ocrButton, !windowMode && !recordingMode && !screenMode && !this._portalMode);
+        // OCR button visibility is managed through toolbar state
 
         this._selectionHintLabel?.set({ visible: selectionMode && !recordingMode });
 
@@ -1156,6 +1182,8 @@ export default class GradiaCompanion extends Extension {
     _repositionToolbar() {
         if (!this._toolbar || !this._primaryBin)
             return;
+
+        this._ocrCacheBlocks = null;
 
         const ui = Main.screenshotUI;
         const monitor = Main.layoutManager.primaryMonitor;
@@ -1200,6 +1228,18 @@ export default class GradiaCompanion extends Extension {
     }
 
     _ensureUI() {
+        this._ocrCacheBlocks = null;
+
+        // Cache system font for OCR token measurement
+        if (!this._systemFont) {
+            try {
+                const iface = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
+                this._systemFont = iface.get_string('font-name');
+            } catch (e) {
+                this._systemFont = 'Sans';
+            }
+        }
+
         if (this._toolbar)
             return;
 
@@ -1356,14 +1396,12 @@ export default class GradiaCompanion extends Extension {
                 canvas.clear();
         });
 
-        if (isGradiaFlatpakInstalled()) {
-            const ui = Main.screenshotUI;
-            this._ocrButton = createOcrButton(async () => {
-                const file = await this._captureScreenshot({ ocr: true });
-                Main.screenshotUI.close();
-                launchGradiaOcrForFile(file);
-            });
-            ui._showPointerButtonContainer.insert_child_below(this._ocrButton, ui._showPointerButton);
+        if (isRapidOcrAvailable()) {
+            this._toolbar.connect('ocr-trigger', () => this._performOcr());
+            this._toolbar.connect('ocr-clear', () => this._clearOcrSelection());
+        } else {
+            this._toolbar._ocrButton.reactive = false;
+            this._toolbar._ocrButton.opacity = 80;
         }
 
         this._settingsButton = createSettingsButton(() => {
@@ -1394,6 +1432,11 @@ export default class GradiaCompanion extends Extension {
                 return Clutter.EVENT_STOP;
             }
 
+            if (this._ocrBlockData && ctrl && sym === Clutter.KEY_c) {
+                this._copySelectedOcrText();
+                return Clutter.EVENT_STOP;
+            }
+
             if (ctrl && sym === Clutter.KEY_c) {
                 if (!this._isRecordingMode() && !this._portalMode) {
                     this._captureScreenshot({ copyOnly: true }).then(result => {
@@ -1414,8 +1457,13 @@ export default class GradiaCompanion extends Extension {
                 }
             }
 
+            if (this._ocrBlockData && ctrl && sym === Clutter.KEY_a) {
+                this._selectAllOcrBlocks();
+                return Clutter.EVENT_STOP;
+            }
+
             if (ctrl && sym === Clutter.KEY_e) {
-                this._ocrButton?.emit('clicked', 0);
+                this._toolbar?.emit('ocr-trigger');
                 return Clutter.EVENT_STOP;
             }
 
@@ -1475,6 +1523,519 @@ export default class GradiaCompanion extends Extension {
         this._updateVisibilityForMode();
     }
 
+    async _performOcr() {
+        if (this._ocrBlockData) {
+            this._clearOcrSelection();
+            return;
+        }
+        try {
+            this._toolbar.setOcrProcessing();
+            this._toolbar._clearToolSelection();
+            this._clearAllSelections();
+            this._hideTrashButton();
+
+            const ui = Main.screenshotUI;
+            let originX = 0, originY = 0;
+            let captureMonitor = null;
+
+            if (ui._selectionButton?.checked && ui._areaSelector) {
+                const geom = ui._areaSelector.getGeometry();
+                if (geom) {
+                    originX = geom[0];
+                    originY = geom[1];
+                }
+            } else if (ui._screenButton?.checked) {
+                const idx = ui._screenSelectors?.findIndex(s => s.checked);
+                if (idx >= 0) {
+                    const mon = Main.layoutManager.monitors[idx];
+                    originX = mon.x;
+                    originY = mon.y;
+                    captureMonitor = mon;
+                }
+            } else if (ui._windowButton?.checked) {
+                const win = ui._windowSelectors?.flatMap(sel => sel.windows()).find(w => w.checked);
+                if (win) {
+                    originX = win.boundingBox.x;
+                    originY = win.boundingBox.y;
+                }
+            }
+            if (!captureMonitor)
+                captureMonitor = global.display.get_monitor_geometry(global.display.get_primary_monitor());
+
+            let blocks;
+            let scale;
+
+            if (this._ocrCacheBlocks) {
+                blocks = this._ocrCacheBlocks;
+                scale = this._captureScale || 1;
+            } else {
+                const file = await this._captureScreenshot({ ocr: true });
+                if (!file)
+                    throw new Error('Screenshot capture failed');
+                scale = this._captureScale || 1;
+                blocks = await runRapidOcr(file, this.path);
+                this._ocrCacheBlocks = blocks;
+            }
+            this._storeOcrBlocks(blocks, originX, originY, scale, captureMonitor);
+            this._toolbar.setOcrDone();
+        } catch (e) {
+            console.error(`OCR failed: ${e.message}`);
+            this._toolbar.setOcrIdle();
+        }
+    }
+
+    _splitOcrBlocks(blocks) {
+        const result = [];
+        let parentIdx = 0;
+        for (const block of blocks) {
+            const xs = block.box.map(p => p[0]);
+            const ys = block.box.map(p => p[1]);
+            const bMinX = Math.min(...xs);
+            const bMaxX = Math.max(...xs);
+            const bMinY = Math.min(...ys);
+            const bMaxY = Math.max(...ys);
+            const bW = bMaxX - bMinX;
+            const bH = bMaxY - bMinY;
+
+            const tokens = [];
+            const text = block.text;
+            let i = 0;
+            let spaced = false;
+            while (i < text.length) {
+                const ch = text[i];
+                const cjk = (ch >= '\u4e00' && ch <= '\u9fff') ||
+                            (ch >= '\u3400' && ch <= '\u4dbf') ||
+                            (ch >= '\uf900' && ch <= '\ufaff');
+                if (ch === ' ') {
+                    spaced = true;
+                    i++;
+                    continue;
+                }
+                if (cjk) {
+                    tokens.push({ text: ch, startIdx: i, endIdx: i + 1, hasSpaceBefore: spaced });
+                    spaced = false;
+                    i++;
+                } else {
+                    let j = i + 1;
+                    while (j < text.length && text[j] !== ' ' &&
+                           !((text[j] >= '\u4e00' && text[j] <= '\u9fff') ||
+                             (text[j] >= '\u3400' && text[j] <= '\u4dbf') ||
+                             (text[j] >= '\uf900' && text[j] <= '\ufaff')))
+                        j++;
+                    tokens.push({ text: text.substring(i, j), startIdx: i, endIdx: j, hasSpaceBefore: spaced });
+                    spaced = false;
+                    i = j;
+                }
+            }
+
+            if (tokens.length === 0) continue;
+
+            // Measure actual token widths with Pango (original text preserves spacing)
+            const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, 1, 1);
+            const cr = new Cairo.Context(surface);
+            const layout = PangoCairo.create_layout(cr);
+            const fontSize = Math.max(8, Math.round(bH * 0.8));
+            const fontFamily = (this._systemFont || 'Sans').replace(/\s+\d+(\.\d+)?$/, '');
+            const desc = Pango.font_description_from_string(`${fontFamily} ${fontSize}px`);
+            layout.set_font_description(desc);
+            layout.set_text(text, -1);
+
+            // Pass 1: raw Pango widths
+            const rawWidths = [];
+            let totalRaw = 0;
+            for (const token of tokens) {
+                const sb = this._toByteIdx(text, token.startIdx);
+                const eb = this._toByteIdx(text, token.endIdx);
+                const w = (layout.index_to_pos(eb).x - layout.index_to_pos(sb).x) / Pango.SCALE;
+                rawWidths.push(w);
+                totalRaw += w;
+            }
+            cr.$dispose();
+            surface.finish();
+
+            // Pass 2: scale to OCR block width (sum-to-bW guarantee)
+            const scale = totalRaw > 0 ? bW / totalRaw : (bW / text.length);
+            let cursorX = 0;
+            for (let i = 0; i < tokens.length; i++) {
+                const tokW = rawWidths[i] * scale;
+                const tokMinX = bMinX + cursorX;
+                const tokMaxX = tokMinX + tokW;
+                cursorX += tokW;
+
+                result.push({
+                    text: tokens[i].text,
+                    score: block.score,
+                    hasSpaceBefore: tokens[i].hasSpaceBefore,
+                    parentIdx,
+                    box: [[tokMinX, bMinY], [tokMaxX, bMinY],
+                          [tokMaxX, bMaxY], [tokMinX, bMaxY]],
+                });
+            }
+            parentIdx++;
+        }
+        return result;
+    }
+
+    _storeOcrBlocks(blocks, originX, originY, captureScale, captureMonitor) {
+        this._clearOcrSelection();
+
+        const splitBlocks = this._splitOcrBlocks(blocks);
+
+        this._ocrBlockData = splitBlocks.map(block => {
+            const xs = block.box.map(p => p[0]);
+            const ys = block.box.map(p => p[1]);
+            const minX = Math.min(...xs) / captureScale + originX;
+            const minY = Math.min(...ys) / captureScale + originY;
+            const maxX = Math.max(...xs) / captureScale + originX;
+            const maxY = Math.max(...ys) / captureScale + originY;
+            return { text: block.text, score: block.score, minX, minY, maxX, maxY, parentIdx: block.parentIdx, hasSpaceBefore: block.hasSpaceBefore };
+        });
+
+        // Sort by reading order: top-to-bottom, left-to-right within same row
+        this._ocrBlockData.sort((a, b) => {
+            const dy = Math.abs(a.minY - b.minY);
+            if (dy < (a.maxY - a.minY) * 0.6)
+                return a.minX - b.minX;
+            return a.minY - b.minY;
+        });
+
+        this._ocrSelectedSet = new Set();
+        this._ocrSelIdx0 = -1;
+        this._ocrHighlightWidgets = [];
+
+        // Selection overlay — inserted below toolbar, above canvases
+        const primaryBin = Main.screenshotUI._primaryMonitorBin;
+        const overlay = new St.Widget({
+            reactive: true,
+        });
+        overlay.set_cursor_type(Clutter.CursorType.CROSSHAIR);
+        overlay.set_position(captureMonitor.x, captureMonitor.y);
+        overlay.set_size(captureMonitor.width, captureMonitor.height);
+        if (primaryBin) {
+            primaryBin.add_child(overlay);
+            primaryBin.set_child_at_index(overlay, 0);
+        }
+        this._ocrOverlay = overlay;
+
+        overlay.connect('button-press-event', (_a, event) => {
+            this._ocrCursorFrozen = true;
+            const [sx, sy] = event.get_coords();
+            const idx = this._findOcrBlockAt(sx, sy);
+            if (idx >= 0) {
+                this._ocrSelIdx0 = idx;
+                this._updateOcrSelection(idx, idx);
+            } else if (this._ocrBlockData) {
+                this._ocrRectMode = true;
+                this._ocrRectStart = { x: sx, y: sy };
+                this._ocrRectEnd = { x: sx, y: sy };
+                this._clearOcrHighlight();
+                this._showOcrRect();
+            }
+            return Clutter.EVENT_STOP;
+        });
+
+        overlay.connect('motion-event', (_a, event) => {
+            const [sx, sy] = event.get_coords();
+            if (!this._ocrCursorFrozen) {
+                overlay.set_cursor_type(
+                    this._findOcrBlockAt(sx, sy) >= 0
+                        ? Clutter.CursorType.TEXT
+                        : Clutter.CursorType.CROSSHAIR);
+            }
+            if (this._ocrSelIdx0 >= 0) {
+                const idx = this._findOcrBlockAt(sx, sy);
+                if (idx >= 0)
+                    this._updateOcrSelection(this._ocrSelIdx0, idx);
+            } else if (this._ocrRectMode) {
+                this._ocrRectEnd = { x: sx, y: sy };
+                this._showOcrRect();
+            }
+            return Clutter.EVENT_STOP;
+        });
+
+        overlay.connect('button-release-event', () => {
+            if (this._ocrRectMode) {
+                this._ocrRectMode = false;
+                if (this._ocrRectStart && this._ocrRectEnd) {
+                    const sx = Math.min(this._ocrRectStart.x, this._ocrRectEnd.x);
+                    const sy = Math.min(this._ocrRectStart.y, this._ocrRectEnd.y);
+                    const ex = Math.max(this._ocrRectStart.x, this._ocrRectEnd.x);
+                    const ey = Math.max(this._ocrRectStart.y, this._ocrRectEnd.y);
+                    if (ex - sx > 3 || ey - sy > 3) {
+                        this._selectBlocksInRect(sx, sy, ex, ey);
+                    }
+                }
+                this._hideOcrRect();
+                this._ocrRectStart = null;
+                this._ocrRectEnd = null;
+            }
+            this._ocrSelIdx0 = -1;
+            this._ocrCursorFrozen = false;
+            return Clutter.EVENT_STOP;
+        });
+    }
+
+    _findOcrBlockAt(stageX, stageY) {
+        for (let i = 0; i < this._ocrBlockData.length; i++) {
+            const b = this._ocrBlockData[i];
+            const MARGIN = 10;
+            if (stageX >= b.minX - MARGIN && stageX <= b.maxX + MARGIN &&
+                stageY >= b.minY - MARGIN && stageY <= b.maxY + MARGIN)
+                return i;
+        }
+        return -1;
+    }
+
+    _updateOcrSelection(idxA, idxB) {
+        this._clearOcrHighlight();
+        const lo = Math.min(idxA, idxB);
+        const hi = Math.max(idxA, idxB);
+        for (let i = lo; i <= hi; i++)
+            this._ocrSelectedSet.add(i);
+        this._renderHighlights();
+    }
+
+    _renderHighlights() {
+        for (const w of this._ocrHighlightWidgets)
+            w.destroy();
+        this._ocrHighlightWidgets = [];
+        this._hideOcrSelBorder();
+        this._hideOcrCopyBtn();
+
+        if (this._ocrSelectedSet.size === 0) return;
+
+        let uMinX = Infinity, uMinY = Infinity, uMaxX = -Infinity, uMaxY = -Infinity;
+
+        for (const i of this._ocrSelectedSet) {
+            const b = this._ocrBlockData[i];
+            const hl = new St.Widget({ style_class: 'gradia-ocr-highlight' });
+            hl.set_position(b.minX, b.minY);
+            hl.set_size(b.maxX - b.minX, b.maxY - b.minY);
+            Main.screenshotUI.add_child(hl);
+            Main.screenshotUI.remove_child(hl);
+            Main.screenshotUI.add_child(hl);
+            this._ocrHighlightWidgets.push(hl);
+
+            if (b.minX < uMinX) uMinX = b.minX;
+            if (b.minY < uMinY) uMinY = b.minY;
+            if (b.maxX > uMaxX) uMaxX = b.maxX;
+            if (b.maxY > uMaxY) uMaxY = b.maxY;
+        }
+
+        const PAD = 8;
+        const primaryBin = Main.screenshotUI._primaryMonitorBin;
+        if (!primaryBin) return;
+
+        const bx = uMinX - PAD;
+        const by = uMinY - PAD;
+        const bw = uMaxX - uMinX + PAD * 2;
+        const bh = uMaxY - uMinY + PAD * 2;
+
+        // Dashed border via St.DrawingArea in Main.screenshotUI (stage coords)
+        const border = new St.DrawingArea({ style: 'background-color: transparent;' });
+        border.set_position(bx, by);
+        border.set_size(Math.max(bw, 2), Math.max(bh, 2));
+        border.connect('repaint', (area) => {
+            const cr = area.get_context();
+            cr.setSourceRGBA(1.0, 1.0, 1.0, 0.9);
+            cr.setLineWidth(1.5);
+            cr.setDash([5, 4], 0);
+            cr.rectangle(1, 1, bw - 2, bh - 2);
+            cr.stroke();
+            cr.$dispose();
+        });
+        Main.screenshotUI.add_child(border);
+        border.queue_repaint();
+        this._ocrSelBorder = border;
+
+        // Copy button at top-right of border
+        this._showOcrCopyBtn(uMaxX + PAD, uMinY - PAD, primaryBin);
+    }
+
+    _showOcrCopyBtn(stageRX, stageTY, primaryBin) {
+        if (!primaryBin) return;
+        if (!this._ocrCopyBtn) {
+            this._ocrCopyBtn = new St.Button({
+                style_class: 'gradia-ocr-copy-btn',
+                child: new St.Icon({ icon_name: 'edit-copy-symbolic', style: 'icon-size: 14px;' }),
+            });
+            attachTooltip(this._ocrCopyBtn, 'Copy selected text', St.Side.RIGHT);
+            this._ocrCopyBtn.connect('clicked', () => this._copySelectedOcrText());
+            if (Main.screenshotUI._panel)
+                primaryBin.insert_child_below(this._ocrCopyBtn, Main.screenshotUI._panel);
+            else
+                primaryBin.add_child(this._ocrCopyBtn);
+        }
+        const [ok, lx, ly] = primaryBin.transform_stage_point(stageRX - 16, stageTY - 24);
+        if (ok) {
+            this._ocrCopyBtn.set_position(Math.round(lx), Math.round(ly));
+            this._ocrCopyBtn.show();
+        }
+    }
+
+    _toByteIdx(text, charIdx) {
+        let byteCount = 0;
+        for (let i = 0; i < charIdx; i++) {
+            const c = text.charCodeAt(i);
+            byteCount += c < 0x80 ? 1 : c < 0x800 ? 2 : 3;
+        }
+        return byteCount;
+    }
+
+    _hideOcrCopyBtn() {
+        this._ocrCopyBtn?.hide();
+    }
+
+    _hideOcrSelBorder() {
+        if (this._ocrSelBorder) {
+            this._ocrSelBorder.destroy();
+            this._ocrSelBorder = null;
+        }
+    }
+
+    _clearOcrHighlight() {
+        for (const w of this._ocrHighlightWidgets)
+            w.destroy();
+        this._ocrHighlightWidgets = [];
+        this._ocrSelectedSet.clear();
+        this._hideOcrSelBorder();
+        this._hideOcrCopyBtn();
+    }
+
+    _showOcrRect() {
+        if (!this._ocrRectStart || !this._ocrRectEnd) return;
+        const x = Math.min(this._ocrRectStart.x, this._ocrRectEnd.x);
+        const y = Math.min(this._ocrRectStart.y, this._ocrRectEnd.y);
+        const w = Math.abs(this._ocrRectEnd.x - this._ocrRectStart.x);
+        const h = Math.abs(this._ocrRectEnd.y - this._ocrRectStart.y);
+        if (w < 3 && h < 3) {
+            this._hideOcrRect();
+            return;
+        }
+        if (!this._ocrRectWidget) {
+            this._ocrRectWidget = new St.Widget({
+                style_class: 'gradia-ocr-sel-rect',
+            });
+            Main.screenshotUI.add_child(this._ocrRectWidget);
+            Main.screenshotUI.remove_child(this._ocrRectWidget);
+            Main.screenshotUI.add_child(this._ocrRectWidget);
+        }
+        this._ocrRectWidget.set_position(x, y);
+        this._ocrRectWidget.set_size(w, h);
+    }
+
+    _hideOcrRect() {
+        if (this._ocrRectWidget) {
+            this._ocrRectWidget.destroy();
+            this._ocrRectWidget = null;
+        }
+    }
+
+    _selectBlocksInRect(sx, sy, ex, ey) {
+        this._clearOcrHighlight();
+        for (let i = 0; i < this._ocrBlockData.length; i++) {
+            const b = this._ocrBlockData[i];
+            if (b.minX < ex && b.maxX > sx && b.minY < ey && b.maxY > sy) {
+                this._ocrSelectedSet.add(i);
+            }
+        }
+        this._renderHighlights();
+    }
+
+    _copySelectedOcrText() {
+        if (!this._ocrSelectedSet || this._ocrSelectedSet.size === 0) {
+            this._showOcrToast('No text selected');
+            return;
+        }
+        const indices = [...this._ocrSelectedSet].sort((a, b) => a - b);
+        const blocks = indices.map(i => this._ocrBlockData[i]);
+
+        // Group into lines by Y proximity
+        const lines = [];
+        let cur = [blocks[0]];
+        for (let i = 1; i < blocks.length; i++) {
+            const prevH = cur[cur.length - 1].maxY - cur[cur.length - 1].minY;
+            const dy = Math.abs(blocks[i].minY - cur[cur.length - 1].minY);
+            if (dy < prevH * 0.6)
+                cur.push(blocks[i]);
+            else {
+                lines.push(cur);
+                cur = [blocks[i]];
+            }
+        }
+        lines.push(cur);
+
+        const text = lines.map(line => {
+            let s = '';
+            for (let i = 0; i < line.length; i++) {
+                if (i > 0) {
+                    if (line[i].parentIdx !== line[i - 1].parentIdx)
+                        s += ' ';
+                    else if (line[i].hasSpaceBefore)
+                        s += ' ';
+                }
+                s += line[i].text;
+            }
+            return s;
+        }).join('\n');
+        St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, text);
+        this._showOcrToast(`Copied ${indices.length} block${indices.length > 1 ? 's' : ''}`);
+    }
+
+    _selectAllOcrBlocks() {
+        if (!this._ocrBlockData || this._ocrBlockData.length === 0) {
+            this._showOcrToast('No OCR text available');
+            return;
+        }
+        this._ocrSelectedSet.clear();
+        for (let i = 0; i < this._ocrBlockData.length; i++)
+            this._ocrSelectedSet.add(i);
+        this._renderHighlights();
+    }
+
+    _clearOcrSelection() {
+        this._clearOcrHighlight();
+        this._hideOcrRect();
+        if (this._ocrOverlay) {
+            this._ocrOverlay.destroy();
+            this._ocrOverlay = null;
+        }
+        if (this._ocrCopyBtn) {
+            this._ocrCopyBtn.destroy();
+            this._ocrCopyBtn = null;
+        }
+        this._ocrBlockData = null;
+        if (this._toolbar)
+            this._toolbar.setOcrIdle();
+    }
+
+    _showOcrToast(text) {
+        const monitor = global.display.get_monitor_geometry(
+            global.display.get_primary_monitor());
+        if (!this._ocrToast) {
+            this._ocrToast = new St.Label({
+                text,
+                style: 'background: rgba(0,0,0,0.7); color: white; border-radius: 6px; padding: 6px 12px; font-size: 13px;',
+                x_expand: false,
+                y_expand: false,
+            });
+            Main.screenshotUI._primaryMonitorBin.add_child(this._ocrToast);
+        } else {
+            this._ocrToast.text = text;
+        }
+        this._ocrToast.set_position(
+            Math.round((monitor.width - this._ocrToast.width) / 2),
+            Math.round((monitor.height - this._ocrToast.height) / 2) + 80
+        );
+        this._ocrToast.opacity = 255;
+        this._ocrToast.ease({
+            opacity: 0,
+            duration: 3000,
+            delay: 1500,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+    }
+
     _removeUI() {
         this._cancelTextEntry();
         this._destroyTrashButton();
@@ -1484,9 +2045,10 @@ export default class GradiaCompanion extends Extension {
             this._idleSourceId = 0;
         }
 
-        if (this._ocrButton) {
-            this._ocrButton.destroy();
-            this._ocrButton = null;
+        this._clearOcrSelection();
+        if (this._ocrToast) {
+            this._ocrToast.destroy();
+            this._ocrToast = null;
         }
 
         if (this._settingsButton) {
