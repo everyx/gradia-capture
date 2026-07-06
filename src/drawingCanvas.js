@@ -344,32 +344,32 @@ export const DrawingCanvas = GObject.registerClass(
 
             for (const stroke of allStrokes) {
                 if (stroke.toolId !== 'blur') continue;
+                if (stroke === this._currentStroke) continue;
 
                 if (stroke.previewSurface) {
-                    const ox = stroke.previewOrigin.x;
-                    const oy = stroke.previewOrigin.y;
-                    const tl = this._stageToLocal(ox, oy);
+                    const tl = this._stageToLocal(stroke.previewOrigin.x, stroke.previewOrigin.y);
                     if (tl) {
                         const ds = stroke.previewScale || ss;
                         cr.save();
                         cr.translate(tl.x, tl.y);
                         cr.scale(1 / ds, 1 / ds);
                         cr.setSourceSurface(stroke.previewSurface, 0, 0);
+                        const srcPat = cr.getSource();
+                        if (srcPat && stroke.previewScale === 1) srcPat.setFilter(Cairo.Filter.NEAREST);
                         cr.paint();
                         cr.restore();
                     }
-                } else {
-                    const tool = getToolDef(stroke.toolId);
-                    if (tool?.render) {
-                        const localPoints = stroke.stagePoints
-                            .map(sp => this._stageToLocal(sp.x, sp.y))
-                            .filter(p => p !== null);
-                        tool.render(cr, {
-                            color: stroke.color,
-                            points: localPoints,
-                            blurMode: stroke.blurMode,
-                            blockSize: stroke.blockSize,
-                        }, stroke.strokeWidth);
+                }
+            }
+
+            for (const stroke of allStrokes) {
+                if (stroke._previewDragSurface && !stroke.previewSurface && stroke._previewDragOrigin) {
+                    const tl = this._stageToLocal(stroke._previewDragOrigin.x, stroke._previewDragOrigin.y);
+                    if (tl) {
+                        cr.setSourceSurface(stroke._previewDragSurface, tl.x, tl.y);
+                        const pat = cr.getSource();
+                        if (pat) pat.setFilter(Cairo.Filter.NEAREST);
+                        cr.paint();
                     }
                 }
             }

@@ -2,8 +2,13 @@ import Cairo from 'gi://cairo';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import GLib from 'gi://GLib';
 
-function averageBlock(source, rowstride, nChannels, x0, y0, x1, y1) {
+export function averageBlock(source, rowstride, nChannels, x0, y0, x1, y1, srcW = Infinity, srcH = Infinity) {
     let r = 0, g = 0, b = 0, a = 0, count = 0;
+
+    x0 = Math.max(0, Math.min(x0, srcW - 1));
+    y0 = Math.max(0, Math.min(y0, srcH - 1));
+    x1 = Math.max(x0, Math.min(x1, srcW));
+    y1 = Math.max(y0, Math.min(y1, srcH));
 
     for (let y = y0; y < y1; y++) {
         let off = y * rowstride + x0 * nChannels;
@@ -26,7 +31,7 @@ function averageBlock(source, rowstride, nChannels, x0, y0, x1, y1) {
     ];
 }
 
-function _forEachBlockInRect(rectAbs, blockSize, originAbsX, originAbsY, fn) {
+export function _forEachBlockInRect(rectAbs, blockSize, originAbsX, originAbsY, fn) {
     const { x: cx, y: cy, w: cw, h: ch } = rectAbs;
     const startBX = Math.floor((cx - originAbsX) / blockSize);
     const startBY = Math.floor((cy - originAbsY) / blockSize);
@@ -119,7 +124,7 @@ function _createMaskedBlocksSurface(pixbuf, regionAbs, pointsAbs, brushWidth, bl
     for (const b of blocks) {
         const px = b.x - regionAbs.x;
         const py = b.y - regionAbs.y;
-        const [r, g, b_, a] = averageBlock(source, rowstride, nChannels, px, py, px + b.w, py + b.h);
+        const [r, g, b_, a] = averageBlock(source, rowstride, nChannels, px, py, px + b.w, py + b.h, width, height);
         ctx.setSourceRGBA(r / 255, g / 255, b_ / 255, 1.0);
         ctx.rectangle(px, py, b.w, b.h);
         ctx.fill();
@@ -196,12 +201,14 @@ export function pixelatePixbufRect(pixbuf, regionAbs, p0Abs, p1Abs, blockSize, o
     const source = pixbuf.get_pixels();
     const rowstride = pixbuf.get_rowstride();
     const nChannels = pixbuf.get_n_channels();
+    const srcW = pixbuf.get_width();
+    const srcH = pixbuf.get_height();
     const target = new Uint8Array(source);
 
     _forEachBlockInRect({ x: cxAbs, y: cyAbs, w: cwAbs, h: chAbs }, blockSize, originAbsX, originAbsY, (x0, y0, x1, y1) => {
         const px = x0 - regionAbs.x;
         const py = y0 - regionAbs.y;
-        const color = averageBlock(source, rowstride, nChannels, px, py, px + (x1 - x0), py + (y1 - y0));
+        const color = averageBlock(source, rowstride, nChannels, px, py, px + (x1 - x0), py + (y1 - y0), srcW, srcH);
         fillBlock(target, rowstride, nChannels, px, py, px + (x1 - x0), py + (y1 - y0), color);
     });
 
@@ -260,7 +267,7 @@ export function getAffectedRectPreviewSurface(pixbuf, regionAbs, blockSize, orig
     _forEachBlockInRect({ x: regionAbs.x, y: regionAbs.y, w: cw, h: ch }, blockSize, originAbsX, originAbsY, (x0, y0, x1, y1) => {
         const px = x0 - regionAbs.x;
         const py = y0 - regionAbs.y;
-        const [r, g, b] = averageBlock(source, rowstride, nChannels, px, py, px + (x1 - x0), py + (y1 - y0));
+        const [r, g, b] = averageBlock(source, rowstride, nChannels, px, py, px + (x1 - x0), py + (y1 - y0), width, height);
         ctx.setSourceRGBA(r / 255, g / 255, b / 255, 1.0);
         ctx.rectangle(px, py, x1 - x0, y1 - y0);
         ctx.fill();
