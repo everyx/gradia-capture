@@ -225,13 +225,15 @@ export default class GradiaCompanion extends Extension {
             y: p.y - regionY,
         }));
 
+        const ds = Main.screenshotUI._scale || 1;
+
         if (mode === 'selection') {
             if (converted.length >= 2) {
                 const p0 = converted[0], p1 = converted[converted.length - 1];
-                const ds = Main.screenshotUI._scale || 1;
                 const pp0 = { x: p0.x * ds, y: p0.y * ds };
                 const pp1 = { x: p1.x * ds, y: p1.y * ds };
-                const raw = getRectBlocks(pixbuf, pp0, pp1, Math.round(blockSize * ds));
+                const origin = { x: Math.round(converted[0].x * ds), y: Math.round(converted[0].y * ds) };
+                const raw = getRectBlocks(pixbuf, pp0, pp1, Math.round(blockSize * ds), origin.x, origin.y);
                 const blocks = raw.map(b => ({
                     x: b.x / ds, y: b.y / ds,
                     width: b.width / ds, height: b.height / ds,
@@ -243,9 +245,9 @@ export default class GradiaCompanion extends Extension {
                 }
             }
         } else {
-            const ds = Main.screenshotUI._scale || 1;
             const physicalPoints = converted.map(p => ({ x: p.x * ds, y: p.y * ds }));
-            const surface = getAffectedPreviewSurface(pixbuf, physicalPoints, lw * ds, Math.round(blockSize * ds));
+            const origin = { x: Math.round(converted[0].x * ds), y: Math.round(converted[0].y * ds) };
+            const surface = getAffectedPreviewSurface(pixbuf, physicalPoints, lw * ds, Math.round(blockSize * ds), origin.x, origin.y);
             if (surface) {
                 stroke.previewSurface = surface;
                 stroke.previewScale = ds;
@@ -264,18 +266,23 @@ export default class GradiaCompanion extends Extension {
         if (pts.length < 2) return;
 
         const region = this._computeBlurRegionBounds(stroke);
-        const { x: rx, y: ry, w: rw, h: rh } = region;
+        const { x: rx, y: ry } = region;
 
-        const regionPixbuf = this._screenshotCapture.getRegionSync({ x: rx, y: ry, w: rw, h: rh });
+        const regionPixbuf = this._screenshotCapture.getRegionSync({ x: rx, y: ry, w: region.w, h: region.h });
         if (!regionPixbuf) return;
 
         const ds = Main.screenshotUI._scale || 1;
 
         if (mode === 'selection') {
+            const origin = {
+                x: Math.round((pts[0].x - rx) * ds),
+                y: Math.round((pts[0].y - ry) * ds),
+            };
             const raw = getRectBlocks(regionPixbuf,
                 { x: 0, y: 0 },
                 { x: regionPixbuf.get_width(), y: regionPixbuf.get_height() },
                 Math.round(blockSize * ds),
+                origin.x, origin.y,
             );
             const blocks = raw.map(b => ({
                 x: b.x / ds, y: b.y / ds,
@@ -292,8 +299,13 @@ export default class GradiaCompanion extends Extension {
                 x: (p.x - rx) * ds,
                 y: (p.y - ry) * ds,
             }));
+            const origin = {
+                x: Math.round((pts[0].x - rx) * ds),
+                y: Math.round((pts[0].y - ry) * ds),
+            };
             const surface = getAffectedPreviewSurface(
                 regionPixbuf, converted, lw * ds, Math.round(blockSize * ds),
+                origin.x, origin.y,
             );
             if (surface) {
                 stroke.previewSurface = surface;

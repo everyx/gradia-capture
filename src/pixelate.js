@@ -30,7 +30,7 @@ function averageBlock(source, rowstride, nChannels, x0, y0, x1, y1) {
     ];
 }
 
-function _getBlocksInBounds(width, height, points, brushWidth, blockSize) {
+function _getBlocksInBounds(width, height, points, brushWidth, blockSize, originX = 0, originY = 0) {
     if (!points || points.length === 0) return [];
 
     const xs = points.map(p => p.x);
@@ -46,16 +46,18 @@ function _getBlocksInBounds(width, height, points, brushWidth, blockSize) {
     maxX = Math.min(width, maxX + pad);
     maxY = Math.min(height, maxY + pad);
 
-    const startBX = Math.floor(minX / blockSize);
-    const startBY = Math.floor(minY / blockSize);
-    const endBX = Math.ceil(maxX / blockSize);
-    const endBY = Math.ceil(maxY / blockSize);
+    const startBX = Math.floor((minX - originX) / blockSize);
+    const startBY = Math.floor((minY - originY) / blockSize);
+    const endBX = Math.ceil((maxX - originX) / blockSize);
+    const endBY = Math.ceil((maxY - originY) / blockSize);
 
     const blocks = [];
     for (let by = startBY; by < endBY; by++) {
         for (let bx = startBX; bx < endBX; bx++) {
-            const x = bx * blockSize;
-            const y = by * blockSize;
+            const rawX = originX + bx * blockSize;
+            const rawY = originY + by * blockSize;
+            const x = Math.max(0, Math.min(width, rawX));
+            const y = Math.max(0, Math.min(height, rawY));
             const w = Math.min(width - x, blockSize);
             const h = Math.min(height - y, blockSize);
             if (w > 0 && h > 0)
@@ -86,7 +88,7 @@ function _drawStrokeMaskSurface(width, height, points, brushWidth) {
     return surface;
 }
 
-function _createMaskedBlocksSurface(pixbuf, points, brushWidth, blockSize) {
+function _createMaskedBlocksSurface(pixbuf, points, brushWidth, blockSize, originX = 0, originY = 0) {
     const width = pixbuf.get_width();
     const height = pixbuf.get_height();
     const source = pixbuf.get_pixels();
@@ -96,7 +98,7 @@ function _createMaskedBlocksSurface(pixbuf, points, brushWidth, blockSize) {
     const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, width, height);
     const ctx = new Cairo.Context(surface);
 
-    const blocks = _getBlocksInBounds(width, height, points, brushWidth, blockSize);
+    const blocks = _getBlocksInBounds(width, height, points, brushWidth, blockSize, originX, originY);
     for (const b of blocks) {
         const [r, g, b_, a] = averageBlock(source, rowstride, nChannels, b.x, b.y, b.x + b.w, b.y + b.h);
         ctx.setSourceRGBA(r / 255, g / 255, b_ / 255, 1.0);
@@ -128,7 +130,7 @@ function makePixbufFromData(source, pixbuf) {
     );
 }
 
-export function pixelatePixbufAlongStroke(pixbuf, points, brushWidth, blockSize) {
+export function pixelatePixbufAlongStroke(pixbuf, points, brushWidth, blockSize, originX = 0, originY = 0) {
     if (!pixbuf || !points || points.length < 2) return pixbuf;
 
     const width = pixbuf.get_width();
@@ -141,7 +143,7 @@ export function pixelatePixbufAlongStroke(pixbuf, points, brushWidth, blockSize)
     srcCtx.paint();
     srcCtx.$dispose();
 
-    const blockSurf = _createMaskedBlocksSurface(pixbuf, points, brushWidth, blockSize);
+    const blockSurf = _createMaskedBlocksSurface(pixbuf, points, brushWidth, blockSize, originX, originY);
 
     const resultCtx = new Cairo.Context(srcSurf);
     resultCtx.setSourceSurface(blockSurf, 0, 0);
@@ -154,7 +156,7 @@ export function pixelatePixbufAlongStroke(pixbuf, points, brushWidth, blockSize)
     return result || pixbuf;
 }
 
-export function pixelatePixbufRect(pixbuf, p0, p1, blockSize) {
+export function pixelatePixbufRect(pixbuf, p0, p1, blockSize, originX = 0, originY = 0) {
     if (!pixbuf) return pixbuf;
 
     const width = pixbuf.get_width();
@@ -177,12 +179,22 @@ export function pixelatePixbufRect(pixbuf, p0, p1, blockSize) {
     const nChannels = pixbuf.get_n_channels();
     const target = new Uint8Array(source);
 
-    for (let by = cy; by < cy + ch; by += blockSize) {
-        for (let bx = cx; bx < cx + cw; bx += blockSize) {
-            const x1 = Math.min(bx + blockSize, cx + cw);
-            const y1 = Math.min(by + blockSize, cy + ch);
-            const color = averageBlock(source, rowstride, nChannels, bx, by, x1, y1);
-            fillBlock(target, rowstride, nChannels, bx, by, x1, y1, color);
+    const startBX = Math.floor((cx - originX) / blockSize);
+    const startBY = Math.floor((cy - originY) / blockSize);
+    const endBX = Math.ceil((cx + cw - originX) / blockSize);
+    const endBY = Math.ceil((cy + ch - originY) / blockSize);
+
+    for (let by = startBY; by < endBY; by++) {
+        for (let bx = startBX; bx < endBX; bx++) {
+            const rawX = originX + bx * blockSize;
+            const rawY = originY + by * blockSize;
+            const x0 = Math.max(cx, rawX);
+            const y0 = Math.max(cy, rawY);
+            const x1 = Math.min(cx + cw, rawX + blockSize);
+            const y1 = Math.min(cy + ch, rawY + blockSize);
+            if (x1 <= x0 || y1 <= y0) continue;
+            const color = averageBlock(source, rowstride, nChannels, x0, y0, x1, y1);
+            fillBlock(target, rowstride, nChannels, x0, y0, x1, y1, color);
         }
     }
 
@@ -211,17 +223,17 @@ function fillBlock(target, rowstride, nChannels, x0, y0, x1, y1, color) {
     }
 }
 
-export function getAffectedPreviewSurface(pixbuf, points, brushWidth, blockSize) {
+export function getAffectedPreviewSurface(pixbuf, points, brushWidth, blockSize, originX = 0, originY = 0) {
     if (!pixbuf || !points || points.length < 2) return null;
 
     const width = pixbuf.get_width();
     const height = pixbuf.get_height();
     if (width <= 0 || height <= 0) return null;
 
-    return _createMaskedBlocksSurface(pixbuf, points, brushWidth, blockSize);
+    return _createMaskedBlocksSurface(pixbuf, points, brushWidth, blockSize, originX, originY);
 }
 
-export function getRectBlocks(pixbuf, p0, p1, blockSize) {
+export function getRectBlocks(pixbuf, p0, p1, blockSize, originX = 0, originY = 0) {
     if (!pixbuf) return [];
 
     const width = pixbuf.get_width();
@@ -244,12 +256,22 @@ export function getRectBlocks(pixbuf, p0, p1, blockSize) {
     const nChannels = pixbuf.get_n_channels();
     const blocks = [];
 
-    for (let by = cy; by < cy + ch; by += blockSize) {
-        for (let bx = cx; bx < cx + cw; bx += blockSize) {
-            const x1 = Math.min(bx + blockSize, cx + cw);
-            const y1 = Math.min(by + blockSize, cy + ch);
-            const [r, g, b] = averageBlock(source, rowstride, nChannels, bx, by, x1, y1);
-            blocks.push({ x: bx, y: by, width: x1 - bx, height: y1 - by, r: r / 255, g: g / 255, b: b / 255 });
+    const startBX = Math.floor((cx - originX) / blockSize);
+    const startBY = Math.floor((cy - originY) / blockSize);
+    const endBX = Math.ceil((cx + cw - originX) / blockSize);
+    const endBY = Math.ceil((cy + ch - originY) / blockSize);
+
+    for (let by = startBY; by < endBY; by++) {
+        for (let bx = startBX; bx < endBX; bx++) {
+            const rawX = originX + bx * blockSize;
+            const rawY = originY + by * blockSize;
+            const x0 = Math.max(cx, rawX);
+            const y0 = Math.max(cy, rawY);
+            const x1 = Math.min(cx + cw, rawX + blockSize);
+            const y1 = Math.min(cy + ch, rawY + blockSize);
+            if (x1 <= x0 || y1 <= y0) continue;
+            const [r, g, b] = averageBlock(source, rowstride, nChannels, x0, y0, x1, y1);
+            blocks.push({ x: x0, y: y0, width: x1 - x0, height: y1 - y0, r: r / 255, g: g / 255, b: b / 255 });
         }
     }
 

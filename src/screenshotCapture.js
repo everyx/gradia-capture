@@ -366,19 +366,25 @@ export class ScreenshotCapture {
 
         let basePixbuf = pixbuf;
         for (const stroke of blurStrokes) {
-            const converted = stroke.stagePoints.map(p => ({
+            const sp = stroke.stagePoints;
+            if (sp.length < 2) continue;
+            const converted = sp.map(p => ({
                 x: (p.x / stageScale - selX) * scaleX,
                 y: (p.y / stageScale - selY) * scaleY,
             }));
             const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
             const blockSize = stroke.blockSize || 16;
+            const origin = {
+                x: Math.round((sp[0].x / stageScale - selX) * scaleX),
+                y: Math.round((sp[0].y / stageScale - selY) * scaleY),
+            };
 
             if ((stroke.blurMode || 'brush') === 'selection') {
                 if (converted.length >= 2) {
-                    basePixbuf = pixelatePixbufRect(basePixbuf, converted[0], converted[converted.length - 1], blockSize);
+                    basePixbuf = pixelatePixbufRect(basePixbuf, converted[0], converted[converted.length - 1], blockSize, origin.x, origin.y);
                 }
             } else {
-                basePixbuf = pixelatePixbufAlongStroke(basePixbuf, converted, lw, blockSize);
+                basePixbuf = pixelatePixbufAlongStroke(basePixbuf, converted, lw, blockSize, origin.x, origin.y);
             }
 
             if (!basePixbuf)
