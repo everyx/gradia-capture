@@ -247,6 +247,123 @@ export default class GradiaCompanion extends Extension {
         canvas.queue_repaint();
     }
 
+    _onBlurStrokePreview(canvas, stroke) {
+        const mode = stroke.blurMode || 'brush';
+        const blockSize = stroke.blockSize || 16;
+        const lw = stroke.strokeWidth || 4;
+        const pts = stroke.stagePoints;
+        if (pts.length < 2) return;
+
+        let rx, ry, rw, rh;
+        if (mode === 'selection') {
+            const p0 = pts[0];
+            const p1 = pts[pts.length - 1];
+            rx = Math.round(Math.min(p0.x, p1.x));
+            ry = Math.round(Math.min(p0.y, p1.y));
+            rw = Math.max(1, Math.round(Math.abs(p1.x - p0.x)));
+            rh = Math.max(1, Math.round(Math.abs(p1.y - p0.y)));
+        } else {
+            const pad = Math.ceil(lw / 2 + blockSize / 2);
+            const xs = pts.map(p => p.x);
+            const ys = pts.map(p => p.y);
+            rx = Math.round(Math.max(0, Math.min(...xs) - pad));
+            ry = Math.round(Math.max(0, Math.min(...ys) - pad));
+            const mx = Math.max(...xs) + pad;
+            const my = Math.max(...ys) + pad;
+            rw = Math.max(1, Math.round(mx - rx));
+            rh = Math.max(1, Math.round(my - ry));
+        }
+
+        const regionPixbuf = this._screenshotCapture.getRegionSync({ x: rx, y: ry, w: rw, h: rh });
+        if (!regionPixbuf) return;
+
+        const ds = Main.screenshotUI._scale || 1;
+
+        if (mode === 'selection') {
+            const raw = getRectBlocks(regionPixbuf,
+                { x: 0, y: 0 },
+                { x: regionPixbuf.get_width(), y: regionPixbuf.get_height() },
+                Math.round(blockSize * ds),
+            );
+            const blocks = raw.map(b => ({
+                x: b.x / ds, y: b.y / ds,
+                width: b.width / ds, height: b.height / ds,
+                r: b.r, g: b.g, b: b.b,
+            }));
+            if (blocks.length > 0) {
+                stroke.previewBlocks = blocks;
+                stroke.previewOrigin = { x: rx, y: ry };
+                canvas.queue_repaint();
+            }
+        } else {
+            const converted = pts.map(p => ({
+                x: (p.x - rx) * ds,
+                y: (p.y - ry) * ds,
+            }));
+            const surface = getAffectedPreviewSurface(
+                regionPixbuf, converted, lw * ds, Math.round(blockSize * ds),
+            );
+            if (surface) {
+                stroke.previewSurface = surface;
+                stroke.previewOrigin = { x: rx, y: ry };
+                canvas.queue_repaint();
+            }
+        }
+    }
+
+    _refreshBlurPreview(canvas, newSize) {
+        let stroke = canvas._currentStroke?.toolId === 'blur'
+            ? canvas._currentStroke
+            : null;
+        if (!stroke) {
+            const sts = canvas._strokes;
+            for (let i = sts.length - 1; i >= 0; i--) {
+                if (sts[i].toolId === 'blur') {
+                    stroke = sts[i];
+                    break;
+                }
+            }
+        }
+        if (!stroke) return;
+        stroke.blockSize = newSize;
+        this._onBlurStrokePreview(canvas, stroke);
+    }
+
+    _handleBlurScroll(event) {
+        const tool = this._toolbar?.selectedTool;
+        if (tool !== 'blur')
+            return Clutter.EVENT_PROPAGATE;
+
+        const mods = event.get_state();
+        if (!(mods & Clutter.ModifierType.CONTROL_MASK))
+            return Clutter.EVENT_PROPAGATE;
+
+        let delta = 0;
+        const direction = event.get_scroll_direction();
+        if (direction === Clutter.ScrollDirection.UP)
+            delta = 2;
+        else if (direction === Clutter.ScrollDirection.DOWN)
+            delta = -2;
+        else if (direction === Clutter.ScrollDirection.SMOOTH) {
+            const [, dy] = event.get_scroll_delta();
+            if (dy < 0) delta = 2;
+            else if (dy > 0) delta = -2;
+        }
+
+        if (delta === 0)
+            return Clutter.EVENT_STOP;
+
+        const bs = this._toolbar._blurBlockSize ?? 16;
+        const newSize = Math.max(4, Math.min(32, bs + delta));
+        if (newSize === bs)
+            return Clutter.EVENT_STOP;
+
+        this._toolbar._blurBlockSize = newSize;
+        this._toolbar._blurMenu?.setBlockSize(newSize);
+        this._toolbar.emit('block-size-changed', newSize);
+        return Clutter.EVENT_STOP;
+    }
+
     _updateBrushCursor() {
         const tool = this._toolbar?.selectedTool;
         const mode = this._toolbar?._blurMode;
@@ -271,6 +388,9 @@ export default class GradiaCompanion extends Extension {
 
         this._monitors.forEachCanvas(c => c.setTool(id));
         this._monitors.forEachOverlay(o => { o.reactive = drawing || dragging; });
+
+        if (id === 'blur')
+            this._screenshotCapture.ensureCache();
 
         this._updateAreaSelectorState(id);
     }
@@ -517,6 +637,8 @@ export default class GradiaCompanion extends Extension {
             c.setTool(this._toolbar.selectedTool);
             c.setStrokeWidth(this._toolbar.lineWidth);
             c._onStrokeCommitted = (stroke) => this._onBlurStrokeCommitted(c, stroke);
+            c._onStrokePreview = (canvas, stroke) => this._onBlurStrokePreview(canvas, stroke);
+            c._onScroll = (event) => this._handleBlurScroll(event);
         });
 
         this._primaryBin = primaryBin;
@@ -668,7 +790,10 @@ export default class GradiaCompanion extends Extension {
             this._updateBrushCursor();
         });
         this._toolbar.connect('block-size-changed', (_tb, size) => {
-            this._monitors.forEachCanvas(c => c.setBlockSize(size));
+            this._monitors.forEachCanvas(c => {
+                c.setBlockSize(size);
+                this._refreshBlurPreview(c, size);
+            });
         });
     }
 

@@ -1,5 +1,6 @@
 import Cairo from 'gi://cairo';
 import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
@@ -34,6 +35,8 @@ export const DrawingCanvas = GObject.registerClass(
             this._cursorX = 0;
             this._cursorY = 0;
             this._cursorRadius = 8;
+
+            this._lastPreviewTime = 0;
 
             this._scaleX = 1;
             this._scaleY = 1;
@@ -224,6 +227,14 @@ export const DrawingCanvas = GObject.registerClass(
             this._cursorX = stageX;
             this._cursorY = stageY;
             this.queue_repaint();
+
+            if (this._onStrokePreview && this._toolId === 'blur') {
+                const now = GLib.get_monotonic_time();
+                if (now - this._lastPreviewTime > 30 * 1000) {
+                    this._lastPreviewTime = now;
+                    this._onStrokePreview(this, this._currentStroke);
+                }
+            }
         }
 
         _endDrawing() {
@@ -313,6 +324,12 @@ export const DrawingCanvas = GObject.registerClass(
                 return Clutter.EVENT_STOP;
             }
 
+            return Clutter.EVENT_PROPAGATE;
+        }
+
+        vfunc_scroll_event(event) {
+            if (this._onScroll)
+                return this._onScroll(event);
             return Clutter.EVENT_PROPAGATE;
         }
 
@@ -453,5 +470,9 @@ export const DrawingInputOverlay = GObject.registerClass(
 
         vfunc_touch_event(event) {
             return this._canvas.vfunc_touch_event(event);
+        }
+
+        vfunc_scroll_event(event) {
+            return this._canvas.vfunc_scroll_event(event);
         }
     });
