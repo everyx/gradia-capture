@@ -118,8 +118,6 @@ export const BlurMenu = GObject.registerClass({
             const min = 4, max = 32;
             this._sizeSlider.value = (size - min) / (max - min);
         }
-        if (this._sizeLabel)
-            this._sizeLabel.text = String(size);
     }
 
     show() {
@@ -167,11 +165,6 @@ export const BlurMenu = GObject.registerClass({
         }
         this.add_child(modeRow);
 
-        this._sizeLabel = new St.Label({
-            text: String(this._selectedSize),
-            style: 'width: 20px; text-align: center; font-size: 11px;',
-            y_align: Clutter.ActorAlign.CENTER,
-        });
         this._sizeSlider = new Slider((this._selectedSize - min) / (max - min));
         this._sizeSlider.style = 'width: 60px;';
         this._sizeSlider.y_align = Clutter.ActorAlign.CENTER;
@@ -181,7 +174,6 @@ export const BlurMenu = GObject.registerClass({
             this.emit('block-size-changed', size);
         });
         this.add_child(this._sizeSlider);
-        this.add_child(this._sizeLabel);
     }
 });
 
