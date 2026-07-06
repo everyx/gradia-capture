@@ -191,10 +191,9 @@ export const Toolbar = GObject.registerClass({
     },
 }, class Toolbar extends St.BoxLayout {
     _init(params = {}) {
-        const { extensionPath = '', gradiaSettings = null, primaryBin = null, ...rest } = params;
+        const { extensionPath = '', gradiaSettings = null, ...rest } = params;
         this._extensionPath = extensionPath;
         this._settings = gradiaSettings;
-        this._primaryBin = primaryBin;
         this._lastReposition = null;
 
         super._init({
@@ -270,8 +269,6 @@ export const Toolbar = GObject.registerClass({
             this.emit('block-size-changed', size);
             this._saveCurrentToolEntry();
         });
-        if (this._primaryBin)
-            this._primaryBin.add_child(this._blurMenu);
     }
 
     _showPopup(popup, triggerBtn) {
@@ -466,8 +463,6 @@ export const Toolbar = GObject.registerClass({
             this._saveCurrentToolEntry();
             this._hidePopup(this._colorMenu);
         });
-        if (this._primaryBin)
-            this._primaryBin.add_child(this._colorMenu);
     }
 
     _buildLineWidthSlider() {
@@ -621,21 +616,13 @@ export const Toolbar = GObject.registerClass({
         this._hidePopup(this._colorMenu);
     }
 
-    reposition({ selectionRect, monitorRect, primaryBin }) {
-        this._primaryBin = primaryBin ?? this._primaryBin;
-        if (this._colorMenu && this._primaryBin && !this._colorMenu.get_parent())
-            this._primaryBin.add_child(this._colorMenu);
-        if (this._blurMenu && this._primaryBin && !this._blurMenu.get_parent())
-            this._primaryBin.add_child(this._blurMenu);
-
+    reposition({ selectionRect, monitorRect }) {
         const [, natW] = this.get_preferred_width(-1);
         const natH = this.get_preferred_height(-1)[1];
         if (natW <= 0 || natH <= 0)
             return;
 
-        const [ok, localMonCX] = primaryBin.transform_stage_point(
-            monitorRect.x + monitorRect.width / 2, monitorRect.y);
-        if (!ok) return;
+        const localMonCX = monitorRect.x + monitorRect.width / 2;
 
         let targetX;
         let targetY;
@@ -644,26 +631,12 @@ export const Toolbar = GObject.registerClass({
             const selTop = selectionRect.y;
             const selHeight = selectionRect.height;
             const selRight = selectionRect.x + selectionRect.width;
-            const [ok2, _sx1, localSelTop] = primaryBin.transform_stage_point(
-                selectionRect.x, selTop);
-            if (!ok2) return;
 
-            const [ok3, _sx2, localSelBottom] = primaryBin.transform_stage_point(
-                selectionRect.x, selTop + selHeight);
-            if (!ok3) return;
-
-            const [ok5, localSelRightX] = primaryBin.transform_stage_point(
-                selRight, selTop);
-            if (!ok5) return;
-
-            const monBottomY = monitorRect.y + monitorRect.height;
-            const [ok4, _sx3, localMonBottom] = primaryBin.transform_stage_point(
-                monitorRect.x, monBottomY);
-            if (!ok4) return;
-
-            const [okMonRight, localMonRight] = primaryBin.transform_stage_point(
-                monitorRect.x + monitorRect.width, monitorRect.y);
-            if (!okMonRight) return;
+            const localSelTop = selTop;
+            const localSelBottom = selTop + selHeight;
+            const localSelRightX = selRight;
+            const localMonBottom = monitorRect.y + monitorRect.height;
+            const localMonRight = monitorRect.x + monitorRect.width;
 
             const yAbove = Math.round(localSelTop - natH);
             const yBelow = Math.round(localSelBottom);
@@ -690,7 +663,6 @@ export const Toolbar = GObject.registerClass({
         this._lastReposition = {
             selectionRect,
             monitorRect,
-            primaryBin,
         };
         if (this._colorMenu?.visible)
             this._repositionPopup(this._colorMenu, this._colorButton);

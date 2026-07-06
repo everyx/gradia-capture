@@ -16,10 +16,10 @@ export const PopupMenu = GObject.registerClass({
         });
     }
 
-    reposition({ triggerBtn, toolbar, selectionRect, monitorRect, primaryBin }) {
+    reposition({ triggerBtn, toolbar, selectionRect, monitorRect }) {
         if (!this.visible)
             return;
-        if (!primaryBin || !triggerBtn || !toolbar)
+        if (!triggerBtn || !toolbar)
             return;
 
         const [btnSX, btnSY] = triggerBtn.get_transformed_position();
@@ -33,18 +33,14 @@ export const PopupMenu = GObject.registerClass({
         if (menuW <= 0 || menuH <= 0)
             return;
 
-        const [okC, localBtnX, localTbTop] = primaryBin.transform_stage_point(btnSX, tbSY);
-        if (!okC) return;
-        const localTbBottom = localTbTop + tbH;
+        const localBtnX = btnSX;
+        const toolbarTop = tbSY;
+        const toolbarBottom = tbSY + tbH;
 
-        const [okL, localMonLeft, localMonTop] = primaryBin.transform_stage_point(
-            monitorRect.x, monitorRect.y);
-        const [okB, , localMonBottom] = primaryBin.transform_stage_point(
-            monitorRect.x, monitorRect.y + monitorRect.height);
-        const [okR, localMonRight] = primaryBin.transform_stage_point(
-            monitorRect.x + monitorRect.width, monitorRect.y);
-        if (!okL || !okB || !okR)
-            return;
+        const localMonLeft = monitorRect.x;
+        const localMonTop = monitorRect.y;
+        const localMonBottom = monitorRect.y + monitorRect.height;
+        const localMonRight = monitorRect.x + monitorRect.width;
 
         let menuX = localBtnX;
         if (menuX + menuW > localMonRight)
@@ -53,25 +49,18 @@ export const PopupMenu = GObject.registerClass({
             menuX = localMonLeft;
         menuX = Math.round(menuX);
 
-        const toolbarTop = localTbTop;
-        const toolbarBottom = localTbBottom;
-
         let preferAbove = true;
         if (selectionRect) {
-            const [okS, , localSelTop] = primaryBin.transform_stage_point(
-                selectionRect.x, selectionRect.y);
-            const [okS2, , localSelBottom] = primaryBin.transform_stage_point(
-                selectionRect.x, selectionRect.y + selectionRect.height);
-            if (okS && okS2) {
-                if (toolbarBottom <= localSelTop)
-                    preferAbove = true;
-                else if (toolbarTop >= localSelBottom)
-                    preferAbove = false;
-                else {
-                    const spaceAbove = toolbarTop - localMonTop;
-                    const spaceBelow = localMonBottom - toolbarBottom;
-                    preferAbove = spaceAbove >= spaceBelow;
-                }
+            const localSelTop = selectionRect.y;
+            const localSelBottom = selectionRect.y + selectionRect.height;
+            if (toolbarBottom <= localSelTop)
+                preferAbove = true;
+            else if (toolbarTop >= localSelBottom)
+                preferAbove = false;
+            else {
+                const spaceAbove = toolbarTop - localMonTop;
+                const spaceBelow = localMonBottom - toolbarBottom;
+                preferAbove = spaceAbove >= spaceBelow;
             }
         }
 

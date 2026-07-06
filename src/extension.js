@@ -463,8 +463,8 @@ export default class GradiaCompanion extends Extension {
         this._ocrSelector?.clearCache();
 
         const ui = Main.screenshotUI;
-        const monitor = Main.layoutManager.primaryMonitor;
-        if (!monitor) return;
+        const monitors = Main.layoutManager.monitors;
+        if (!monitors || monitors.length === 0) return;
 
         const selectionMode = ui._selectionButton?.checked ?? false;
         const windowMode = this._isWindowMode();
@@ -492,15 +492,29 @@ export default class GradiaCompanion extends Extension {
 
         this._toolbar.visible = true;
 
+        // Determine target monitor based on selection position
+        let targetMonitor = monitors[0];
+        if (selectionRect) {
+            const cx = selectionRect.x + selectionRect.width / 2;
+            const cy = selectionRect.y + selectionRect.height / 2;
+            for (let i = 0; i < monitors.length; i++) {
+                const m = monitors[i];
+                if (cx >= m.x && cx < m.x + m.width &&
+                    cy >= m.y && cy < m.y + m.height) {
+                    targetMonitor = m;
+                    break;
+                }
+            }
+        }
+
         this._toolbar.reposition({
             selectionRect,
             monitorRect: {
-                x: monitor.x,
-                y: monitor.y,
-                width: monitor.width,
-                height: monitor.height,
+                x: targetMonitor.x,
+                y: targetMonitor.y,
+                width: targetMonitor.width,
+                height: targetMonitor.height,
             },
-            primaryBin: this._primaryBin,
         });
     }
 
@@ -593,7 +607,7 @@ export default class GradiaCompanion extends Extension {
         if (!primaryBin)
             return;
 
-        this._toolbar = new Toolbar({ extensionPath: this.path, gradiaSettings: this._gradiaSettings, primaryBin });
+        this._toolbar = new Toolbar({ extensionPath: this.path, gradiaSettings: this._gradiaSettings });
         this._textEntryManager = new TextEntryManager(this._toolbar, this._monitors);
         this._screenshotCapture = new ScreenshotCapture({
             annotations: this._annotations,
@@ -642,7 +656,11 @@ export default class GradiaCompanion extends Extension {
         });
 
         this._primaryBin = primaryBin;
-        primaryBin.add_child(this._toolbar);
+        ui.add_child(this._toolbar);
+        if (this._toolbar._colorMenu)
+            ui.add_child(this._toolbar._colorMenu);
+        if (this._toolbar._blurMenu)
+            ui.add_child(this._toolbar._blurMenu);
         this._repositionToolbar();
 
         this._resolutionOverlay = new ResolutionOverlay(primaryBin);
