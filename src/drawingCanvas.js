@@ -358,17 +358,6 @@ export const DrawingCanvas = GObject.registerClass(
                         cr.paint();
                         cr.restore();
                     }
-                } else if (stroke.previewBlocks) {
-                    const ox = stroke.previewOrigin.x;
-                    const oy = stroke.previewOrigin.y;
-                    for (const block of stroke.previewBlocks) {
-                        const tl = this._stageToLocal(ox + block.x, oy + block.y);
-                        if (tl) {
-                            cr.setSourceRGBA(block.r, block.g, block.b, 1.0);
-                            cr.rectangle(tl.x, tl.y, block.width / ss, block.height / ss);
-                            cr.fill();
-                        }
-                    }
                 } else {
                     const tool = getToolDef(stroke.toolId);
                     if (tool?.render) {
