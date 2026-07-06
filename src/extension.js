@@ -172,38 +172,46 @@ export default class GradiaCompanion extends Extension {
         this[prop] = 0;
     }
 
+    _computeBlurRegionBounds(stroke) {
+        const mode = stroke.blurMode || 'brush';
+        const blockSize = stroke.blockSize || 16;
+        const lw = stroke.strokeWidth || 4;
+        const pts = stroke.stagePoints;
+
+        if (mode === 'selection') {
+            const p0 = pts[0];
+            const p1 = pts[pts.length - 1];
+            return {
+                x: Math.round(Math.min(p0.x, p1.x)),
+                y: Math.round(Math.min(p0.y, p1.y)),
+                w: Math.max(1, Math.round(Math.abs(p1.x - p0.x))),
+                h: Math.max(1, Math.round(Math.abs(p1.y - p0.y))),
+            };
+        }
+
+        const pad = Math.ceil(lw / 2 + blockSize / 2);
+        const xs = pts.map(p => p.x);
+        const ys = pts.map(p => p.y);
+        const rx = Math.round(Math.max(0, Math.min(...xs) - pad));
+        const ry = Math.round(Math.max(0, Math.min(...ys) - pad));
+        return {
+            x: rx, y: ry,
+            w: Math.max(1, Math.round(Math.max(...xs) + pad - rx)),
+            h: Math.max(1, Math.round(Math.max(...ys) + pad - ry)),
+        };
+    }
+
     async _onBlurStrokeCommitted(canvas, stroke) {
         if (stroke.toolId !== 'blur')
             return;
 
         const mode = stroke.blurMode || 'brush';
-
-        const xs = stroke.stagePoints.map(p => p.x);
-        const ys = stroke.stagePoints.map(p => p.y);
-        const minX = Math.min(...xs);
-        const minY = Math.min(...ys);
-        const maxX = Math.max(...xs);
-        const maxY = Math.max(...ys);
-
         const blockSize = stroke.blockSize || 16;
         const lw = stroke.strokeWidth || 4;
 
-        let pad = 0;
-        if (mode === 'brush') {
-            pad = Math.ceil(lw / 2 + blockSize / 2);
-        }
-
-        const regionX = Math.round(Math.max(0, minX - pad));
-        const regionY = Math.round(Math.max(0, minY - pad));
-        const regionW = Math.max(1, Math.round(maxX + pad) - regionX);
-        const regionH = Math.max(1, Math.round(maxY + pad) - regionY);
-
-        const stageRect = {
-            x: regionX,
-            y: regionY,
-            w: regionW,
-            h: regionH,
-        };
+        const region = this._computeBlurRegionBounds(stroke);
+        const { x: regionX, y: regionY, w: regionW, h: regionH } = region;
+        const stageRect = { x: regionX, y: regionY, w: regionW, h: regionH };
 
         const pixbuf = await this._screenshotCapture.captureRegion(stageRect).catch(e => {
             return null;
@@ -255,25 +263,8 @@ export default class GradiaCompanion extends Extension {
         const pts = stroke.stagePoints;
         if (pts.length < 2) return;
 
-        let rx, ry, rw, rh;
-        if (mode === 'selection') {
-            const p0 = pts[0];
-            const p1 = pts[pts.length - 1];
-            rx = Math.round(Math.min(p0.x, p1.x));
-            ry = Math.round(Math.min(p0.y, p1.y));
-            rw = Math.max(1, Math.round(Math.abs(p1.x - p0.x)));
-            rh = Math.max(1, Math.round(Math.abs(p1.y - p0.y)));
-        } else {
-            const pad = Math.ceil(lw / 2 + blockSize / 2);
-            const xs = pts.map(p => p.x);
-            const ys = pts.map(p => p.y);
-            rx = Math.round(Math.max(0, Math.min(...xs) - pad));
-            ry = Math.round(Math.max(0, Math.min(...ys) - pad));
-            const mx = Math.max(...xs) + pad;
-            const my = Math.max(...ys) + pad;
-            rw = Math.max(1, Math.round(mx - rx));
-            rh = Math.max(1, Math.round(my - ry));
-        }
+        const region = this._computeBlurRegionBounds(stroke);
+        const { x: rx, y: ry, w: rw, h: rh } = region;
 
         const regionPixbuf = this._screenshotCapture.getRegionSync({ x: rx, y: ry, w: rw, h: rh });
         if (!regionPixbuf) return;
