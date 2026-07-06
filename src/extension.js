@@ -240,6 +240,7 @@ export default class GradiaCompanion extends Extension {
             const surface = getAffectedPreviewSurface(pixbuf, physicalPoints, lw * ds, Math.round(blockSize * ds));
             if (surface) {
                 stroke.previewSurface = surface;
+                stroke.previewScale = ds;
                 stroke.previewOrigin = { x: regionX, y: regionY };
             }
         }
@@ -305,6 +306,7 @@ export default class GradiaCompanion extends Extension {
             );
             if (surface) {
                 stroke.previewSurface = surface;
+                stroke.previewScale = ds;
                 stroke.previewOrigin = { x: rx, y: ry };
                 canvas.queue_repaint();
             }

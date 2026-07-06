@@ -350,9 +350,10 @@ export const DrawingCanvas = GObject.registerClass(
                     const oy = stroke.previewOrigin.y;
                     const tl = this._stageToLocal(ox, oy);
                     if (tl) {
+                        const ds = stroke.previewScale || ss;
                         cr.save();
                         cr.translate(tl.x, tl.y);
-                        cr.scale(1 / ss, 1 / ss);
+                        cr.scale(1 / ds, 1 / ds);
                         cr.setSourceSurface(stroke.previewSurface, 0, 0);
                         cr.paint();
                         cr.restore();
