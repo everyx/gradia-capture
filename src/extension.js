@@ -201,35 +201,6 @@ export default class GradiaCompanion extends Extension {
         };
     }
 
-    _ensureBlurRegionCache(stroke, region) {
-        const rect = region || this._computeBlurRegionBounds(stroke);
-        if (rect.w <= 0 || rect.h <= 0) return null;
-
-        const cache = stroke._blurCache;
-
-        if (cache) {
-            const cr = cache.rect;
-            if (cr.x <= rect.x && cr.y <= rect.y &&
-                cr.x + cr.w >= rect.x + rect.w &&
-                cr.y + cr.h >= rect.y + rect.h) {
-                return cache;
-            }
-            const ux = Math.min(cr.x, rect.x);
-            const uy = Math.min(cr.y, rect.y);
-            const uw = Math.max(cr.x + cr.w, rect.x + rect.w) - ux;
-            const uh = Math.max(cr.y + cr.h, rect.y + rect.h) - uy;
-            const pixbuf = this._screenshotCapture.getRegionSync({ x: ux, y: uy, w: uw, h: uh });
-            if (!pixbuf) return cache;
-            stroke._blurCache = { pixbuf, rect: { x: ux, y: uy, w: uw, h: uh } };
-            return stroke._blurCache;
-        }
-
-        const pixbuf = this._screenshotCapture.getRegionSync({ x: rect.x, y: rect.y, w: rect.w, h: rect.h });
-        if (!pixbuf) return null;
-        stroke._blurCache = { pixbuf, rect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h } };
-        return stroke._blurCache;
-    }
-
     async _onBlurStrokeCommitted(canvas, stroke) {
         if (stroke.toolId !== 'blur')
             return;
@@ -249,26 +220,22 @@ export default class GradiaCompanion extends Extension {
             return;
         }
 
-        const converted = stroke.stagePoints.map(p => ({
-            x: p.x - regionX,
-            y: p.y - regionY,
-        }));
-
         const ds = Main.screenshotUI._scale || 1;
 
+        const regionAbs = {
+            x: Math.round(regionX * ds),
+            y: Math.round(regionY * ds),
+            w: Math.round(regionW * ds),
+            h: Math.round(regionH * ds),
+        };
+        const originAbs = {
+            x: Math.round(stroke.stagePoints[0].x * ds),
+            y: Math.round(stroke.stagePoints[0].y * ds),
+        };
+
         if (mode === 'selection') {
-            if (converted.length >= 2) {
-                const p0 = converted[0], p1 = converted[converted.length - 1];
-                const pp0 = { x: p0.x * ds, y: p0.y * ds };
-                const pp1 = { x: p1.x * ds, y: p1.y * ds };
-                const origin = { x: Math.round(converted[0].x * ds), y: Math.round(converted[0].y * ds) };
-                const rect = {
-                    x: Math.round(Math.min(pp0.x, pp1.x)),
-                    y: Math.round(Math.min(pp0.y, pp1.y)),
-                    w: Math.round(Math.abs(pp1.x - pp0.x)),
-                    h: Math.round(Math.abs(pp1.y - pp0.y)),
-                };
-                const surface = getAffectedRectPreviewSurface(pixbuf, rect, Math.round(blockSize * ds), origin.x, origin.y);
+            if (regionAbs.w > 0 && regionAbs.h > 0) {
+                const surface = getAffectedRectPreviewSurface(pixbuf, regionAbs, Math.round(blockSize * ds), originAbs.x, originAbs.y);
                 if (surface) {
                     stroke.previewSurface = surface;
                     stroke.previewScale = ds;
@@ -276,9 +243,8 @@ export default class GradiaCompanion extends Extension {
                 }
             }
         } else {
-            const physicalPoints = converted.map(p => ({ x: p.x * ds, y: p.y * ds }));
-            const origin = { x: Math.round(converted[0].x * ds), y: Math.round(converted[0].y * ds) };
-            const surface = getAffectedPreviewSurface(pixbuf, physicalPoints, lw * ds, Math.round(blockSize * ds), origin.x, origin.y);
+            const pointsAbs = stroke.stagePoints.map(p => ({ x: p.x * ds, y: p.y * ds }));
+            const surface = getAffectedPreviewSurface(pixbuf, regionAbs, pointsAbs, lw * ds, Math.round(blockSize * ds), originAbs.x, originAbs.y);
             if (surface) {
                 stroke.previewSurface = surface;
                 stroke.previewScale = ds;
@@ -287,7 +253,6 @@ export default class GradiaCompanion extends Extension {
         }
 
         canvas.queue_repaint();
-        delete stroke._blurCache;
     }
 
     _onBlurStrokePreview(canvas, stroke) {
@@ -298,31 +263,26 @@ export default class GradiaCompanion extends Extension {
         if (pts.length < 2) return;
 
         const region = this._computeBlurRegionBounds(stroke);
-        const cache = this._ensureBlurRegionCache(stroke, region);
-        if (!cache) return;
+        if (region.w <= 0 || region.h <= 0) return;
 
-        const { pixbuf, rect } = cache;
+        const pixbuf = this._screenshotCapture.getRegionSync(region);
+        if (!pixbuf) return;
+
         const ds = Main.screenshotUI._scale || 1;
 
-        const absOrigin = {
+        const regionAbs = {
+            x: Math.round(region.x * ds),
+            y: Math.round(region.y * ds),
+            w: Math.round(region.w * ds),
+            h: Math.round(region.h * ds),
+        };
+        const originAbs = {
             x: Math.round(pts[0].x * ds),
             y: Math.round(pts[0].y * ds),
         };
-        const origin = {
-            x: absOrigin.x - Math.round(rect.x * ds),
-            y: absOrigin.y - Math.round(rect.y * ds),
-        };
 
         if (mode === 'selection') {
-            const sx = Math.round((region.x - rect.x) * ds);
-            const sy = Math.round((region.y - rect.y) * ds);
-            const sw = Math.round(region.w * ds);
-            const sh = Math.round(region.h * ds);
-            const surface = getAffectedRectPreviewSurface(pixbuf,
-                { x: sx, y: sy, w: sw, h: sh },
-                Math.round(blockSize * ds),
-                origin.x, origin.y,
-            );
+            const surface = getAffectedRectPreviewSurface(pixbuf, regionAbs, Math.round(blockSize * ds), originAbs.x, originAbs.y);
             if (surface) {
                 stroke.previewSurface = surface;
                 stroke.previewScale = ds;
@@ -330,18 +290,12 @@ export default class GradiaCompanion extends Extension {
                 canvas.queue_repaint();
             }
         } else {
-            const converted = pts.map(p => ({
-                x: (p.x - rect.x) * ds,
-                y: (p.y - rect.y) * ds,
-            }));
-            const surface = getAffectedPreviewSurface(
-                pixbuf, converted, lw * ds, Math.round(blockSize * ds),
-                origin.x, origin.y,
-            );
+            const pointsAbs = pts.map(p => ({ x: p.x * ds, y: p.y * ds }));
+            const surface = getAffectedPreviewSurface(pixbuf, regionAbs, pointsAbs, lw * ds, Math.round(blockSize * ds), originAbs.x, originAbs.y);
             if (surface) {
                 stroke.previewSurface = surface;
                 stroke.previewScale = ds;
-                stroke.previewOrigin = { x: rect.x, y: rect.y };
+                stroke.previewOrigin = { x: region.x, y: region.y };
                 canvas.queue_repaint();
             }
         }
