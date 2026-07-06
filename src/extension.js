@@ -617,6 +617,7 @@ export default class GradiaCompanion extends Extension {
             isRecordingMode: () => this._isRecordingMode(),
         });
         this._screenshotCapture.portalMode = this._portalMode;
+        this._screenshotCapture.ensureCache();
         this._dragTool = new DragTool({
             toolbar: this._toolbar,
             monitors: this._monitors,

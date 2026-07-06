@@ -16,6 +16,7 @@ export class ScreenshotCapture {
         this._settings = settings;
         this._isRecordingMode = isRecordingMode ?? (() => false);
         this._cachedFullPixbuf = null;
+        this._capturePromise = null;
         this.captureGeometry = null;
         this.captureScale = 1;
     }
@@ -202,41 +203,47 @@ export class ScreenshotCapture {
         return { windows: entries };
     }
 
+    async _ensureFullCapture() {
+        if (this._cachedFullPixbuf)
+            return true;
+        if (this._capturePromise)
+            return this._capturePromise;
+        this._capturePromise = this._doCapture();
+        const result = await this._capturePromise;
+        this._capturePromise = null;
+        return result;
+    }
+
+    async _doCapture() {
+        const ui = Main.screenshotUI;
+        let texture;
+        if (ui._windowButton.checked) {
+            const win = ui._windowSelectors
+                .flatMap(s => s.windows())
+                .find(w => w.checked);
+            if (!win) return false;
+            texture = win.windowContent.get_texture();
+        } else {
+            const content = ui._stageScreenshot?.get_content();
+            if (!content) return false;
+            texture = content.get_texture();
+        }
+        if (!texture) return false;
+        const stream = Gio.MemoryOutputStream.new_resizable();
+        const full = await Shell.Screenshot.composite_to_stream(
+            texture, 0, 0, -1, -1, 1, null, 0, 0, 1, stream
+        );
+        stream.close(null);
+        if (!full) return false;
+        this._cachedFullPixbuf = full;
+        return true;
+    }
+
     async captureRegion(stageRect) {
         const ui = Main.screenshotUI;
-        let texX, texY = 0;
-
-        let needCapture = false;
-        if (!this._cachedFullPixbuf)
-            needCapture = true;
-
-        if (needCapture) {
-            let texture;
-            if (ui._windowButton.checked) {
-                const win = ui._windowSelectors
-                    .flatMap(s => s.windows())
-                    .find(w => w.checked);
-                if (!win) return null;
-                texture = win.windowContent.get_texture();
-                texX = win.boundingBox.x;
-                texY = win.boundingBox.y;
-            } else {
-                const content = ui._stageScreenshot?.get_content();
-                if (!content) return null;
-                texture = content.get_texture();
-                if (!texture) return null;
-                texX = 0;
-                texY = 0;
-            }
-
-            if (!texture) return null;
-            const stream = Gio.MemoryOutputStream.new_resizable();
-            const full = await Shell.Screenshot.composite_to_stream(
-                texture, 0, 0, -1, -1, 1, null, 0, 0, 1, stream
-            );
-            stream.close(null);
-            if (!full) return null;
-            this._cachedFullPixbuf = full;
+        if (!this._cachedFullPixbuf) {
+            const ok = await this._ensureFullCapture();
+            if (!ok) return null;
         }
 
         const ds = ui._scale || 1;
@@ -329,12 +336,11 @@ export class ScreenshotCapture {
         );
     }
 
-    ensureCache() {
+    async ensureCache() {
         if (this._cachedFullPixbuf)
             return;
-        const ui = Main.screenshotUI;
-        if (!ui) return;
-        this.captureRegion({ x: 0, y: 0, w: 1, h: 1 });
+        if (!Main.screenshotUI) return;
+        await this._ensureFullCapture();
     }
 
     _compositeStrokesOntoPixbuf(bytes, pixbuf, data) {
