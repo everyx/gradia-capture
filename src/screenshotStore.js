@@ -108,10 +108,18 @@ function _showToast(file, pixbuf, copyOnly) {
     showScreenshotToast(file, imageContent, pixbuf.width, pixbuf.height, copyOnly);
 }
 
+async function _saveToTempAsync(bytes, format) {
+    const tmpDir = GLib.get_tmp_dir();
+    const timestamp = GLib.DateTime.new_now_local().format('%Y%m%d-%H%M%S');
+    const name = `gradia-ocr-${timestamp}.${format}`;
+    const file = Gio.File.new_for_path(GLib.build_filenamev([tmpDir, name]));
+    return _writeBytesToFile(file, bytes);
+}
+
 async function _storeScreenshotAsync(
     bytes,
     pixbuf,
-    { copy = true, save = true, format = 'png', alreadyEncoded = false } = {},
+    { copy = true, save = true, format = 'png', alreadyEncoded = false, tempFile = false } = {},
 ) {
     let finalBytes = bytes;
     if (format !== 'png' && !alreadyEncoded && save) finalBytes = await _pixbufSaveToStreamAsync(pixbuf, format);
@@ -123,8 +131,12 @@ async function _storeScreenshotAsync(
 
     let file = null;
     if (save) {
-        file = await _saveToDiskAsync(finalBytes, format);
-        if (file) Main.screenshotUI.emit('screenshot-taken', file);
+        if (tempFile) {
+            file = await _saveToTempAsync(finalBytes, format);
+        } else {
+            file = await _saveToDiskAsync(finalBytes, format);
+            if (file) Main.screenshotUI.emit('screenshot-taken', file);
+        }
     }
 
     if (copy) _showToast(file, pixbuf, copy && !save);
@@ -258,7 +270,7 @@ export async function captureAndStoreScreenshot(
     cursor,
     compositeFn,
     windowComposite = null,
-    { copy = true, save = true, externalSave = false, format = 'png', playSound = true } = {},
+    { copy = true, save = true, externalSave = false, format = 'png', playSound = true, tempFile = false } = {},
 ) {
     if (playSound) global.display.get_sound_player().play_from_theme('screen-capture', 'Screenshot taken', null);
 
@@ -304,5 +316,5 @@ export async function captureAndStoreScreenshot(
 
     if (externalSave) return _saveToUserChosenLocation(finalBytes, finalPixbuf, format);
 
-    return _storeScreenshotAsync(finalBytes, finalPixbuf, { copy, save, format, alreadyEncoded });
+    return _storeScreenshotAsync(finalBytes, finalPixbuf, { copy, save, format, alreadyEncoded, tempFile });
 }

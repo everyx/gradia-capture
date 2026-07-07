@@ -221,7 +221,10 @@ export class TextEntryManager {
                 node.get_border_width(St.Side.BOTTOM);
             const [, naturalWidth] = clutterText.get_preferred_width(-1);
             const [, naturalHeight] = clutterText.get_preferred_height(-1);
-            this._entry.set_size(Math.max(fs * MIN_WIDTH_CHARS, naturalWidth + fs), Math.max(fs, naturalHeight) + vExtra);
+            this._entry.set_size(
+                Math.max(fs * MIN_WIDTH_CHARS, naturalWidth + fs),
+                Math.max(fs, naturalHeight) + vExtra,
+            );
             return GLib.SOURCE_REMOVE;
         });
     }

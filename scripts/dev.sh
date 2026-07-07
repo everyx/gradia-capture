@@ -19,7 +19,8 @@ echo "Logs: $LOG_FILE"
 echo "Close the window or press Ctrl+C to exit."
 echo ""
 
-dbus-run-session gnome-shell --devkit --wayland --virtual-monitor 960x1080@1.25 2>&1 \
+# dbus-run-session gnome-shell --devkit --wayland --virtual-monitor 960x1080@1.25 2>&1 \
+dbus-run-session gnome-shell --devkit --wayland 2>&1 \
   | tee "$LOG_FILE" \
   | grep -v '^$' \
   | grep --line-buffered -E '(gradia|\[text\]|Gjs|JS ERROR|EXTENSION|Warning|CRITICAL)' \

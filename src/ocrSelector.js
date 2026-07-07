@@ -82,8 +82,14 @@ export class OcrSelector {
                 const { file, scale: s } = await this._screenshotFn();
                 if (!file) throw new Error('Screenshot capture failed');
                 scale = s || 1;
-                blocks = await runRapidOcr(file, this._extensionPath);
-                this._cacheResult = { blocks, scale };
+                try {
+                    blocks = await runRapidOcr(file, this._extensionPath);
+                    this._cacheResult = { blocks, scale };
+                } finally {
+                    try {
+                        file.delete(null);
+                    } catch {}
+                }
             }
 
             this._storeBlocks(blocks, originX, originY, scale, captureMonitor);

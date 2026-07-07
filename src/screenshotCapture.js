@@ -49,7 +49,7 @@ export class ScreenshotCapture {
                 cursor,
                 compositeFn,
                 windowComposite,
-                { copy: shouldCopy, save: shouldSave, externalSave, format, playSound },
+                { copy: shouldCopy, save: shouldSave, externalSave, format, playSound, tempFile: ocr },
             );
             if (portalMode || ocr) return capturePromise;
             return true;
