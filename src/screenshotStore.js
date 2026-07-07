@@ -60,7 +60,7 @@ async function _writeBytesToFile(file, bytes) {
 
 async function _saveBytesToDir(dir, bytes, format) {
     const timestamp = GLib.DateTime.new_now_local().format('%Y-%m-%d %H-%M-%S');
-    const name = `Screenshot From ${timestamp}`;
+    const name = GLib.dgettext('gnome-shell', 'Screenshot from %s').format(timestamp);
 
     for (const suffix of _suffixes()) {
         const file = dir.get_child(`${name}${suffix}.${format}`);
@@ -80,7 +80,7 @@ function _saveToDiskAsync(bytes, format = 'png') {
     const dir = Gio.File.new_for_path(
         GLib.build_filenamev([
             GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES) || GLib.get_home_dir(),
-            'Screenshots',
+            GLib.dgettext('gnome-shell', 'Screenshots'),
         ]),
     );
 
@@ -201,7 +201,7 @@ async function _pickSaveLocationViaPortal(suggestedName) {
 
 async function _saveToUserChosenLocation(bytes, pixbuf, format = 'png') {
     const timestamp = GLib.DateTime.new_now_local().format('%Y-%m-%d %H-%M-%S');
-    const suggestedName = `Screenshot From ${timestamp}.${format}`;
+    const suggestedName = `${GLib.dgettext('gnome-shell', 'Screenshot from %s').format(timestamp)}.${format}`;
 
     const chosenUri = await _pickSaveLocationViaPortal(suggestedName);
     if (!chosenUri) return null;
