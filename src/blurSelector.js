@@ -446,7 +446,7 @@ export class BlurSelector {
             cr.scale(1 / ds, 1 / ds);
             cr.setSourceSurface(stroke.previewSurface, 0, 0);
             const srcPat = cr.getSource();
-            if (srcPat && stroke.previewScale === 1) srcPat.setFilter(Cairo.Filter.NEAREST);
+            if (srcPat) srcPat.setFilter(Cairo.Filter.NEAREST);
             cr.paint();
             cr.restore();
             return;
@@ -456,10 +456,14 @@ export class BlurSelector {
             const origin = this._previewCache.origin;
             const local = canvas._stageToLocal(origin.x, origin.y);
             if (!local) return;
-            cr.setSourceSurface(this._previewCache.surface, local.x, local.y);
+            cr.save();
+            cr.translate(local.x, local.y);
+            cr.scale(1 / this._stageScale, 1 / this._stageScale);
+            cr.setSourceSurface(this._previewCache.surface, 0, 0);
             const pat = cr.getSource();
             if (pat) pat.setFilter(Cairo.Filter.NEAREST);
             cr.paint();
+            cr.restore();
         }
     }
 
@@ -500,7 +504,7 @@ export class BlurSelector {
         if (this._previewCache.surface && !this._previewCache.baked) {
             stroke.previewSurface = this._previewCache.surface;
             stroke.previewOrigin = this._previewCache.origin;
-            stroke.previewScale = 1;
+            stroke.previewScale = this._stageScale;
             this._previewCache.surface = null;
             this._previewCache.baked = true;
             canvas.queue_repaint();
@@ -583,9 +587,7 @@ export class BlurSelector {
         const pixH = pixbuf.get_height();
         if (pixW <= 0 || pixH <= 0) return;
 
-        const sw = Math.ceil(pixW / ds);
-        const sh = Math.ceil(pixH / ds);
-        const surf = new Cairo.ImageSurface(Cairo.Format.ARGB32, sw, sh);
+        const surf = new Cairo.ImageSurface(Cairo.Format.ARGB32, pixW, pixH);
         const ctx = new Cairo.Context(surf);
         ctx.setAntialias(Cairo.Antialias.NONE);
         const source = pixbuf.get_pixels();
@@ -608,7 +610,7 @@ export class BlurSelector {
                 const ey = Math.max(sy, Math.min(py + ph, pixH));
                 const color = _averageBlock(source, rs, nc, sx, sy, ex, ey);
                 ctx.setSourceRGBA(color[0] / 255, color[1] / 255, color[2] / 255, 1.0);
-                ctx.rectangle(px / ds, py / ds, pw / ds, ph / ds);
+                ctx.rectangle(px, py, pw, ph);
                 ctx.fill();
             },
         );
@@ -618,10 +620,10 @@ export class BlurSelector {
             ctx.setSourceRGBA(1, 1, 1, 1);
             ctx.setLineJoin(Cairo.LineJoin.ROUND);
             ctx.setLineCap(Cairo.LineCap.ROUND);
-            ctx.setLineWidth(lw);
-            ctx.moveTo(stroke.stagePoints[0].x - regionAbs.x / ds, stroke.stagePoints[0].y - regionAbs.y / ds);
+            ctx.setLineWidth(lw * ds);
+            ctx.moveTo(stroke.stagePoints[0].x * ds - regionAbs.x, stroke.stagePoints[0].y * ds - regionAbs.y);
             for (let i = 1; i < stroke.stagePoints.length; i++)
-                ctx.lineTo(stroke.stagePoints[i].x - regionAbs.x / ds, stroke.stagePoints[i].y - regionAbs.y / ds);
+                ctx.lineTo(stroke.stagePoints[i].x * ds - regionAbs.x, stroke.stagePoints[i].y * ds - regionAbs.y);
             ctx.stroke();
         }
 
@@ -651,7 +653,7 @@ export class BlurSelector {
             if (stroke.previewSurface) stroke.previewSurface.finish();
             stroke.previewSurface = this._previewCache.surface;
             stroke.previewOrigin = this._previewCache.origin;
-            stroke.previewScale = 1;
+            stroke.previewScale = this._stageScale;
             this._previewCache.surface = null;
             this._previewCache.baked = true;
         }
