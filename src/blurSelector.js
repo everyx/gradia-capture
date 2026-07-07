@@ -56,8 +56,8 @@ function _forEachBlockInRect(rectAbs, blockSize, originAbsX, originAbsY, fn) {
     }
 }
 
-function _getBlocksInBounds(regionAbs, pointsAbs, brushWidth, blockSize, originAbsX = 0, originAbsY = 0) {
-    if (!pointsAbs || pointsAbs.length === 0) return [];
+function _forEachBlockInStroke(regionAbs, pointsAbs, brushWidth, blockSize, fn, originAbsX = 0, originAbsY = 0) {
+    if (!pointsAbs || pointsAbs.length === 0) return;
 
     const xs = pointsAbs.map((p) => p.x);
     const ys = pointsAbs.map((p) => p.y);
@@ -77,7 +77,6 @@ function _getBlocksInBounds(regionAbs, pointsAbs, brushWidth, blockSize, originA
     const endBX = Math.ceil((maxX - originAbsX) / blockSize);
     const endBY = Math.ceil((maxY - originAbsY) / blockSize);
 
-    const blocks = [];
     for (let by = startBY; by < endBY; by++) {
         for (let bx = startBX; bx < endBX; bx++) {
             const rawX = originAbsX + bx * blockSize;
@@ -86,11 +85,9 @@ function _getBlocksInBounds(regionAbs, pointsAbs, brushWidth, blockSize, originA
             const y = Math.max(regionAbs.y, Math.min(regionAbs.y + regionAbs.h, rawY));
             const w = Math.min(regionAbs.x + regionAbs.w - x, blockSize);
             const h = Math.min(regionAbs.y + regionAbs.h - y, blockSize);
-            if (w > 0 && h > 0) blocks.push({ x, y, w, h });
+            if (w > 0 && h > 0) fn(x, y, w, h);
         }
     }
-
-    return blocks;
 }
 
 function _drawStrokeMaskSurface(width, height, points, brushWidth) {
@@ -130,15 +127,22 @@ function _createMaskedBlocksSurface(
     const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, width, height);
     const ctx = new Cairo.Context(surface);
 
-    const blocks = _getBlocksInBounds(regionAbs, pointsAbs, brushWidth, blockSize, originAbsX, originAbsY);
-    for (const b of blocks) {
-        const px = b.x - regionAbs.x;
-        const py = b.y - regionAbs.y;
-        const [r, g, b_, _a] = _averageBlock(source, rowstride, nChannels, px, py, px + b.w, py + b.h, width, height);
-        ctx.setSourceRGBA(r / 255, g / 255, b_ / 255, 1.0);
-        ctx.rectangle(px, py, b.w, b.h);
-        ctx.fill();
-    }
+    _forEachBlockInStroke(
+        regionAbs,
+        pointsAbs,
+        brushWidth,
+        blockSize,
+        (x, y, w, h) => {
+            const px = x - regionAbs.x;
+            const py = y - regionAbs.y;
+            const [r, g, b_, _a] = _averageBlock(source, rowstride, nChannels, px, py, px + w, py + h, width, height);
+            ctx.setSourceRGBA(r / 255, g / 255, b_ / 255, 1.0);
+            ctx.rectangle(px, py, w, h);
+            ctx.fill();
+        },
+        originAbsX,
+        originAbsY,
+    );
 
     const relPoints = pointsAbs.map((p) => ({ x: p.x - regionAbs.x, y: p.y - regionAbs.y }));
     const maskSurf = _drawStrokeMaskSurface(width, height, relPoints, brushWidth);
@@ -151,14 +155,39 @@ function _createMaskedBlocksSurface(
     return surface;
 }
 
-function _fillBlock(target, rowstride, nChannels, x0, y0, x1, y1, color) {
+function _pixelateBlock(source, rowstride, nChannels, x0, y0, x1, y1, srcW, srcH) {
+    let r = 0,
+        g = 0,
+        b = 0,
+        count = 0;
+
+    x0 = Math.max(0, Math.min(x0, srcW - 1));
+    y0 = Math.max(0, Math.min(y0, srcH - 1));
+    x1 = Math.max(x0, Math.min(x1, srcW));
+    y1 = Math.max(y0, Math.min(y1, srcH));
+
     for (let y = y0; y < y1; y++) {
         let off = y * rowstride + x0 * nChannels;
         for (let x = x0; x < x1; x++) {
-            target[off] = color[0];
-            target[off + 1] = color[1];
-            target[off + 2] = color[2];
-            if (nChannels >= 4) target[off + 3] = color[3];
+            r += source[off];
+            g += source[off + 1];
+            b += source[off + 2];
+            off += nChannels;
+            count++;
+        }
+    }
+
+    if (count === 0) return;
+
+    const c = new Uint8Array([Math.round(r / count), Math.round(g / count), Math.round(b / count), 255]);
+
+    for (let y = y0; y < y1; y++) {
+        let off = y * rowstride + x0 * nChannels;
+        for (let x = x0; x < x1; x++) {
+            source[off] = c[0];
+            source[off + 1] = c[1];
+            source[off + 2] = c[2];
+            if (nChannels >= 4) source[off + 3] = c[3];
             off += nChannels;
         }
     }
@@ -237,12 +266,11 @@ function _pixelatePixbufRect(pixbuf, regionAbs, p0Abs, p1Abs, blockSize, originA
     const cwAbs = Math.max(1, Math.min(rw, regionAbs.x + regionAbs.w - cxAbs));
     const chAbs = Math.max(1, Math.min(rh, regionAbs.y + regionAbs.h - cyAbs));
 
-    const source = pixbuf.get_pixels();
     const rowstride = pixbuf.get_rowstride();
     const nChannels = pixbuf.get_n_channels();
     const srcW = pixbuf.get_width();
     const srcH = pixbuf.get_height();
-    const target = new Uint8Array(source);
+    const target = new Uint8Array(pixbuf.get_pixels());
 
     _forEachBlockInRect(
         { x: cxAbs, y: cyAbs, w: cwAbs, h: chAbs },
@@ -252,18 +280,7 @@ function _pixelatePixbufRect(pixbuf, regionAbs, p0Abs, p1Abs, blockSize, originA
         (x0, y0, x1, y1) => {
             const px = x0 - regionAbs.x;
             const py = y0 - regionAbs.y;
-            const color = _averageBlock(
-                source,
-                rowstride,
-                nChannels,
-                px,
-                py,
-                px + (x1 - x0),
-                py + (y1 - y0),
-                srcW,
-                srcH,
-            );
-            _fillBlock(target, rowstride, nChannels, px, py, px + (x1 - x0), py + (y1 - y0), color);
+            _pixelateBlock(target, rowstride, nChannels, px, py, px + (x1 - x0), py + (y1 - y0), srcW, srcH);
         },
     );
 
