@@ -863,10 +863,6 @@ export default class GradiaCompanion extends Extension {
                 this._ocrSelector?.activate();
                 this._toolbar._updateUndoClearSensitivity();
             });
-            this._toolbar.connect('ocr-clear', () => {
-                this._ocrSelector.deactivate(true);
-                this._toolbar._updateUndoClearSensitivity();
-            });
         }
 
         this._toolbar.connect('blur-mode-changed', (_tb, mode) => {

@@ -185,7 +185,6 @@ export const Toolbar = GObject.registerClass({
         'undo': {},
         'clear': {},
         'ocr-trigger': {},
-        'ocr-clear': {},
         'blur-mode-changed': { param_types: [GObject.TYPE_STRING] },
         'block-size-changed': { param_types: [GObject.TYPE_INT] },
     },
