@@ -180,15 +180,14 @@ export const BlurMenu = GObject.registerClass({
 export const Toolbar = GObject.registerClass({
     Signals: {
         'tool-changed': { param_types: [GObject.TYPE_STRING] },
-        'color-changed': { param_types: [GObject.TYPE_STRING] },
-        'line-width-changed': { param_types: [GObject.TYPE_DOUBLE] },
+        'tool-property-changed': { param_types: [GObject.TYPE_STRING] },
         'undo': {},
         'clear': {},
         'ocr-trigger': {},
     },
 }, class Toolbar extends St.BoxLayout {
     _init(params = {}) {
-        const { extensionPath = '', gradiaSettings = null, ...rest } = params;
+        const { extensionPath = '', gradiaSettings = null, hasSelection, hasVisibleCanvas, ...rest } = params;
         this._extensionPath = extensionPath;
         this._settings = gradiaSettings;
         this._lastReposition = null;
@@ -210,6 +209,8 @@ export const Toolbar = GObject.registerClass({
         this._blurToolBtn = null;
         this._toolEntries = new Map();
         this._popupStagePressIds = new Map();
+        this._hasSelection = hasSelection ?? (() => false);
+        this._hasVisibleCanvas = hasVisibleCanvas ?? (() => true);
 
         this._buildToolButtons();
         this._addSeparator();
@@ -225,7 +226,7 @@ export const Toolbar = GObject.registerClass({
         this._buildBlurMenu();
 
         this._restoreToolEntry(this._selectedTool);
-        this._updateDrawingControlsSensitivity();
+        this.updateDrawingControlsSensitivity();
 
         this.connect('notify::visible', () => {
             if (!this.visible) {
@@ -256,7 +257,7 @@ export const Toolbar = GObject.registerClass({
         this._blurMenu.connect('mode-changed', (_m, mode) => {
             if (this._blurSelector) this._blurSelector.setMode(mode);
             this._saveCurrentToolEntry();
-            this._updateDrawingControlsSensitivity();
+            this.updateDrawingControlsSensitivity();
         });
         this._blurMenu.connect('block-size-changed', (_m, size) => {
             if (this._blurSelector) this._blurSelector.setBlockSize(size);
@@ -310,7 +311,7 @@ export const Toolbar = GObject.registerClass({
         return TOOLS.find(t => t.id === this._selectedTool)?.isDrawing ?? false;
     }
 
-    _updateDrawingControlsSensitivity() {
+    updateDrawingControlsSensitivity() {
         const drawing = this._currentToolIsDrawing();
         const hasSelection = this._hasSelection?.() ?? false;
         const enabled = drawing || hasSelection;
@@ -379,7 +380,7 @@ export const Toolbar = GObject.registerClass({
             this._colorSwatch.style = `background-color: ${hex};`;
         if (this._colorMenu)
             this._colorMenu.setSelectedHex(hex);
-        this.emit('color-changed', hex);
+        this.emit('tool-property-changed', 'color');
     }
 
     _applyLineWidth(width) {
@@ -387,10 +388,10 @@ export const Toolbar = GObject.registerClass({
         this._updatingSlider = true;
         this._slider.value = this._widthToSliderValue(width);
         this._updatingSlider = false;
-        this.emit('line-width-changed', width);
+        this.emit('tool-property-changed', 'lineWidth');
     }
 
-    _syncToStroke(stroke) {
+    syncToStroke(stroke) {
         this._applyColor(stroke.color);
         this._applyLineWidth(stroke.strokeWidth);
     }
@@ -406,7 +407,7 @@ export const Toolbar = GObject.registerClass({
                 y_align: Clutter.ActorAlign.CENTER,
             });
             btn._toolId = tool.id;
-            btn.connect('clicked', () => this._onToolClicked(tool.id));
+            btn.connect('clicked', () => this.selectTool(tool.id));
             this.add_child(btn);
             this._toolButtons.push(btn);
 
@@ -472,8 +473,7 @@ export const Toolbar = GObject.registerClass({
         this._slider.y_align = Clutter.ActorAlign.CENTER;
         this._slider.connect('notify::value', () => {
             if (this._updatingSlider) return;
-            this._lineWidth = this._sliderValueToWidth(this._slider.value);
-            this.emit('line-width-changed', this._lineWidth);
+            this._applyLineWidth(this._sliderValueToWidth(this._slider.value));
             this._saveCurrentToolEntry();
         });
         this.add_child(this._slider);
@@ -513,7 +513,7 @@ export const Toolbar = GObject.registerClass({
             this._ocrButton.set_child(this._ocrIcon);
     }
 
-    _updateUndoClearSensitivity() {
+    updateUndoClearSensitivity() {
         const visible = this._hasVisibleCanvas?.() ?? true;
         this._undoBtn.reactive = visible;
         this._undoBtn.opacity = visible ? 255 : 80;
@@ -564,7 +564,7 @@ export const Toolbar = GObject.registerClass({
         this.add_child(new St.Widget({ style_class: 'gradia-separator', y_expand: true }));
     }
 
-    _onToolClicked(id) {
+    selectTool(id) {
         const btn = this._toolButtons.find(b => b._toolId === id);
         if (btn && !btn.reactive)
             return;
@@ -578,7 +578,7 @@ export const Toolbar = GObject.registerClass({
             btn.checked = (btn._toolId === id);
         this.emit('tool-changed', id);
         this._restoreToolEntry(id);
-        this._updateDrawingControlsSensitivity();
+        this.updateDrawingControlsSensitivity();
 
         if (id === 'blur') {
             if (wasBlur)
@@ -590,10 +590,15 @@ export const Toolbar = GObject.registerClass({
         }
     }
 
-    _clearToolSelection() {
+    clearToolSelection() {
         for (const btn of this._toolButtons)
             btn.checked = false;
-        this._updateDrawingControlsSensitivity();
+        this.updateDrawingControlsSensitivity();
+    }
+
+    setOcrAvailable(available) {
+        this._ocrButton.reactive = available;
+        this._ocrButton.opacity = available ? 255 : 80;
     }
 
     setSelectionToolVisible(enabled) {
@@ -674,4 +679,10 @@ export const Toolbar = GObject.registerClass({
     get selectedTool() { return this._selectedTool; }
     get selectedColor() { return this._selectedColor; }
     get lineWidth() { return this._lineWidth; }
+    get colorMenu() { return this._colorMenu; }
+    get blurMenu() { return this._blurMenu; }
+
+    getToolButton(toolId) {
+        return this._toolButtons.find(b => b._toolId === toolId) || null;
+    }
 });

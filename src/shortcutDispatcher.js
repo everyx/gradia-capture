@@ -94,7 +94,7 @@ export class ShortcutDispatcher {
             }
 
             if (!ctrl && sym in TOOL_SHORTCUTS) {
-                this._toolbar._onToolClicked(TOOL_SHORTCUTS[sym]);
+                this._toolbar.selectTool(TOOL_SHORTCUTS[sym]);
                 return Clutter.EVENT_STOP;
             }
 

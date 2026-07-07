@@ -46,13 +46,17 @@ export const DrawingCanvas = GObject.registerClass(
         get strokes() { return this._strokes; }
         get selectedStroke() { return this._selectedStroke; }
 
-        setColor(hex) { this._strokeColor = hex; }
+        applyProps(props) {
+            if (props.color !== undefined)
+                this._strokeColor = props.color;
+            if (props.lineWidth !== undefined)
+                this._strokeWidth = props.lineWidth;
+        }
         setTool(id) {
             this._toolId = id;
             if (id !== 'drag')
                 this._selectedStroke = null;
         }
-        setStrokeWidth(w) { this._strokeWidth = w; }
 
 
 

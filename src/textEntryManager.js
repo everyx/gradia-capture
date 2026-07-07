@@ -124,7 +124,7 @@ export class TextEntryManager {
                 this.commit();
         });
 
-        const textBtn = this._toolbar._toolButtons.find(b => b._toolId === 'text');
+        const textBtn = this._toolbar.getToolButton('text');
         if (textBtn) {
             this._deactivateId = textBtn.connect('notify::checked', () => {
                 if (!textBtn.checked) this.commit();
@@ -175,7 +175,7 @@ export class TextEntryManager {
     _cleanup() {
         this._committing = true;
         if (this._deactivateId) {
-            const btn = this._toolbar._toolButtons.find(b => b._toolId === 'text');
+            const btn = this._toolbar.getToolButton('text');
             if (btn)
                 btn.disconnect(this._deactivateId);
             this._deactivateId = 0;

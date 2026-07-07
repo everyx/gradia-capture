@@ -15,8 +15,8 @@ export class DragTool {
         const result = this._annotations.selectAt(stageX, stageY);
 
         if (result) {
-            this._toolbar._syncToStroke(result.stroke);
-            this._toolbar._updateDrawingControlsSensitivity();
+            this._toolbar.syncToStroke(result.stroke);
+            this._toolbar.updateDrawingControlsSensitivity();
 
             this.active = true;
             this._startX = stageX;
