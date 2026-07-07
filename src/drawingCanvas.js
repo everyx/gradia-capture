@@ -348,7 +348,7 @@ export const DrawingCanvas = GObject.registerClass(
             if (this._onRenderBlurStroke) {
                 for (const stroke of allStrokes) {
                     if (stroke.toolId !== 'blur') continue;
-                    this._onRenderBlurStroke(cr, stroke, ss);
+                    this._onRenderBlurStroke(cr, stroke, ss, this);
                 }
             }
 

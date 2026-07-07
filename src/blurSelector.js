@@ -347,12 +347,14 @@ export class BlurSelector {
         this._previewCache.pixbuf = null;
     }
 
-    renderPreviewSurface(cr, stroke, ss) {
+    renderPreviewSurface(cr, stroke, ss, canvas) {
         if (stroke.previewSurface) {
-            const tl = { x: stroke.previewOrigin.x, y: stroke.previewOrigin.y };
+            const origin = stroke.previewOrigin;
+            const local = origin ? canvas._stageToLocal(origin.x, origin.y) : null;
+            if (!local) return;
             const ds = stroke.previewScale || ss;
             cr.save();
-            cr.translate(tl.x, tl.y);
+            cr.translate(local.x, local.y);
             cr.scale(1 / ds, 1 / ds);
             cr.setSourceSurface(stroke.previewSurface, 0, 0);
             const srcPat = cr.getSource();
@@ -363,8 +365,10 @@ export class BlurSelector {
         }
 
         if (this._previewCache.surface && this._previewCache.origin) {
-            const tl = this._previewCache.origin;
-            cr.setSourceSurface(this._previewCache.surface, tl.x, tl.y);
+            const origin = this._previewCache.origin;
+            const local = canvas._stageToLocal(origin.x, origin.y);
+            if (!local) return;
+            cr.setSourceSurface(this._previewCache.surface, local.x, local.y);
             const pat = cr.getSource();
             if (pat) pat.setFilter(Cairo.Filter.NEAREST);
             cr.paint();

@@ -507,7 +507,7 @@ export default class GradiaCompanion extends Extension {
             };
             c._onScroll = (event) => this._handleBlurScroll(event);
             c._getBlurState = () => ({ mode: this._blurSelector.mode, blockSize: this._blurSelector.blockSize });
-            c._onRenderBlurStroke = (cr, stroke, ss) => this._blurSelector.renderPreviewSurface(cr, stroke, ss);
+            c._onRenderBlurStroke = (cr, stroke, ss, canvas) => this._blurSelector.renderPreviewSurface(cr, stroke, ss, canvas);
         });
 
         this._primaryBin = primaryBin;
