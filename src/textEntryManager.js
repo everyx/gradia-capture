@@ -4,6 +4,8 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+const MIN_WIDTH_CHARS = 4;
+
 export class TextEntryManager {
     constructor(toolbar, canvases) {
         this._toolbar = toolbar;
@@ -84,7 +86,7 @@ export class TextEntryManager {
                 this._resizeIdle = 0;
                 const fs = Math.max(8, Math.round(this._toolbar.lineWidth * 3));
                 const [, naturalWidth] = clutterText.get_preferred_width(-1);
-                entry.set_width(Math.max(fs * 4, naturalWidth + fs));
+                entry.set_width(Math.max(fs * MIN_WIDTH_CHARS, naturalWidth + fs));
 
                 const node = entry.get_theme_node();
                 const vExtra =
@@ -217,8 +219,9 @@ export class TextEntryManager {
                 node.get_padding(St.Side.BOTTOM) +
                 node.get_border_width(St.Side.TOP) +
                 node.get_border_width(St.Side.BOTTOM);
+            const [, naturalWidth] = clutterText.get_preferred_width(-1);
             const [, naturalHeight] = clutterText.get_preferred_height(-1);
-            this._entry.set_height(naturalHeight + vExtra);
+            this._entry.set_size(Math.max(fs * MIN_WIDTH_CHARS, naturalWidth + fs), Math.max(fs, naturalHeight) + vExtra);
             return GLib.SOURCE_REMOVE;
         });
     }
