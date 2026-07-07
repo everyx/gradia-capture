@@ -308,7 +308,6 @@ export default class GradiaCompanion extends Extension {
         const windowMode = this._isWindowMode();
         const recordingMode = this._isRecordingMode();
 
-        // Hidden modes
         if (windowMode || recordingMode) {
             this._toolbar.visible = false;
             return;
@@ -322,7 +321,6 @@ export default class GradiaCompanion extends Extension {
             }
         }
 
-        // Selection mode without a valid selection → hide
         if (selectionMode && !selectionRect) {
             this._toolbar.visible = false;
             return;
@@ -330,7 +328,6 @@ export default class GradiaCompanion extends Extension {
 
         this._toolbar.visible = true;
 
-        // Determine target monitor based on selection position
         let targetMonitor = monitors[0];
         if (selectionRect) {
             const cx = selectionRect.x + selectionRect.width / 2;

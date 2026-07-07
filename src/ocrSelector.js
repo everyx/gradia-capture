@@ -8,6 +8,7 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { runRapidOcr } from './gradiaIntegration.js';
 import { attachTooltip } from './tooltip.js';
+import { getCaptureContext } from './captureContext.js';
 
 export class OcrSelector {
     constructor({ toolbar, canvases, extensionPath, screenshotFn }) {
@@ -51,31 +52,17 @@ export class OcrSelector {
             for (const canvas of this._canvases)
                 canvas.hide();
 
-            const ui = Main.screenshotUI;
-            let originX = 0, originY = 0;
+            const ctx = getCaptureContext();
+            const originX = ctx.origin.x;
+            const originY = ctx.origin.y;
             let captureMonitor = null;
 
-            if (ui._selectionButton?.checked && ui._areaSelector) {
-                const geom = ui._areaSelector.getGeometry();
-                if (geom) {
-                    originX = geom[0];
-                    originY = geom[1];
-                }
-            } else if (ui._screenButton?.checked) {
-                const idx = ui._screenSelectors?.findIndex(s => s.checked);
-                if (idx >= 0) {
-                    const mon = Main.layoutManager.monitors[idx];
-                    originX = mon.x;
-                    originY = mon.y;
-                    captureMonitor = mon;
-                }
-            } else if (ui._windowButton?.checked) {
-                const win = ui._windowSelectors?.flatMap(sel => sel.windows()).find(w => w.checked);
-                if (win) {
-                    originX = win.boundingBox.x;
-                    originY = win.boundingBox.y;
-                }
+            if (ctx.mode === 'screen') {
+                const idx = Main.screenshotUI._screenSelectors?.findIndex(s => s.checked);
+                if (idx >= 0)
+                    captureMonitor = Main.layoutManager.monitors[idx];
             }
+
             if (!captureMonitor)
                 captureMonitor = global.display.get_monitor_geometry(global.display.get_primary_monitor());
 

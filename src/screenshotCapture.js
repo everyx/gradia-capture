@@ -6,6 +6,7 @@ import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
 import { getToolDef } from './tools.js';
+import { getCaptureContext } from './captureContext.js';
 
 export class ScreenshotCapture {
     constructor({ canvases, textEntryManager, toolbar, settings, isRecordingMode }) {
@@ -27,12 +28,12 @@ export class ScreenshotCapture {
         if (ocr)
             copyOnly = false;
 
-        if (!ui._selectionButton.checked && !ui._screenButton.checked && !ui._windowButton.checked)
+        const ctx = getCaptureContext(ui);
+        if (ctx.mode === 'none')
             return;
 
-        if (ui._selectionButton.checked) {
-            const [,, w, h] = ui._areaSelector.getGeometry?.() ?? [0, 0, 0, 0];
-            if (w <= 2 || h <= 2)
+        if (ctx.mode === 'selection') {
+            if (ctx.origin.w <= 2 || ctx.origin.h <= 2)
                 return;
         }
 
@@ -53,7 +54,7 @@ export class ScreenshotCapture {
             return true;
         };
 
-        if (ui._windowButton.checked) {
+        if (ctx.mode === 'window') {
             const selectedWindow =
                 ui._windowSelectors.flatMap(sel => sel.windows())
                     .find(win => win.checked);
@@ -110,11 +111,11 @@ export class ScreenshotCapture {
         return await _capture(
             content.get_texture(),
             ui._getSelectedGeometry(true),
-            ui._scale,
+            ctx.scale,
             {
                 texture: cursorTexture ?? null,
-                x: ui._cursor.x * ui._scale,
-                y: ui._cursor.y * ui._scale,
+                x: ui._cursor.x * ctx.scale,
+                y: ui._cursor.y * ctx.scale,
                 scale: ui._cursorScale,
             },
             strokeData ? (bytes, pixbuf) => this._compositeStrokesOntoPixbuf(bytes, pixbuf, strokeData) : null
@@ -413,35 +414,13 @@ export class ScreenshotCapture {
     }
 
     _buildStrokeData() {
-        const ui = Main.screenshotUI;
-
-        let selX = 0, selY = 0, selW = 0, selH = 0;
-
-        if (ui._selectionButton.checked) {
-            [selX, selY, selW, selH] = ui._areaSelector.getGeometry();
-        } else if (ui._screenButton.checked) {
-            const index = ui._screenSelectors.findIndex(s => s.checked);
-            const monitor = Main.layoutManager.monitors[index];
-            selX = monitor.x;
-            selY = monitor.y;
-            selW = monitor.width;
-            selH = monitor.height;
-        } else if (ui._windowButton.checked) {
-            const window = ui._windowSelectors
-                .flatMap(sel => sel.windows())
-                .find(win => win.checked);
-
-            if (window) {
-                const box = window.boundingBox;
-                selX = box.x;
-                selY = box.y;
-                selW = box.width;
-                selH = box.height;
-            }
-        }
+        const ctx = getCaptureContext();
 
         return {
-            selX, selY, selW, selH,
+            selX: ctx.origin.x,
+            selY: ctx.origin.y,
+            selW: ctx.origin.w,
+            selH: ctx.origin.h,
             strokes: this._canvases.strokeData,
             stageScale: global.stage.scale_factor || 1,
         };
