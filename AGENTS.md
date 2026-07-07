@@ -30,3 +30,17 @@ GNOME Shell extension（GJS），为截图工具加标注，可选集成 Gradia 
 - 隐藏标注双重保护：`canvas.hide()` 视觉层 + `!ocr` 跳过 `strokeData` 合成。
 - `transform_stage_point` 用于坐标转换（overlay 里 placement 按钮位置）。
 - `EVENT_STOP` 阻断事件穿透到工具层。
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues（`gh` CLI），外部 PR 纳入 triage 队列。详见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+使用默认标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。详见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+Single-context 布局：`CONTEXT.md` + `docs/adr/`。详见 `docs/agents/domain.md`。
