@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["import", "unicorn"],
+  "rules": {
+    "no-unused-vars": "warn",
+    "unicorn/filename-case": "off",
+    "import/no-cycle": "warn"
+  }
+}

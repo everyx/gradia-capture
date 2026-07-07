@@ -10,9 +10,17 @@ const MODE_BUTTONS = [
 ];
 
 export class ShortcutDispatcher {
-    constructor({ toolbar, ocrSelector, screenshotCapture, dragTool,
-                  isRecordingMode, updateVisibilityForMode, repositionToolbar,
-                  hideTrashButton, resolutionOverlay }) {
+    constructor({
+        toolbar,
+        ocrSelector,
+        screenshotCapture,
+        dragTool,
+        isRecordingMode,
+        updateVisibilityForMode,
+        repositionToolbar,
+        hideTrashButton,
+        resolutionOverlay,
+    }) {
         this._toolbar = toolbar;
         this._ocrSelector = ocrSelector;
         this._screenshotCapture = screenshotCapture;
@@ -35,9 +43,7 @@ export class ShortcutDispatcher {
         const ui = Main.screenshotUI;
 
         for (const [prop, id] of MODE_BUTTONS) {
-            this._modeButtonSignals[id] = ui[prop].connect(
-                'notify::checked', () => this._updateVisibilityForMode()
-            );
+            this._modeButtonSignals[id] = ui[prop].connect('notify::checked', () => this._updateVisibilityForMode());
         }
 
         this._keyPressId = ui.connect('key-press-event', (_actor, event) => {
@@ -57,9 +63,8 @@ export class ShortcutDispatcher {
 
             if (ctrl && sym === Clutter.KEY_c) {
                 if (!this._isRecordingMode() && !this.portalMode) {
-                    this._screenshotCapture.capture({ copyOnly: true, portalMode: this.portalMode }).then(result => {
-                        if (result !== undefined)
-                            ui.close();
+                    this._screenshotCapture.capture({ copyOnly: true, portalMode: this.portalMode }).then((result) => {
+                        if (result !== undefined) ui.close();
                     });
                     return Clutter.EVENT_STOP;
                 }
@@ -67,10 +72,11 @@ export class ShortcutDispatcher {
 
             if (ctrl && sym === Clutter.KEY_s) {
                 if (!this._isRecordingMode()) {
-                    this._screenshotCapture.capture({ externalSave: true, portalMode: this.portalMode }).then(result => {
-                        if (result !== undefined)
-                            ui.close();
-                    });
+                    this._screenshotCapture
+                        .capture({ externalSave: true, portalMode: this.portalMode })
+                        .then((result) => {
+                            if (result !== undefined) ui.close();
+                        });
                     return Clutter.EVENT_STOP;
                 }
             }
@@ -85,8 +91,10 @@ export class ShortcutDispatcher {
                 return Clutter.EVENT_STOP;
             }
 
-            if (this._toolbar?.selectedTool === 'drag' &&
-                (sym === Clutter.KEY_Delete || sym === Clutter.KEY_BackSpace)) {
+            if (
+                this._toolbar?.selectedTool === 'drag' &&
+                (sym === Clutter.KEY_Delete || sym === Clutter.KEY_BackSpace)
+            ) {
                 if (this._dragTool.deleteSelected()) {
                     this._hideTrashButton();
                     return Clutter.EVENT_STOP;
@@ -134,12 +142,10 @@ export class ShortcutDispatcher {
 
     _connectDragBehavior(ui) {
         const selector = ui._areaSelector;
-        if (!selector)
-            return;
+        if (!selector) return;
 
         this._dragStartedId = selector.connect('drag-started', () => {
-            if (this._toolbar)
-                this._toolbar.visible = false;
+            if (this._toolbar) this._toolbar.visible = false;
             this._resolutionOverlay?.onDragStarted();
         });
 
@@ -151,8 +157,7 @@ export class ShortcutDispatcher {
 
     _disconnectDragBehavior(ui) {
         const selector = ui?._areaSelector;
-        if (!selector)
-            return;
+        if (!selector) return;
 
         if (this._dragStartedId) {
             selector.disconnect(this._dragStartedId);

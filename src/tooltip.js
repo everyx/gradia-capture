@@ -16,10 +16,8 @@ export const Tooltip = GObject.registerClass(
             this._timeoutId = null;
             this._side = side;
             this._hoverId = widget.connect('notify::hover', () => {
-                if (widget.hover)
-                    this._scheduleShow(widget);
-                else
-                    this._hide();
+                if (widget.hover) this._scheduleShow(widget);
+                else this._hide();
             });
             this._destroyId = widget.connect('destroy', () => this.destroy());
             this.connect('destroy', () => {
@@ -28,8 +26,7 @@ export const Tooltip = GObject.registerClass(
             });
         }
         _scheduleShow(widget) {
-            if (this._timeoutId)
-                return;
+            if (this._timeoutId) return;
             this._timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
                 this._timeoutId = null;
                 this._show(widget);
@@ -37,8 +34,7 @@ export const Tooltip = GObject.registerClass(
             });
         }
         _getGap() {
-            if (this._side !== St.Side.TOP)
-                return DEFAULT_GAP;
+            if (this._side !== St.Side.TOP) return DEFAULT_GAP;
             const node = this.get_theme_node();
             const gap = node?.get_length('-y-offset');
             return gap > 0 ? gap : DEFAULT_GAP;
@@ -50,10 +46,10 @@ export const Tooltip = GObject.registerClass(
             const cy = Math.floor(wy + (wh - this.height) / 2);
             const gap = this._getGap();
             const positions = {
-                [St.Side.TOP]:    [cx, wy - this.height - gap],
+                [St.Side.TOP]: [cx, wy - this.height - gap],
                 [St.Side.BOTTOM]: [cx, wy + wh + gap],
-                [St.Side.LEFT]:   [wx - this.width - gap, cy],
-                [St.Side.RIGHT]:  [wx + ww + gap, cy],
+                [St.Side.LEFT]: [wx - this.width - gap, cy],
+                [St.Side.RIGHT]: [wx + ww + gap, cy],
             };
             const [x, y] = positions[this._side] ?? positions[St.Side.BOTTOM];
             this.set_position(x, y);
@@ -66,7 +62,8 @@ export const Tooltip = GObject.registerClass(
             }
             this.hide();
         }
-    });
+    },
+);
 
 export function attachTooltip(widget, text, side = St.Side.BOTTOM) {
     const tooltip = new Tooltip(widget, text, side);

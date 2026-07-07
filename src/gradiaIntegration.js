@@ -1,4 +1,3 @@
-import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GioUnix from 'gi://GioUnix';
 import GLib from 'gi://GLib';
@@ -14,10 +13,10 @@ export function isRapidOcrAvailable() {
     try {
         const proc = Gio.Subprocess.new(
             ['which', 'rapidocr'],
-            Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE
+            Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE,
         );
         return proc.wait_check(null);
-    } catch (e) {
+    } catch {
         return false;
     }
 }
@@ -32,7 +31,7 @@ export function runRapidOcr(file, extensionPath) {
         try {
             const proc = Gio.Subprocess.new(
                 ['python3', `${extensionPath}/ocr.py`, path],
-                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
             );
             proc.communicate_utf8_async(null, null, (_p, res) => {
                 try {
@@ -58,12 +57,10 @@ export function isGradiaInstalled() {
 }
 
 export function launchGradiaForScreenshot(file) {
-    if (!file)
-      return;
+    if (!file) return;
 
     const appInfo = Shell.AppSystem.get_default().lookup_app(GRADIA_DESKTOP_ID)?.get_app_info();
-    if (!appInfo)
-      return;
+    if (!appInfo) return;
 
     try {
         Gio.Subprocess.new(['gio', 'launch', appInfo.get_filename(), file.get_uri()], Gio.SubprocessFlags.NONE);
@@ -83,15 +80,12 @@ export function openContainingFolder(file) {
         Gio.DBusCallFlags.NONE,
         -1,
         null,
-        null
+        null,
     );
 }
 
 export function openFileInDefaultApp(file) {
-    Gio.app_info_launch_default_for_uri(
-        file.get_uri(),
-        global.create_app_launch_context(0, -1)
-    );
+    Gio.app_info_launch_default_for_uri(file.get_uri(), global.create_app_launch_context(0, -1));
 }
 
 export function createSettingsButton(onClick) {

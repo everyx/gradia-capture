@@ -34,12 +34,10 @@ export class TextEntryManager {
 
         const ui = Main.screenshotUI;
         const primaryBin = ui._primaryMonitorBin;
-        if (!primaryBin)
-            return;
+        if (!primaryBin) return;
 
         const [ok, localX, localY] = primaryBin.transform_stage_point(stageX, stageY);
-        if (!ok)
-            return;
+        if (!ok) return;
 
         this._targetCanvas = this._canvases.canvasForStagePoint(stageX, stageY);
 
@@ -71,10 +69,7 @@ export class TextEntryManager {
             const borderTop = node.get_border_width(St.Side.TOP);
             const borderLeft = node.get_border_width(St.Side.LEFT);
 
-            entry.set_position(
-                localX - borderLeft - paddingLeft,
-                localY - borderTop - paddingTop
-            );
+            entry.set_position(localX - borderLeft - paddingLeft, localY - borderTop - paddingTop);
         });
 
         const clutterText = entry.get_clutter_text();
@@ -106,8 +101,7 @@ export class TextEntryManager {
         clutterText.connect('key-press-event', (_actor, event) => {
             const sym = event.get_key_symbol();
             if (sym === Clutter.KEY_Return || sym === Clutter.KEY_KP_Enter) {
-                if (event.get_state() & Clutter.ModifierType.SHIFT_MASK)
-                    return Clutter.EVENT_PROPAGATE;
+                if (event.get_state() & Clutter.ModifierType.SHIFT_MASK) return Clutter.EVENT_PROPAGATE;
                 this.commit();
                 return Clutter.EVENT_STOP;
             }
@@ -120,8 +114,7 @@ export class TextEntryManager {
 
         this._committing = false;
         clutterText.connect('notify::has-key-focus', () => {
-            if (!clutterText.has_key_focus() && !this._committing)
-                this.commit();
+            if (!clutterText.has_key_focus() && !this._committing) this.commit();
         });
 
         const textBtn = this._toolbar.getToolButton('text');
@@ -135,8 +128,7 @@ export class TextEntryManager {
     }
 
     commit() {
-        if (!this._entry)
-            return;
+        if (!this._entry) return;
 
         const text = this._entry.get_text()?.trim() ?? '';
         if (text.length > 0 && this._pendingStroke) {
@@ -148,8 +140,7 @@ export class TextEntryManager {
     }
 
     cancel() {
-        if (!this._entry)
-            return;
+        if (!this._entry) return;
 
         this._teardown();
     }
@@ -176,8 +167,7 @@ export class TextEntryManager {
         this._committing = true;
         if (this._deactivateId) {
             const btn = this._toolbar.getToolButton('text');
-            if (btn)
-                btn.disconnect(this._deactivateId);
+            if (btn) btn.disconnect(this._deactivateId);
             this._deactivateId = 0;
         }
         if (this._resizeIdle) {
@@ -189,8 +179,7 @@ export class TextEntryManager {
         this._pendingStroke = null;
         this._targetCanvas = null;
 
-        if (this._idleSourceId)
-            GLib.source_remove(this._idleSourceId);
+        if (this._idleSourceId) GLib.source_remove(this._idleSourceId);
         this._idleSourceId = 0;
     }
 
@@ -205,8 +194,7 @@ export class TextEntryManager {
     }
 
     _updateStyle() {
-        if (!this._entry)
-            return;
+        if (!this._entry) return;
         const fs = Math.max(8, Math.round(this._toolbar.lineWidth * 3));
         const col = this._toolbar.selectedColor;
         this._entry.style = `
@@ -221,8 +209,7 @@ export class TextEntryManager {
         }
         this._resizeIdle = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this._resizeIdle = 0;
-            if (!this._entry)
-                return GLib.SOURCE_REMOVE;
+            if (!this._entry) return GLib.SOURCE_REMOVE;
             const clutterText = this._entry.get_clutter_text();
             const node = this._entry.get_theme_node();
             const vExtra =

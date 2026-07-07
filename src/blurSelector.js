@@ -3,7 +3,11 @@ import GdkPixbuf from 'gi://GdkPixbuf';
 import GLib from 'gi://GLib';
 
 function _averageBlock(source, rowstride, nChannels, x0, y0, x1, y1, srcW = Infinity, srcH = Infinity) {
-    let r = 0, g = 0, b = 0, a = 0, count = 0;
+    let r = 0,
+        g = 0,
+        b = 0,
+        a = 0,
+        count = 0;
 
     x0 = Math.max(0, Math.min(x0, srcW - 1));
     y0 = Math.max(0, Math.min(y0, srcH - 1));
@@ -55,8 +59,8 @@ function _forEachBlockInRect(rectAbs, blockSize, originAbsX, originAbsY, fn) {
 function _getBlocksInBounds(regionAbs, pointsAbs, brushWidth, blockSize, originAbsX = 0, originAbsY = 0) {
     if (!pointsAbs || pointsAbs.length === 0) return [];
 
-    const xs = pointsAbs.map(p => p.x);
-    const ys = pointsAbs.map(p => p.y);
+    const xs = pointsAbs.map((p) => p.x);
+    const ys = pointsAbs.map((p) => p.y);
     let minX = Math.min(...xs);
     let minY = Math.min(...ys);
     let maxX = Math.max(...xs);
@@ -82,8 +86,7 @@ function _getBlocksInBounds(regionAbs, pointsAbs, brushWidth, blockSize, originA
             const y = Math.max(regionAbs.y, Math.min(regionAbs.y + regionAbs.h, rawY));
             const w = Math.min(regionAbs.x + regionAbs.w - x, blockSize);
             const h = Math.min(regionAbs.y + regionAbs.h - y, blockSize);
-            if (w > 0 && h > 0)
-                blocks.push({ x, y, w, h });
+            if (w > 0 && h > 0) blocks.push({ x, y, w, h });
         }
     }
 
@@ -102,15 +105,22 @@ function _drawStrokeMaskSurface(width, height, points, brushWidth) {
     ctx.setLineCap(Cairo.LineCap.ROUND);
     ctx.setLineJoin(Cairo.LineJoin.ROUND);
     ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++)
-        ctx.lineTo(points[i].x, points[i].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
     ctx.stroke();
 
     ctx.$dispose();
     return surface;
 }
 
-function _createMaskedBlocksSurface(pixbuf, regionAbs, pointsAbs, brushWidth, blockSize, originAbsX = 0, originAbsY = 0) {
+function _createMaskedBlocksSurface(
+    pixbuf,
+    regionAbs,
+    pointsAbs,
+    brushWidth,
+    blockSize,
+    originAbsX = 0,
+    originAbsY = 0,
+) {
     const width = pixbuf.get_width();
     const height = pixbuf.get_height();
     const source = pixbuf.get_pixels();
@@ -124,13 +134,13 @@ function _createMaskedBlocksSurface(pixbuf, regionAbs, pointsAbs, brushWidth, bl
     for (const b of blocks) {
         const px = b.x - regionAbs.x;
         const py = b.y - regionAbs.y;
-        const [r, g, b_, a] = _averageBlock(source, rowstride, nChannels, px, py, px + b.w, py + b.h, width, height);
+        const [r, g, b_, _a] = _averageBlock(source, rowstride, nChannels, px, py, px + b.w, py + b.h, width, height);
         ctx.setSourceRGBA(r / 255, g / 255, b_ / 255, 1.0);
         ctx.rectangle(px, py, b.w, b.h);
         ctx.fill();
     }
 
-    const relPoints = pointsAbs.map(p => ({ x: p.x - regionAbs.x, y: p.y - regionAbs.y }));
+    const relPoints = pointsAbs.map((p) => ({ x: p.x - regionAbs.x, y: p.y - regionAbs.y }));
     const maskSurf = _drawStrokeMaskSurface(width, height, relPoints, brushWidth);
     ctx.setOperator(Cairo.Operator.DEST_IN);
     ctx.setSourceSurface(maskSurf, 0, 0);
@@ -164,11 +174,19 @@ function _makePixbufFromData(source, pixbuf) {
         pixbuf.get_bits_per_sample(),
         pixbuf.get_width(),
         pixbuf.get_height(),
-        pixbuf.get_rowstride()
+        pixbuf.get_rowstride(),
     );
 }
 
-function _pixelatePixbufAlongStroke(pixbuf, regionAbs, pointsAbs, brushWidth, blockSize, originAbsX = 0, originAbsY = 0) {
+function _pixelatePixbufAlongStroke(
+    pixbuf,
+    regionAbs,
+    pointsAbs,
+    brushWidth,
+    blockSize,
+    originAbsX = 0,
+    originAbsY = 0,
+) {
     if (!pixbuf || !pointsAbs || pointsAbs.length < 2) return pixbuf;
 
     const width = pixbuf.get_width();
@@ -181,7 +199,15 @@ function _pixelatePixbufAlongStroke(pixbuf, regionAbs, pointsAbs, brushWidth, bl
     srcCtx.paint();
     srcCtx.$dispose();
 
-    const blockSurf = _createMaskedBlocksSurface(pixbuf, regionAbs, pointsAbs, brushWidth, blockSize, originAbsX, originAbsY);
+    const blockSurf = _createMaskedBlocksSurface(
+        pixbuf,
+        regionAbs,
+        pointsAbs,
+        brushWidth,
+        blockSize,
+        originAbsX,
+        originAbsY,
+    );
 
     const resultCtx = new Cairo.Context(srcSurf);
     resultCtx.setSourceSurface(blockSurf, 0, 0);
@@ -218,17 +244,41 @@ function _pixelatePixbufRect(pixbuf, regionAbs, p0Abs, p1Abs, blockSize, originA
     const srcH = pixbuf.get_height();
     const target = new Uint8Array(source);
 
-    _forEachBlockInRect({ x: cxAbs, y: cyAbs, w: cwAbs, h: chAbs }, blockSize, originAbsX, originAbsY, (x0, y0, x1, y1) => {
-        const px = x0 - regionAbs.x;
-        const py = y0 - regionAbs.y;
-        const color = _averageBlock(source, rowstride, nChannels, px, py, px + (x1 - x0), py + (y1 - y0), srcW, srcH);
-        _fillBlock(target, rowstride, nChannels, px, py, px + (x1 - x0), py + (y1 - y0), color);
-    });
+    _forEachBlockInRect(
+        { x: cxAbs, y: cyAbs, w: cwAbs, h: chAbs },
+        blockSize,
+        originAbsX,
+        originAbsY,
+        (x0, y0, x1, y1) => {
+            const px = x0 - regionAbs.x;
+            const py = y0 - regionAbs.y;
+            const color = _averageBlock(
+                source,
+                rowstride,
+                nChannels,
+                px,
+                py,
+                px + (x1 - x0),
+                py + (y1 - y0),
+                srcW,
+                srcH,
+            );
+            _fillBlock(target, rowstride, nChannels, px, py, px + (x1 - x0), py + (y1 - y0), color);
+        },
+    );
 
     return _makePixbufFromData(target, pixbuf);
 }
 
-function _getAffectedPreviewSurface(pixbuf, regionAbs, pointsAbs, brushWidth, blockSize, originAbsX = 0, originAbsY = 0) {
+function _getAffectedPreviewSurface(
+    pixbuf,
+    regionAbs,
+    pointsAbs,
+    brushWidth,
+    blockSize,
+    originAbsX = 0,
+    originAbsY = 0,
+) {
     if (!pixbuf || !pointsAbs || pointsAbs.length < 2) return null;
 
     const width = pixbuf.get_width();
@@ -255,14 +305,30 @@ function _getAffectedRectPreviewSurface(pixbuf, regionAbs, blockSize, originAbsX
     const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, cw, ch);
     const ctx = new Cairo.Context(surface);
 
-    _forEachBlockInRect({ x: regionAbs.x, y: regionAbs.y, w: cw, h: ch }, blockSize, originAbsX, originAbsY, (x0, y0, x1, y1) => {
-        const px = x0 - regionAbs.x;
-        const py = y0 - regionAbs.y;
-        const [r, g, b] = _averageBlock(source, rowstride, nChannels, px, py, px + (x1 - x0), py + (y1 - y0), width, height);
-        ctx.setSourceRGBA(r / 255, g / 255, b / 255, 1.0);
-        ctx.rectangle(px, py, x1 - x0, y1 - y0);
-        ctx.fill();
-    });
+    _forEachBlockInRect(
+        { x: regionAbs.x, y: regionAbs.y, w: cw, h: ch },
+        blockSize,
+        originAbsX,
+        originAbsY,
+        (x0, y0, x1, y1) => {
+            const px = x0 - regionAbs.x;
+            const py = y0 - regionAbs.y;
+            const [r, g, b] = _averageBlock(
+                source,
+                rowstride,
+                nChannels,
+                px,
+                py,
+                px + (x1 - x0),
+                py + (y1 - y0),
+                width,
+                height,
+            );
+            ctx.setSourceRGBA(r / 255, g / 255, b / 255, 1.0);
+            ctx.rectangle(px, py, x1 - x0, y1 - y0);
+            ctx.fill();
+        },
+    );
 
     ctx.$dispose();
     return surface;
@@ -290,12 +356,13 @@ function _computeBlurRegionBounds(stroke) {
     }
 
     const pad = Math.ceil(lw / 2 + blockSize / 2);
-    const xs = pts.map(p => p.x);
-    const ys = pts.map(p => p.y);
+    const xs = pts.map((p) => p.x);
+    const ys = pts.map((p) => p.y);
     const rx = Math.round(Math.max(0, Math.min(...xs) - pad));
     const ry = Math.round(Math.max(0, Math.min(...ys) - pad));
     return {
-        x: rx, y: ry,
+        x: rx,
+        y: ry,
         w: Math.max(1, Math.round(Math.max(...xs) + pad - rx)),
         h: Math.max(1, Math.round(Math.max(...ys) + pad - ry)),
     };
@@ -314,8 +381,12 @@ export class BlurSelector {
         this._previewCache = { pixbuf: null };
     }
 
-    get mode() { return this._mode; }
-    get blockSize() { return this._blockSize; }
+    get mode() {
+        return this._mode;
+    }
+    get blockSize() {
+        return this._blockSize;
+    }
 
     setMode(mode) {
         if (this._mode === mode) return;
@@ -448,7 +519,13 @@ export class BlurSelector {
 
         if (mode === 'selection') {
             if (regionAbs.w > 0 && regionAbs.h > 0) {
-                const surface = _getAffectedRectPreviewSurface(pixbuf, regionAbs, Math.round(blockSize * ds), originAbs.x, originAbs.y);
+                const surface = _getAffectedRectPreviewSurface(
+                    pixbuf,
+                    regionAbs,
+                    Math.round(blockSize * ds),
+                    originAbs.x,
+                    originAbs.y,
+                );
                 if (surface) {
                     stroke.previewSurface = surface;
                     stroke.previewScale = ds;
@@ -456,8 +533,16 @@ export class BlurSelector {
                 }
             }
         } else {
-            const pointsAbs = stroke.stagePoints.map(p => ({ x: p.x * ds, y: p.y * ds }));
-            const surface = _getAffectedPreviewSurface(pixbuf, regionAbs, pointsAbs, lw * ds, Math.round(blockSize * ds), originAbs.x, originAbs.y);
+            const pointsAbs = stroke.stagePoints.map((p) => ({ x: p.x * ds, y: p.y * ds }));
+            const surface = _getAffectedPreviewSurface(
+                pixbuf,
+                regionAbs,
+                pointsAbs,
+                lw * ds,
+                Math.round(blockSize * ds),
+                originAbs.x,
+                originAbs.y,
+            );
             if (surface) {
                 stroke.previewSurface = surface;
                 stroke.previewScale = ds;
@@ -492,7 +577,9 @@ export class BlurSelector {
 
         _forEachBlockInRect(
             { x: regionAbs.x, y: regionAbs.y, w: pixW, h: pixH },
-            Math.round(blockSize * ds), originAbs.x, originAbs.y,
+            Math.round(blockSize * ds),
+            originAbs.x,
+            originAbs.y,
             (x0, y0, x1, y1) => {
                 const px = x0 - regionAbs.x;
                 const py = y0 - regionAbs.y;
@@ -506,7 +593,7 @@ export class BlurSelector {
                 ctx.setSourceRGBA(color[0] / 255, color[1] / 255, color[2] / 255, 1.0);
                 ctx.rectangle(px / ds, py / ds, pw / ds, ph / ds);
                 ctx.fill();
-            }
+            },
         );
 
         if (mode === 'brush' && stroke.stagePoints && stroke.stagePoints.length >= 2) {
@@ -528,9 +615,7 @@ export class BlurSelector {
     }
 
     refreshPreview(canvas) {
-        let stroke = canvas._currentStroke?.toolId === 'blur'
-            ? canvas._currentStroke
-            : null;
+        let stroke = canvas._currentStroke?.toolId === 'blur' ? canvas._currentStroke : null;
         const isCurrent = !!stroke;
         if (!stroke) {
             const sts = canvas._strokes;
@@ -546,8 +631,7 @@ export class BlurSelector {
         this.onStrokePreview(canvas, stroke);
 
         if (!isCurrent && this._previewCache.surface) {
-            if (stroke.previewSurface)
-                stroke.previewSurface.finish();
+            if (stroke.previewSurface) stroke.previewSurface.finish();
             stroke.previewSurface = this._previewCache.surface;
             stroke.previewOrigin = this._previewCache.origin;
             stroke.previewScale = 1;
@@ -566,14 +650,15 @@ export class BlurSelector {
         for (const stroke of strokes) {
             const sp = stroke.stagePoints;
             if (sp.length < 2) continue;
-            const pointsAbs = sp.map(p => ({
+            const pointsAbs = sp.map((p) => ({
                 x: (p.x / stageScale - selX) * scaleX,
                 y: (p.y / stageScale - selY) * scaleY,
             }));
             const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
             const blockSize = stroke.blockSize || 16;
             const regionAbs = {
-                x: 0, y: 0,
+                x: 0,
+                y: 0,
                 w: result.get_width(),
                 h: result.get_height(),
             };
@@ -584,10 +669,26 @@ export class BlurSelector {
 
             if ((stroke.blurMode || 'brush') === 'selection') {
                 if (pointsAbs.length >= 2) {
-                    result = _pixelatePixbufRect(result, regionAbs, pointsAbs[0], pointsAbs[pointsAbs.length - 1], blockSize, originAbs.x, originAbs.y);
+                    result = _pixelatePixbufRect(
+                        result,
+                        regionAbs,
+                        pointsAbs[0],
+                        pointsAbs[pointsAbs.length - 1],
+                        blockSize,
+                        originAbs.x,
+                        originAbs.y,
+                    );
                 }
             } else {
-                result = _pixelatePixbufAlongStroke(result, regionAbs, pointsAbs, lw, blockSize, originAbs.x, originAbs.y);
+                result = _pixelatePixbufAlongStroke(
+                    result,
+                    regionAbs,
+                    pointsAbs,
+                    lw,
+                    blockSize,
+                    originAbs.x,
+                    originAbs.y,
+                );
             }
 
             if (!result) return null;

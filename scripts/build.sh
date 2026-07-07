@@ -6,7 +6,7 @@
 # Copyright (C) 2025 Alexander Vanhee
 
 set -e
-cd "$( cd "$( dirname "$0" )" && pwd )"
+cd "$(cd "$(dirname "$0")" && pwd)/.."
 
 echo "Packing extension..."
 gnome-extensions pack src \

@@ -28,21 +28,12 @@ export class GradiaSettings {
         const entries = [];
 
         for (const [toolId, { color, lineWidth }] of map) {
-            const tuple = GLib.Variant.new_tuple([
-                GLib.Variant.new_string(color),
-                GLib.Variant.new_double(lineWidth),
-            ]);
-            const entry = GLib.Variant.new_dict_entry(
-                GLib.Variant.new_string(toolId),
-                tuple
-            );
+            const tuple = GLib.Variant.new_tuple([GLib.Variant.new_string(color), GLib.Variant.new_double(lineWidth)]);
+            const entry = GLib.Variant.new_dict_entry(GLib.Variant.new_string(toolId), tuple);
             entries.push(entry);
         }
 
-        const variant = GLib.Variant.new_array(
-            GLib.VariantType.new('{s(sd)}'),
-            entries
-        );
+        const variant = GLib.Variant.new_array(GLib.VariantType.new('{s(sd)}'), entries);
 
         this._settings.set_value('tool-settings', variant);
     }

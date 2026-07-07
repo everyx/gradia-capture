@@ -2,9 +2,7 @@
 
 import { InjectionManager } from 'resource:///org/gnome/shell/extensions/extension.js';
 
-const HANDLE_NAMES = [
-  '_topLeftHandle', '_topRightHandle', '_bottomLeftHandle', '_bottomRightHandle'
-];
+const HANDLE_NAMES = ['_topLeftHandle', '_topRightHandle', '_bottomLeftHandle', '_bottomRightHandle'];
 
 export class SelectionClearer {
     constructor() {
@@ -23,7 +21,7 @@ export class SelectionClearer {
         this._handleOpacities = new Map();
 
         if (selector.reset) {
-            this._injectionManager.overrideMethod(selector, 'reset', originalReset => (...args) => {
+            this._injectionManager.overrideMethod(selector, 'reset', (originalReset) => (...args) => {
                 const result = originalReset.apply(selector, args);
                 this._clearSelection(selector);
                 return result;
@@ -41,8 +39,7 @@ export class SelectionClearer {
         const selector = this._selector;
         this._selector = null;
 
-        if (!selector)
-            return;
+        if (!selector) return;
 
         if (this._dragStartedId) {
             selector.disconnect(this._dragStartedId);
@@ -50,20 +47,20 @@ export class SelectionClearer {
         }
 
         const rect = this._getRect(selector);
-        if (rect && this._selectionRectOpacity !== null)
-            rect.opacity = this._selectionRectOpacity;
+        if (rect && this._selectionRectOpacity !== null) rect.opacity = this._selectionRectOpacity;
         this._selectionRectOpacity = null;
 
         for (const name of HANDLE_NAMES) {
             const actor = selector[name];
             const original = this._handleOpacities?.get(name);
-            if (actor && original !== undefined)
-                actor.opacity = original;
+            if (actor && original !== undefined) actor.opacity = original;
         }
         this._handleOpacities = null;
     }
 
-    get isPatched() { return !!this._selector; }
+    get isPatched() {
+        return !!this._selector;
+    }
 
     setHandlesVisible(visible) {
         const selector = this._selector;
@@ -72,13 +69,11 @@ export class SelectionClearer {
             const actor = selector[name];
             if (!actor) continue;
             if (!visible) {
-                if (!this._handleOpacities.has(name))
-                    this._handleOpacities.set(name, actor.opacity);
+                if (!this._handleOpacities.has(name)) this._handleOpacities.set(name, actor.opacity);
                 actor.opacity = 0;
             } else {
                 const original = this._handleOpacities?.get(name);
-                if (original !== undefined)
-                    actor.opacity = original;
+                if (original !== undefined) actor.opacity = original;
             }
         }
     }
@@ -92,29 +87,25 @@ export class SelectionClearer {
         for (const name of HANDLE_NAMES) {
             const actor = selector[name];
             if (!actor) continue;
-            if (!this._handleOpacities.has(name))
-                this._handleOpacities.set(name, actor.opacity);
+            if (!this._handleOpacities.has(name)) this._handleOpacities.set(name, actor.opacity);
             actor.opacity = 0;
         }
 
         const rect = this._getRect(selector);
         if (rect) {
-            if (this._selectionRectOpacity === null)
-                this._selectionRectOpacity = rect.opacity;
+            if (this._selectionRectOpacity === null) this._selectionRectOpacity = rect.opacity;
             rect.opacity = 0;
         }
     }
 
     _revealSelection(selector) {
         const rect = this._getRect(selector);
-        if (rect && this._selectionRectOpacity !== null)
-            rect.opacity = this._selectionRectOpacity;
+        if (rect && this._selectionRectOpacity !== null) rect.opacity = this._selectionRectOpacity;
 
         for (const name of HANDLE_NAMES) {
             const actor = selector[name];
             const original = this._handleOpacities?.get(name);
-            if (actor && original !== undefined)
-                actor.opacity = original;
+            if (actor && original !== undefined) actor.opacity = original;
         }
     }
 

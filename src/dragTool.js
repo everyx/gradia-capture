@@ -31,8 +31,7 @@ export class DragTool {
     }
 
     motion(stageX, stageY) {
-        if (!this.active || !this._canvas)
-            return;
+        if (!this.active || !this._canvas) return;
 
         const dx = stageX - this._startX;
         const dy = stageY - this._startY;

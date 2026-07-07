@@ -14,7 +14,10 @@ function hexToRgb(hex) {
 }
 
 function rectBounds(pts, pad) {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
     for (const p of pts) {
         if (p.x < minX) minX = p.x;
         if (p.y < minY) minY = p.y;
@@ -29,7 +32,7 @@ function rectHit(bounds, sx, sy) {
 }
 
 function makeStrokeBounds(padFn) {
-    return function(stroke) {
+    return function (stroke) {
         return rectBounds(stroke.stagePoints, padFn(stroke));
     };
 }
@@ -44,8 +47,7 @@ let _patternCache = null;
 
 function createPixelatePattern(blockSize) {
     const size = blockSize || PIXELATE_BLOCK_SIZE;
-    if (_patternCache && _patternCache._size === size)
-        return _patternCache;
+    if (_patternCache && _patternCache._size === size) return _patternCache;
 
     const ts = size * 2;
     const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, ts, ts);
@@ -98,7 +100,7 @@ export const TOOLS = [
         keybindings: [Clutter.KEY_3, Clutter.KEY_quotedbl, Clutter.KEY_f],
         isDrawing: true,
         beginStroke: () => ({}),
-        bounds: makeStrokeBounds(s => SELECTION_PADDING + (s.strokeWidth ?? 4)),
+        bounds: makeStrokeBounds((s) => SELECTION_PADDING + (s.strokeWidth ?? 4)),
         hitTest: standardHitTest,
         render(cr, stroke, lineWidth) {
             if (stroke.points.length < 2) return;
@@ -106,8 +108,7 @@ export const TOOLS = [
             cr.setSourceRGBA(r, g, b, 1.0);
             cr.setLineWidth(lineWidth);
             cr.moveTo(stroke.points[0].x, stroke.points[0].y);
-            for (let i = 1; i < stroke.points.length; i++)
-                cr.lineTo(stroke.points[i].x, stroke.points[i].y);
+            for (let i = 1; i < stroke.points.length; i++) cr.lineTo(stroke.points[i].x, stroke.points[i].y);
             cr.stroke();
         },
     },
@@ -118,14 +119,15 @@ export const TOOLS = [
         keybindings: [Clutter.KEY_4, Clutter.KEY_apostrophe, Clutter.KEY_r],
         isDrawing: true,
         beginStroke: () => ({}),
-        bounds: makeStrokeBounds(s => SELECTION_PADDING + (s.strokeWidth ?? 4)),
+        bounds: makeStrokeBounds((s) => SELECTION_PADDING + (s.strokeWidth ?? 4)),
         hitTest: standardHitTest,
         render(cr, stroke, lineWidth) {
             if (stroke.points.length < 2) return;
             const { r, g, b } = hexToRgb(stroke.color);
             cr.setSourceRGBA(r, g, b, 1.0);
             cr.setLineWidth(lineWidth);
-            const p0 = stroke.points[0], p1 = stroke.points[stroke.points.length - 1];
+            const p0 = stroke.points[0],
+                p1 = stroke.points[stroke.points.length - 1];
             cr.rectangle(Math.min(p0.x, p1.x), Math.min(p0.y, p1.y), Math.abs(p1.x - p0.x), Math.abs(p1.y - p0.y));
             cr.stroke();
         },
@@ -143,7 +145,8 @@ export const TOOLS = [
             if (stroke.points.length < 2) return;
             const { r, g, b } = hexToRgb(stroke.color);
             cr.setSourceRGBA(r, g, b, 1.0);
-            const p0 = stroke.points[0], p1 = stroke.points[stroke.points.length - 1];
+            const p0 = stroke.points[0],
+                p1 = stroke.points[stroke.points.length - 1];
             cr.rectangle(Math.min(p0.x, p1.x), Math.min(p0.y, p1.y), Math.abs(p1.x - p0.x), Math.abs(p1.y - p0.y));
             cr.fill();
         },
@@ -155,7 +158,7 @@ export const TOOLS = [
         keybindings: [Clutter.KEY_6, Clutter.KEY_section, Clutter.KEY_h],
         isDrawing: true,
         beginStroke: () => ({}),
-        bounds: makeStrokeBounds(s => SELECTION_PADDING + (s.strokeWidth ?? 4) * 4),
+        bounds: makeStrokeBounds((s) => SELECTION_PADDING + (s.strokeWidth ?? 4) * 4),
         hitTest: standardHitTest,
         render(cr, stroke, lineWidth) {
             if (stroke.points.length < 2) return;
@@ -164,8 +167,7 @@ export const TOOLS = [
             cr.setLineWidth(lineWidth * 4);
             cr.setLineCap(Cairo.LineCap.SQUARE);
             cr.moveTo(stroke.points[0].x, stroke.points[0].y);
-            for (let i = 1; i < stroke.points.length; i++)
-                cr.lineTo(stroke.points[i].x, stroke.points[i].y);
+            for (let i = 1; i < stroke.points.length; i++) cr.lineTo(stroke.points[i].x, stroke.points[i].y);
             cr.stroke();
         },
     },
@@ -176,7 +178,7 @@ export const TOOLS = [
         keybindings: [Clutter.KEY_7, Clutter.KEY_egrave, Clutter.KEY_a],
         isDrawing: true,
         beginStroke: () => ({}),
-        bounds: makeStrokeBounds(s => SELECTION_PADDING + (s.strokeWidth ?? 4) * 2),
+        bounds: makeStrokeBounds((s) => SELECTION_PADDING + (s.strokeWidth ?? 4) * 2),
         hitTest: standardHitTest,
         render(cr, stroke, lineWidth) {
             if (stroke.points.length < 2) return;
@@ -185,7 +187,8 @@ export const TOOLS = [
             cr.setLineWidth(lineWidth);
             cr.setLineCap(Cairo.LineCap.ROUND);
             cr.setLineJoin(Cairo.LineJoin.ROUND);
-            const p0 = stroke.points[0], p1 = stroke.points[stroke.points.length - 1];
+            const p0 = stroke.points[0],
+                p1 = stroke.points[stroke.points.length - 1];
             cr.moveTo(p0.x, p0.y);
             cr.lineTo(p1.x, p1.y);
             cr.stroke();
@@ -308,7 +311,7 @@ export const TOOLS = [
         keybindings: [Clutter.KEY_0, Clutter.KEY_agrave, Clutter.KEY_m],
         isDrawing: true,
         beginStroke: () => ({}),
-        bounds: makeStrokeBounds(s => SELECTION_PADDING + (s.strokeWidth ?? 8) / 2),
+        bounds: makeStrokeBounds((s) => SELECTION_PADDING + (s.strokeWidth ?? 8) / 2),
         hitTest: standardHitTest,
         render(cr, stroke, lineWidth) {
             if (stroke.points.length < 2) return;
@@ -318,7 +321,8 @@ export const TOOLS = [
             cr.setSource(pattern);
 
             if (stroke.blurMode === 'selection') {
-                const p0 = stroke.points[0], p1 = stroke.points[stroke.points.length - 1];
+                const p0 = stroke.points[0],
+                    p1 = stroke.points[stroke.points.length - 1];
                 cr.rectangle(Math.min(p0.x, p1.x), Math.min(p0.y, p1.y), Math.abs(p1.x - p0.x), Math.abs(p1.y - p0.y));
                 cr.fill();
             } else {
@@ -326,8 +330,7 @@ export const TOOLS = [
                 cr.setLineCap(Cairo.LineCap.ROUND);
                 cr.setLineJoin(Cairo.LineJoin.ROUND);
                 cr.moveTo(stroke.points[0].x, stroke.points[0].y);
-                for (let i = 1; i < stroke.points.length; i++)
-                    cr.lineTo(stroke.points[i].x, stroke.points[i].y);
+                for (let i = 1; i < stroke.points.length; i++) cr.lineTo(stroke.points[i].x, stroke.points[i].y);
                 cr.stroke();
             }
 
@@ -336,10 +339,8 @@ export const TOOLS = [
     },
 ];
 
-export const TOOL_SHORTCUTS = Object.fromEntries(
-    TOOLS.flatMap(t => t.keybindings.map(key => [key, t.id]))
-);
+export const TOOL_SHORTCUTS = Object.fromEntries(TOOLS.flatMap((t) => t.keybindings.map((key) => [key, t.id])));
 
 export function getToolDef(id) {
-    return TOOLS.find(t => t.id === id) ?? null;
+    return TOOLS.find((t) => t.id === id) ?? null;
 }

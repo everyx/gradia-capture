@@ -3,7 +3,12 @@ import GLib from 'gi://GLib';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import { isGradiaInstalled, launchGradiaForScreenshot, openContainingFolder, openFileInDefaultApp } from './gradiaIntegration.js';
+import {
+    isGradiaInstalled,
+    launchGradiaForScreenshot,
+    openContainingFolder,
+    openFileInDefaultApp,
+} from './gradiaIntegration.js';
 
 const TOAST_WIDTH = 250;
 const TOAST_MARGIN = 18;
@@ -25,8 +30,7 @@ class ScreenshotToast {
         this._signalIds = [];
 
         let thumbH = 140;
-        if (imgW > 0 && imgH > 0)
-            thumbH = Math.round(TOAST_WIDTH * (imgH / imgW));
+        if (imgW > 0 && imgH > 0) thumbH = Math.round(TOAST_WIDTH * (imgH / imgW));
 
         thumbH = Math.max(MIN_THUMB_H, Math.min(MAX_THUMB_H, thumbH));
 
@@ -34,10 +38,7 @@ class ScreenshotToast {
             reactive: true,
             track_hover: true,
         });
-        this._outerContainer.set_size(
-            TOAST_WIDTH + CLOSE_BUTTON_OFFSET,
-            thumbH + CLOSE_BUTTON_OFFSET
-        );
+        this._outerContainer.set_size(TOAST_WIDTH + CLOSE_BUTTON_OFFSET, thumbH + CLOSE_BUTTON_OFFSET);
 
         this._shadowLayer = new St.Widget({
             style: `
@@ -82,9 +83,7 @@ class ScreenshotToast {
             });
             img.set_position(offX, offY);
             img.set_content(imageContent);
-            img.set_content_scaling_filters(
-                Clutter.ScalingFilter.TRILINEAR,
-                Clutter.ScalingFilter.LINEAR);
+            img.set_content_scaling_filters(Clutter.ScalingFilter.TRILINEAR, Clutter.ScalingFilter.LINEAR);
             this._contentLayer.add_child(img);
         }
 
@@ -102,15 +101,21 @@ class ScreenshotToast {
 
             this._contentLayer.add_child(this._editButton);
 
-            this._signalIds.push([this._editButton, this._editButton.connect('realize', () => {
-                this._editButton.set_size(CLOSE_BUTTON_SIZE, CLOSE_BUTTON_SIZE);
-                this._editButton.set_position(btnMargin, thumbH - CLOSE_BUTTON_SIZE - btnMargin);
-            })]);
+            this._signalIds.push([
+                this._editButton,
+                this._editButton.connect('realize', () => {
+                    this._editButton.set_size(CLOSE_BUTTON_SIZE, CLOSE_BUTTON_SIZE);
+                    this._editButton.set_position(btnMargin, thumbH - CLOSE_BUTTON_SIZE - btnMargin);
+                }),
+            ]);
 
-            this._signalIds.push([this._editButton, this._editButton.connect('clicked', () => {
-                launchGradiaForScreenshot(file);
-                this.destroy();
-            })]);
+            this._signalIds.push([
+                this._editButton,
+                this._editButton.connect('clicked', () => {
+                    launchGradiaForScreenshot(file);
+                    this.destroy();
+                }),
+            ]);
         }
 
         if (file) {
@@ -125,15 +130,24 @@ class ScreenshotToast {
 
             this._contentLayer.add_child(this._openFolderButton);
 
-            this._signalIds.push([this._openFolderButton, this._openFolderButton.connect('realize', () => {
-                this._openFolderButton.set_size(CLOSE_BUTTON_SIZE, CLOSE_BUTTON_SIZE);
-                this._openFolderButton.set_position(TOAST_WIDTH - CLOSE_BUTTON_SIZE - btnMargin, thumbH - CLOSE_BUTTON_SIZE - btnMargin);
-            })]);
+            this._signalIds.push([
+                this._openFolderButton,
+                this._openFolderButton.connect('realize', () => {
+                    this._openFolderButton.set_size(CLOSE_BUTTON_SIZE, CLOSE_BUTTON_SIZE);
+                    this._openFolderButton.set_position(
+                        TOAST_WIDTH - CLOSE_BUTTON_SIZE - btnMargin,
+                        thumbH - CLOSE_BUTTON_SIZE - btnMargin,
+                    );
+                }),
+            ]);
 
-            this._signalIds.push([this._openFolderButton, this._openFolderButton.connect('clicked', () => {
-                openContainingFolder(file);
-                this.destroy();
-            })]);
+            this._signalIds.push([
+                this._openFolderButton,
+                this._openFolderButton.connect('clicked', () => {
+                    openContainingFolder(file);
+                    this.destroy();
+                }),
+            ]);
         }
 
         if (showCopied) {
@@ -156,21 +170,26 @@ class ScreenshotToast {
             this._copiedLabel.add_child(label);
 
             this._contentLayer.add_child(this._copiedLabel);
-            this._signalIds.push([this._copiedLabel, this._copiedLabel.connect('realize', () => {
-                const [, naturalW] = this._copiedLabel.get_preferred_width(-1);
-                const [, naturalH] = this._copiedLabel.get_preferred_height(-1);
-                this._copiedLabel.set_position(
-                    Math.round((TOAST_WIDTH - naturalW) / 2),
-                    Math.round((thumbH - naturalH) / 2)
-                );
-            })]);
+            this._signalIds.push([
+                this._copiedLabel,
+                this._copiedLabel.connect('realize', () => {
+                    const [, naturalW] = this._copiedLabel.get_preferred_width(-1);
+                    const [, naturalH] = this._copiedLabel.get_preferred_height(-1);
+                    this._copiedLabel.set_position(
+                        Math.round((TOAST_WIDTH - naturalW) / 2),
+                        Math.round((thumbH - naturalH) / 2),
+                    );
+                }),
+            ]);
         }
 
-        this._signalIds.push([this._mainButton, this._mainButton.connect('clicked', () => {
-            if (this._file)
-                openFileInDefaultApp(this._file);
-            this.destroy();
-        })]);
+        this._signalIds.push([
+            this._mainButton,
+            this._mainButton.connect('clicked', () => {
+                if (this._file) openFileInDefaultApp(this._file);
+                this.destroy();
+            }),
+        ]);
 
         const borderOverlay = new St.Widget({
             style_class: 'gradia-toast-border',
@@ -192,12 +211,13 @@ class ScreenshotToast {
         this._signalIds.push([this._closeButton, this._closeButton.connect('clicked', () => this.destroy())]);
         this._outerContainer.add_child(this._closeButton);
 
-        this._signalIds.push([this._outerContainer, this._outerContainer.connect('notify::hover', () => {
-            if (this._outerContainer.hover)
-                this._clearTimeout();
-            else
-                this._scheduleHide();
-        })]);
+        this._signalIds.push([
+            this._outerContainer,
+            this._outerContainer.connect('notify::hover', () => {
+                if (this._outerContainer.hover) this._clearTimeout();
+                else this._scheduleHide();
+            }),
+        ]);
 
         this._addToStage();
         this._scheduleHide();
@@ -207,8 +227,7 @@ class ScreenshotToast {
         Main.layoutManager.addChrome(this._outerContainer);
 
         const monitor = Main.layoutManager.primaryMonitor;
-        if (!monitor)
-            return;
+        if (!monitor) return;
 
         const targetX = monitor.x + monitor.width - TOAST_WIDTH - TOAST_MARGIN - CLOSE_BUTTON_OFFSET;
         const targetY = monitor.y + monitor.height - this._outerContainer.height - TOAST_MARGIN - CLOSE_BUTTON_OFFSET;
@@ -228,14 +247,11 @@ class ScreenshotToast {
 
     _scheduleHide() {
         this._clearTimeout();
-        this._timeoutId = GLib.timeout_add(
-            GLib.PRIORITY_DEFAULT,
-            AUTO_HIDE_TIMEOUT,
-            () => {
-                this._timeoutId = 0;
-                this.destroy();
-                return GLib.SOURCE_REMOVE;
-            });
+        this._timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, AUTO_HIDE_TIMEOUT, () => {
+            this._timeoutId = 0;
+            this.destroy();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _clearTimeout() {
@@ -246,14 +262,12 @@ class ScreenshotToast {
     }
 
     destroy() {
-        if (this._destroyed)
-            return;
+        if (this._destroyed) return;
         this._destroyed = true;
 
         this._clearTimeout();
 
-        for (const [obj, id] of this._signalIds)
-            obj.disconnect(id);
+        for (const [obj, id] of this._signalIds) obj.disconnect(id);
         this._signalIds = [];
 
         this._outerContainer.ease({
@@ -268,8 +282,7 @@ class ScreenshotToast {
             },
         });
 
-        if (_activeToast === this)
-            _activeToast = null;
+        if (_activeToast === this) _activeToast = null;
     }
 }
 

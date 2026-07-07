@@ -53,8 +53,7 @@ export class ResolutionOverlay {
     }
 
     _fadeIn() {
-        if (this._visible)
-            return;
+        if (this._visible) return;
         this._visible = true;
         this._label.remove_all_transitions();
         this._label.visible = true;
@@ -66,8 +65,7 @@ export class ResolutionOverlay {
     }
 
     _fadeOut() {
-        if (!this._visible)
-            return;
+        if (!this._visible) return;
         this._visible = false;
         this._label.remove_all_transitions();
         this._label.ease({
@@ -75,16 +73,14 @@ export class ResolutionOverlay {
             duration: FADE_DURATION,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             onComplete: () => {
-                if (!this._visible)
-                    this._label.visible = false;
+                if (!this._visible) this._label.visible = false;
             },
         });
     }
 
     _update() {
         const selector = Main.screenshotUI?._areaSelector;
-        if (!selector)
-            return;
+        if (!selector) return;
 
         const [x, y, w, h] = selector.getGeometry();
 
@@ -93,30 +89,22 @@ export class ResolutionOverlay {
             return;
         }
 
-        if (!this._visible)
-            this._fadeIn();
+        if (!this._visible) this._fadeIn();
 
         const scale = this._getMaxScale();
         const physW = Math.round(w * scale);
         const physH = Math.round(h * scale);
 
-        const [ok, localX, localY] = this._primaryBin.transform_stage_point(
-            x + w / 2,
-            y + h / 2,
-        );
+        const [ok, localX, localY] = this._primaryBin.transform_stage_point(x + w / 2, y + h / 2);
 
-        if (!ok)
-            return;
+        if (!ok) return;
 
         this._label.set_text(`${physW}×${physH}`);
 
         const [, natW] = this._label.get_preferred_width(-1);
         const [, natH] = this._label.get_preferred_height(-1);
 
-        this._label.set_position(
-            Math.round(localX - natW / 2),
-            Math.round(localY - natH / 2),
-        );
+        this._label.set_position(Math.round(localX - natW / 2), Math.round(localY - natH / 2));
     }
 
     destroy() {

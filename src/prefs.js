@@ -7,7 +7,7 @@ import GdkPixbuf from 'gi://GdkPixbuf';
 import { ExtensionPreferences } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 const FORMAT_INFO = [
-    { id: 'png',  label: 'PNG'  },
+    { id: 'png', label: 'PNG' },
     { id: 'webp', label: 'WebP' },
     { id: 'avif', label: 'AVIF' },
 ];
@@ -38,7 +38,7 @@ const AboutPage = GObject.registerClass(
             Gtk.StyleContext.add_provider_for_display(
                 Gdk.Display.get_default(),
                 cssProvider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
             );
         }
 
@@ -63,7 +63,7 @@ const AboutPage = GObject.registerClass(
                 label: 'Support This Extension',
                 halign: Gtk.Align.START,
                 css_classes: ['title-4'],
-                wrap: true
+                wrap: true,
             });
 
             const subtitle = new Gtk.Label({
@@ -93,11 +93,11 @@ const AboutPage = GObject.registerClass(
 
             const availableIds = new Set(
                 GdkPixbuf.Pixbuf.get_formats()
-                    .filter(f => f.is_writable())
-                    .map(f => f.get_name())
+                    .filter((f) => f.is_writable())
+                    .map((f) => f.get_name()),
             );
 
-            const formats = FORMAT_INFO.filter(f => availableIds.has(f.id));
+            const formats = FORMAT_INFO.filter((f) => availableIds.has(f.id));
 
             const formatRow = new Adw.ComboRow({
                 title: 'File Format',
@@ -105,19 +105,17 @@ const AboutPage = GObject.registerClass(
             });
 
             const model = new Gtk.StringList();
-            for (const fmt of formats)
-                model.append(fmt.label);
+            for (const fmt of formats) model.append(fmt.label);
 
             formatRow.set_model(model);
 
             const currentFormat = this._settings.get_string('screenshot-format');
-            const currentIndex = formats.findIndex(f => f.id === currentFormat);
-            formatRow.set_selected(currentIndex >= 0 ? currentIndex : formats.findIndex(f => f.id === 'png'));
+            const currentIndex = formats.findIndex((f) => f.id === currentFormat);
+            formatRow.set_selected(currentIndex >= 0 ? currentIndex : formats.findIndex((f) => f.id === 'png'));
 
             formatRow.connect('notify::selected', () => {
                 const selected = formats[formatRow.get_selected()];
-                if (selected)
-                    this._settings.set_string('screenshot-format', selected.id);
+                if (selected) this._settings.set_string('screenshot-format', selected.id);
             });
 
             const clearSelectionRow = new Adw.SwitchRow({
@@ -132,7 +130,12 @@ const AboutPage = GObject.registerClass(
                 subtitle: 'Also capture parent windows when a transient window is selected',
             });
 
-            this._settings.bind('composite-window-capture', compositeWindowRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+            this._settings.bind(
+                'composite-window-capture',
+                compositeWindowRow,
+                'active',
+                Gio.SettingsBindFlags.DEFAULT,
+            );
 
             const soundRow = new Adw.SwitchRow({
                 title: 'Sound',
@@ -147,7 +150,8 @@ const AboutPage = GObject.registerClass(
             group.add(soundRow);
             this.add(group);
         }
-    });
+    },
+);
 
 const ShortcutsPage = GObject.registerClass(
     class ShortcutsPage extends Adw.PreferencesPage {
@@ -158,29 +162,29 @@ const ShortcutsPage = GObject.registerClass(
             });
 
             this._addGroup('Screenshot Mode', [
-                ['Take Screenshot / Capture',  'Return space'],
-                ['Copy to Clipboard',          '<Control>c'],
-                ['Save As…',                   '<Control>s'],
-                ['Extract Text (OCR)',         '<Control>e'],
-                ['Area Selection',             's'],
-                ['Screen Selection',           'c'],
-                ['Window Selection',           'w'],
-                ['Toggle Pointer Visibility',  'p'],
-                ['Toggle Screen Recording',    'v'],
+                ['Take Screenshot / Capture', 'Return space'],
+                ['Copy to Clipboard', '<Control>c'],
+                ['Save As…', '<Control>s'],
+                ['Extract Text (OCR)', '<Control>e'],
+                ['Area Selection', 's'],
+                ['Screen Selection', 'c'],
+                ['Window Selection', 'w'],
+                ['Toggle Pointer Visibility', 'p'],
+                ['Toggle Screen Recording', 'v'],
             ]);
 
             this._addGroup('Annotations', [
-                ['Undo Last Stroke',     '<Control>z'],
-                ['Delete Selected',      'Delete BackSpace'],
-                ['Crop Tool',            '1 q'],
-                ['Drag Tool',            '2 d'],
-                ['Freehand Tool',        '3 f'],
-                ['Rectangle Tool',       '4 r'],
+                ['Undo Last Stroke', '<Control>z'],
+                ['Delete Selected', 'Delete BackSpace'],
+                ['Crop Tool', '1 q'],
+                ['Drag Tool', '2 d'],
+                ['Freehand Tool', '3 f'],
+                ['Rectangle Tool', '4 r'],
                 ['Solid Rectangle Tool', '5 b'],
-                ['Highlighter Tool',     '6 h'],
-                ['Arrow Tool',           '7 a'],
-                ['Text Tool',            '8 t'],
-                ['Number Stamp Tool',    '9 n'],
+                ['Highlighter Tool', '6 h'],
+                ['Arrow Tool', '7 a'],
+                ['Text Tool', '8 t'],
+                ['Number Stamp Tool', '9 n'],
             ]);
 
             this._addSystemKeybindingsGroup();
@@ -188,8 +192,7 @@ const ShortcutsPage = GObject.registerClass(
 
         _addGroup(title, entries, note = null) {
             const group = new Adw.PreferencesGroup({ title });
-            if (note)
-                group.set_description(note);
+            if (note) group.set_description(note);
             for (const [label, accel] of entries) {
                 const row = new Adw.ActionRow({ title: label });
                 const shortcut = new Adw.ShortcutLabel({ accelerator: accel });
@@ -226,7 +229,8 @@ const ShortcutsPage = GObject.registerClass(
 
             this.add(group);
         }
-    });
+    },
+);
 
 export default class GradiaPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {

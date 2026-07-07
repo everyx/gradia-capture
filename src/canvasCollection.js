@@ -5,22 +5,36 @@ export class CanvasCollection {
         this._bins = [];
     }
 
-    get canvases() { return this._canvasList; }
-    get overlays() { return this._overlays; }
+    get canvases() {
+        return this._canvasList;
+    }
+    get overlays() {
+        return this._overlays;
+    }
 
-    get length() { return this._canvasList.length; }
-    getCanvas(i) { return this._canvasList[i]; }
-    getOverlay(i) { return this._overlays[i]; }
-    indexOfCanvas(canvas) { return this._canvasList.indexOf(canvas); }
+    get length() {
+        return this._canvasList.length;
+    }
+    getCanvas(i) {
+        return this._canvasList[i];
+    }
+    getOverlay(i) {
+        return this._overlays[i];
+    }
+    indexOfCanvas(canvas) {
+        return this._canvasList.indexOf(canvas);
+    }
 
-    forEachCanvas(fn) { this._canvasList.forEach(fn); }
-    forEachOverlay(fn) { this._overlays.forEach(fn); }
+    forEachCanvas(fn) {
+        this._canvasList.forEach(fn);
+    }
+    forEachOverlay(fn) {
+        this._overlays.forEach(fn);
+    }
 
     destroy() {
-        for (const o of this._overlays)
-            o.destroy();
-        for (const c of this._canvasList)
-            c.destroy();
+        for (const o of this._overlays) o.destroy();
+        for (const c of this._canvasList) c.destroy();
         this._overlays = [];
         this._canvasList = [];
         this._bins = [];
@@ -45,34 +59,31 @@ export class CanvasCollection {
 
     canvasForStagePoint(stageX, stageY) {
         for (let i = 0; i < this._bins.length; i++) {
-            if (this.binContainsStagePoint(this._bins[i], stageX, stageY))
-                return this._canvasList[i];
+            if (this.binContainsStagePoint(this._bins[i], stageX, stageY)) return this._canvasList[i];
         }
         return this._canvasList[0] ?? null;
     }
 
     getSelectedCanvasAndStroke() {
         for (const canvas of this._canvasList) {
-            if (canvas.selectedStroke)
-                return { canvas, stroke: canvas.selectedStroke };
+            if (canvas.selectedStroke) return { canvas, stroke: canvas.selectedStroke };
         }
         return null;
     }
 
     allCanvasesVisible() {
-        return this._canvasList.every(c => c.visible && c.opacity > 0);
+        return this._canvasList.every((c) => c.visible && c.opacity > 0);
     }
 
     clearSelections(exceptCanvas = null) {
         for (const canvas of this._canvasList) {
-            if (canvas !== exceptCanvas)
-                canvas.clearSelection();
+            if (canvas !== exceptCanvas) canvas.clearSelection();
         }
     }
 
     get strokeData() {
         const strokes = [];
-        this.forEachCanvas(c => {
+        this.forEachCanvas((c) => {
             for (const s of c.strokes) {
                 strokes.push({
                     color: s.color,
@@ -82,7 +93,7 @@ export class CanvasCollection {
                     text: s.text,
                     blurMode: s.blurMode,
                     blockSize: s.blockSize,
-                    stagePoints: s.stagePoints.map(p => ({ x: p.x, y: p.y })),
+                    stagePoints: s.stagePoints.map((p) => ({ x: p.x, y: p.y })),
                 });
             }
         });
@@ -95,8 +106,7 @@ export class CanvasCollection {
 
     get hasStrokes() {
         for (let i = 0; i < this._canvasList.length; i++) {
-            if (this._canvasList[i].hasStrokes())
-                return true;
+            if (this._canvasList[i].hasStrokes()) return true;
         }
         return false;
     }
@@ -125,7 +135,7 @@ export class CanvasCollection {
 
     clear() {
         this.clearSelections();
-        this.forEachCanvas(c => c.clear());
+        this.forEachCanvas((c) => c.clear());
     }
 
     deleteSelected() {

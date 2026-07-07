@@ -43,14 +43,12 @@ export class OcrSelector {
     }
 
     async activate() {
-        if (this._blockData)
-            return;
+        if (this._blockData) return;
 
         try {
             this._toolbar.setOcrProcessing();
 
-            for (const canvas of this._canvases)
-                canvas.hide();
+            for (const canvas of this._canvases) canvas.hide();
 
             const ctx = getCaptureContext();
             const originX = ctx.origin.x;
@@ -58,9 +56,8 @@ export class OcrSelector {
             let captureMonitor = null;
 
             if (ctx.mode === 'screen') {
-                const idx = Main.screenshotUI._screenSelectors?.findIndex(s => s.checked);
-                if (idx >= 0)
-                    captureMonitor = Main.layoutManager.monitors[idx];
+                const idx = Main.screenshotUI._screenSelectors?.findIndex((s) => s.checked);
+                if (idx >= 0) captureMonitor = Main.layoutManager.monitors[idx];
             }
 
             if (!captureMonitor)
@@ -70,7 +67,7 @@ export class OcrSelector {
                 try {
                     const iface = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
                     this._systemFont = iface.get_string('font-name');
-                } catch (e) {
+                } catch {
                     this._systemFont = 'Sans';
                 }
             }
@@ -83,8 +80,7 @@ export class OcrSelector {
                 scale = this._cacheResult.scale;
             } else {
                 const { file, scale: s } = await this._screenshotFn();
-                if (!file)
-                    throw new Error('Screenshot capture failed');
+                if (!file) throw new Error('Screenshot capture failed');
                 scale = s || 1;
                 blocks = await runRapidOcr(file, this._extensionPath);
                 this._cacheResult = { blocks, scale };
@@ -111,8 +107,7 @@ export class OcrSelector {
         }
         this._blockData = null;
         if (restoreCanvas) {
-            for (const canvas of this._canvases)
-                canvas.show();
+            for (const canvas of this._canvases) canvas.show();
         }
         this._toolbar.setOcrIdle();
     }
@@ -123,8 +118,7 @@ export class OcrSelector {
             return;
         }
         this._selectedSet.clear();
-        for (let i = 0; i < this._blockData.length; i++)
-            this._selectedSet.add(i);
+        for (let i = 0; i < this._blockData.length; i++) this._selectedSet.add(i);
         this._renderHighlights();
     }
 
@@ -134,15 +128,14 @@ export class OcrSelector {
             return;
         }
         const indices = [...this._selectedSet].sort((a, b) => a - b);
-        const blocks = indices.map(i => this._blockData[i]);
+        const blocks = indices.map((i) => this._blockData[i]);
 
         const lines = [];
         let cur = [blocks[0]];
         for (let i = 1; i < blocks.length; i++) {
             const prevH = cur[cur.length - 1].maxY - cur[cur.length - 1].minY;
             const dy = Math.abs(blocks[i].minY - cur[cur.length - 1].minY);
-            if (dy < prevH * 0.6)
-                cur.push(blocks[i]);
+            if (dy < prevH * 0.6) cur.push(blocks[i]);
             else {
                 lines.push(cur);
                 cur = [blocks[i]];
@@ -150,19 +143,19 @@ export class OcrSelector {
         }
         lines.push(cur);
 
-        const text = lines.map(line => {
-            let s = '';
-            for (let i = 0; i < line.length; i++) {
-                if (i > 0) {
-                    if (line[i].parentIdx !== line[i - 1].parentIdx)
-                        s += ' ';
-                    else if (line[i].hasSpaceBefore)
-                        s += ' ';
+        const text = lines
+            .map((line) => {
+                let s = '';
+                for (let i = 0; i < line.length; i++) {
+                    if (i > 0) {
+                        if (line[i].parentIdx !== line[i - 1].parentIdx) s += ' ';
+                        else if (line[i].hasSpaceBefore) s += ' ';
+                    }
+                    s += line[i].text;
                 }
-                s += line[i].text;
-            }
-            return s;
-        }).join('\n');
+                return s;
+            })
+            .join('\n');
 
         St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, text);
         this._showToast(`Copied ${indices.length} block${indices.length > 1 ? 's' : ''}`);
@@ -180,8 +173,8 @@ export class OcrSelector {
         const result = [];
         let parentIdx = 0;
         for (const block of blocks) {
-            const xs = block.box.map(p => p[0]);
-            const ys = block.box.map(p => p[1]);
+            const xs = block.box.map((p) => p[0]);
+            const ys = block.box.map((p) => p[1]);
             const bMinX = Math.min(...xs);
             const bMaxX = Math.max(...xs);
             const bMinY = Math.min(...ys);
@@ -195,9 +188,10 @@ export class OcrSelector {
             let spaced = false;
             while (i < text.length) {
                 const ch = text[i];
-                const cjk = (ch >= '\u4e00' && ch <= '\u9fff') ||
-                            (ch >= '\u3400' && ch <= '\u4dbf') ||
-                            (ch >= '\uf900' && ch <= '\ufaff');
+                const cjk =
+                    (ch >= '\u4e00' && ch <= '\u9fff') ||
+                    (ch >= '\u3400' && ch <= '\u4dbf') ||
+                    (ch >= '\uf900' && ch <= '\ufaff');
                 if (ch === ' ') {
                     spaced = true;
                     i++;
@@ -209,10 +203,15 @@ export class OcrSelector {
                     i++;
                 } else {
                     let j = i + 1;
-                    while (j < text.length && text[j] !== ' ' &&
-                           !((text[j] >= '\u4e00' && text[j] <= '\u9fff') ||
-                             (text[j] >= '\u3400' && text[j] <= '\u4dbf') ||
-                             (text[j] >= '\uf900' && text[j] <= '\ufaff')))
+                    while (
+                        j < text.length &&
+                        text[j] !== ' ' &&
+                        !(
+                            (text[j] >= '\u4e00' && text[j] <= '\u9fff') ||
+                            (text[j] >= '\u3400' && text[j] <= '\u4dbf') ||
+                            (text[j] >= '\uf900' && text[j] <= '\ufaff')
+                        )
+                    )
                         j++;
                     tokens.push({ text: text.substring(i, j), startIdx: i, endIdx: j, hasSpaceBefore: spaced });
                     spaced = false;
@@ -243,7 +242,7 @@ export class OcrSelector {
             cr.$dispose();
             surface.finish();
 
-            const scale = totalRaw > 0 ? bW / totalRaw : (bW / text.length);
+            const scale = totalRaw > 0 ? bW / totalRaw : bW / text.length;
             let cursorX = 0;
             for (let i = 0; i < tokens.length; i++) {
                 const tokW = rawWidths[i] * scale;
@@ -256,8 +255,12 @@ export class OcrSelector {
                     score: block.score,
                     hasSpaceBefore: tokens[i].hasSpaceBefore,
                     parentIdx,
-                    box: [[tokMinX, bMinY], [tokMaxX, bMinY],
-                          [tokMaxX, bMaxY], [tokMinX, bMaxY]],
+                    box: [
+                        [tokMinX, bMinY],
+                        [tokMaxX, bMinY],
+                        [tokMaxX, bMaxY],
+                        [tokMinX, bMaxY],
+                    ],
                 });
             }
             parentIdx++;
@@ -270,20 +273,28 @@ export class OcrSelector {
 
         const splitBlocks = this._splitBlocks(blocks);
 
-        this._blockData = splitBlocks.map(block => {
-            const xs = block.box.map(p => p[0]);
-            const ys = block.box.map(p => p[1]);
+        this._blockData = splitBlocks.map((block) => {
+            const xs = block.box.map((p) => p[0]);
+            const ys = block.box.map((p) => p[1]);
             const minX = Math.min(...xs) / captureScale + originX;
             const minY = Math.min(...ys) / captureScale + originY;
             const maxX = Math.max(...xs) / captureScale + originX;
             const maxY = Math.max(...ys) / captureScale + originY;
-            return { text: block.text, score: block.score, minX, minY, maxX, maxY, parentIdx: block.parentIdx, hasSpaceBefore: block.hasSpaceBefore };
+            return {
+                text: block.text,
+                score: block.score,
+                minX,
+                minY,
+                maxX,
+                maxY,
+                parentIdx: block.parentIdx,
+                hasSpaceBefore: block.hasSpaceBefore,
+            };
         });
 
         this._blockData.sort((a, b) => {
             const dy = Math.abs(a.minY - b.minY);
-            if (dy < (a.maxY - a.minY) * 0.6)
-                return a.minX - b.minX;
+            if (dy < (a.maxY - a.minY) * 0.6) return a.minX - b.minX;
             return a.minY - b.minY;
         });
 
@@ -323,14 +334,12 @@ export class OcrSelector {
             const [sx, sy] = event.get_coords();
             if (!this._cursorFrozen) {
                 overlay.set_cursor_type(
-                    this._findBlockAt(sx, sy) >= 0
-                        ? Clutter.CursorType.TEXT
-                        : Clutter.CursorType.CROSSHAIR);
+                    this._findBlockAt(sx, sy) >= 0 ? Clutter.CursorType.TEXT : Clutter.CursorType.CROSSHAIR,
+                );
             }
             if (this._selIdx0 >= 0) {
                 const idx = this._findBlockAt(sx, sy);
-                if (idx >= 0)
-                    this._updateSelection(this._selIdx0, idx);
+                if (idx >= 0) this._updateSelection(this._selIdx0, idx);
             } else if (this._rectMode) {
                 this._rectEnd = { x: sx, y: sy };
                 this._showRect();
@@ -364,8 +373,12 @@ export class OcrSelector {
         for (let i = 0; i < this._blockData.length; i++) {
             const b = this._blockData[i];
             const MARGIN = 10;
-            if (stageX >= b.minX - MARGIN && stageX <= b.maxX + MARGIN &&
-                stageY >= b.minY - MARGIN && stageY <= b.maxY + MARGIN)
+            if (
+                stageX >= b.minX - MARGIN &&
+                stageX <= b.maxX + MARGIN &&
+                stageY >= b.minY - MARGIN &&
+                stageY <= b.maxY + MARGIN
+            )
                 return i;
         }
         return -1;
@@ -375,21 +388,22 @@ export class OcrSelector {
         this._clearHighlight();
         const lo = Math.min(idxA, idxB);
         const hi = Math.max(idxA, idxB);
-        for (let i = lo; i <= hi; i++)
-            this._selectedSet.add(i);
+        for (let i = lo; i <= hi; i++) this._selectedSet.add(i);
         this._renderHighlights();
     }
 
     _renderHighlights() {
-        for (const w of this._highlightWidgets)
-            w.destroy();
+        for (const w of this._highlightWidgets) w.destroy();
         this._highlightWidgets = [];
         this._hideSelBorder();
         this._hideCopyBtn();
 
         if (this._selectedSet.size === 0) return;
 
-        let uMinX = Infinity, uMinY = Infinity, uMaxX = -Infinity, uMaxY = -Infinity;
+        let uMinX = Infinity,
+            uMinY = Infinity,
+            uMaxX = -Infinity,
+            uMaxY = -Infinity;
 
         for (const i of this._selectedSet) {
             const b = this._blockData[i];
@@ -444,10 +458,8 @@ export class OcrSelector {
             });
             attachTooltip(this._copyBtn, 'Copy selected text', St.Side.RIGHT);
             this._copyBtn.connect('clicked', () => this.copySelected());
-            if (Main.screenshotUI._panel)
-                primaryBin.insert_child_below(this._copyBtn, Main.screenshotUI._panel);
-            else
-                primaryBin.add_child(this._copyBtn);
+            if (Main.screenshotUI._panel) primaryBin.insert_child_below(this._copyBtn, Main.screenshotUI._panel);
+            else primaryBin.add_child(this._copyBtn);
         }
         const [ok, lx, ly] = primaryBin.transform_stage_point(stageRX - 16, stageTY - 24);
         if (ok) {
@@ -468,8 +480,7 @@ export class OcrSelector {
     }
 
     _clearHighlight() {
-        for (const w of this._highlightWidgets)
-            w.destroy();
+        for (const w of this._highlightWidgets) w.destroy();
         this._highlightWidgets = [];
         this._selectedSet.clear();
         this._hideSelBorder();
@@ -526,8 +537,7 @@ export class OcrSelector {
     }
 
     _showToast(text) {
-        const monitor = global.display.get_monitor_geometry(
-            global.display.get_primary_monitor());
+        const monitor = global.display.get_monitor_geometry(global.display.get_primary_monitor());
         if (!this._toast) {
             this._toast = new St.Label({
                 text,
@@ -541,7 +551,7 @@ export class OcrSelector {
         }
         this._toast.set_position(
             Math.round((monitor.width - this._toast.width) / 2),
-            Math.round((monitor.height - this._toast.height) / 2) + 80
+            Math.round((monitor.height - this._toast.height) / 2) + 80,
         );
         this._toast.opacity = 255;
         this._toast.ease({
