@@ -21,22 +21,6 @@ import { destroyActiveToast } from './screenshotToast.js';
 import { BlurSelector } from './blurSelector.js';
 import { SelectionClearer } from './selectionClearPatch.js';
 
-export function setAreaSelectorHandlesVisible(selector, visible) {
-    const handles = [
-        selector?._topLeftHandle,
-        selector?._topRightHandle,
-        selector?._bottomLeftHandle,
-        selector?._bottomRightHandle,
-    ].filter(h => h != null);
-
-    for (const handle of handles) {
-        if (visible)
-            handle.show();
-        else
-            handle.hide();
-    }
-}
-
 export default class GradiaCompanion extends Extension {
     enable() {
         this._originalOpen = Main.screenshotUI.open.bind(Main.screenshotUI);
@@ -248,13 +232,25 @@ export default class GradiaCompanion extends Extension {
         const drawing = this._isDrawingTool(id);
         const dragging = id === 'drag';
 
-        if (drawing || dragging) {
+        const visible = !drawing && !dragging;
+        if (drawing || dragging)
             selector.reactive = false;
-            setAreaSelectorHandlesVisible(selector, false);
-        } else {
+        else
             selector.reactive = true;
+
+        if (visible)
             selector._areaIndicator?.show();
-            setAreaSelectorHandlesVisible(selector, true);
+
+        if (this._selectionClearer.isPatched) {
+            this._selectionClearer.setHandlesVisible(visible);
+        } else {
+            for (const name of ['_topLeftHandle', '_topRightHandle', '_bottomLeftHandle', '_bottomRightHandle']) {
+                const handle = selector[name];
+                if (handle) {
+                    if (visible) handle.show();
+                    else handle.hide();
+                }
+            }
         }
     }
 
@@ -690,7 +686,11 @@ export default class GradiaCompanion extends Extension {
         const selector = Main.screenshotUI?._areaSelector;
         if (selector) {
             selector.reactive = true;
-            setAreaSelectorHandlesVisible(selector, true);
+            if (this._selectionClearer.isPatched)
+                this._selectionClearer.setHandlesVisible(true);
+            else
+                ['_topLeftHandle', '_topRightHandle', '_bottomLeftHandle', '_bottomRightHandle']
+                    .forEach(name => selector[name]?.show());
         }
 
         this._canvases?.destroy();

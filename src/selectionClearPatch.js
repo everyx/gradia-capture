@@ -63,6 +63,26 @@ export class SelectionClearer {
         this._handleOpacities = null;
     }
 
+    get isPatched() { return !!this._selector; }
+
+    setHandlesVisible(visible) {
+        const selector = this._selector;
+        if (!selector) return;
+        for (const name of HANDLE_NAMES) {
+            const actor = selector[name];
+            if (!actor) continue;
+            if (!visible) {
+                if (!this._handleOpacities.has(name))
+                    this._handleOpacities.set(name, actor.opacity);
+                actor.opacity = 0;
+            } else {
+                const original = this._handleOpacities?.get(name);
+                if (original !== undefined)
+                    actor.opacity = original;
+            }
+        }
+    }
+
     _clearSelection(selector) {
         for (const coord of ['_startX', '_startY', '_lastX', '_lastY']) {
             if (coord in selector) selector[coord] = 0;
