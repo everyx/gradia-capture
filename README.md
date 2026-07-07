@@ -1,3 +1,19 @@
+# Gradia Capture (personal fork)
+
+Forked from [`AlexanderVanhee/gradia-capture`](https://github.com/AlexanderVanhee/gradia-capture) to carry features and tweaks I want for my own workflow.
+
+What this fork adds on top of upstream:
+
+- **Blur / Pixelation tool** — mosaic blur with real-time preview and adjustable block size (Ctrl + scroll)
+- **Self-contained OCR** — backend switched to [`rapidocr`](https://github.com/RapidAI/RapidOCR) (install with `pip install rapidocr`); supports block-range and rectangle text selection with copy. Falls back to the Gradia Flatpak app when `rapidocr` is not on `PATH`. To exit OCR mode, switch to another tool.
+- **UI enhancements** — multi-line text input, scroll-to-resize the last stroke, dropdown color menu, dynamic toolbar positioning
+- **Multi-monitor fixes** — toolbar placed correctly on any monitor
+- **Stability & performance** — null safety, error handling, capture cache improvements
+
+---
+
+<details>
+<summary>Original upstream README</summary>
 
 <div align="center">
   <img src="https://github.com/user-attachments/assets/03ba0ce8-aa83-4f9e-b829-23a66ec599cc" alt="logo" width="150"/>
@@ -40,3 +56,5 @@ Run the following command from the root directory of the cloned repo:
 ```
 
 The `-i` flag tells the script to both build the project and install it automatically.
+
+</details>
