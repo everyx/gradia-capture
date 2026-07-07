@@ -5,9 +5,9 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 export class TextEntryManager {
-    constructor(toolbar, monitors) {
+    constructor(toolbar, canvases) {
         this._toolbar = toolbar;
-        this._monitors = monitors;
+        this._canvases = canvases;
 
         this._entry = null;
         this._pendingStroke = null;
@@ -41,7 +41,7 @@ export class TextEntryManager {
         if (!ok)
             return;
 
-        this._targetCanvas = this._monitors.canvasForStagePoint(stageX, stageY);
+        this._targetCanvas = this._canvases.canvasForStagePoint(stageX, stageY);
 
         this._pendingStroke = {
             color: this._toolbar.selectedColor,

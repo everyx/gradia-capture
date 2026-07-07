@@ -1,8 +1,7 @@
 export class DragTool {
-    constructor({ toolbar, monitors, annotations }) {
+    constructor({ toolbar, canvases }) {
         this._toolbar = toolbar;
-        this._monitors = monitors;
-        this._annotations = annotations;
+        this._canvases = canvases;
 
         this.active = false;
         this._startX = 0;
@@ -12,7 +11,7 @@ export class DragTool {
     }
 
     press(stageX, stageY) {
-        const result = this._annotations.selectAt(stageX, stageY);
+        const result = this._canvases.selectAt(stageX, stageY);
 
         if (result) {
             this._toolbar.syncToStroke(result.stroke);
@@ -23,8 +22,8 @@ export class DragTool {
             this._startY = stageY;
             this._canvas = result.canvas;
 
-            const idx = this._monitors.canvases.indexOf(result.canvas);
-            this._grab = global.stage.grab(this._monitors.getOverlay(idx));
+            const idx = this._canvases.indexOfCanvas(result.canvas);
+            this._grab = global.stage.grab(this._canvases.getOverlay(idx));
             return;
         }
 
@@ -39,7 +38,7 @@ export class DragTool {
         const dy = stageY - this._startY;
 
         const stroke = this._canvas.selectedStroke;
-        const targetCanvas = this._monitors.canvasForStagePoint(stageX, stageY);
+        const targetCanvas = this._canvases.canvasForStagePoint(stageX, stageY);
 
         if (targetCanvas && targetCanvas !== this._canvas && stroke) {
             this._canvas.evictStroke(stroke);
@@ -63,7 +62,7 @@ export class DragTool {
     }
 
     deleteSelected() {
-        return this._annotations.deleteSelected();
+        return this._canvases.deleteSelected();
     }
 
     destroy() {

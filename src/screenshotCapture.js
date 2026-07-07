@@ -8,8 +8,8 @@ import { captureAndStoreScreenshot } from './screenshotStore.js';
 import { getToolDef } from './tools.js';
 
 export class ScreenshotCapture {
-    constructor({ annotations, textEntryManager, toolbar, settings, isRecordingMode }) {
-        this._annotations = annotations;
+    constructor({ canvases, textEntryManager, toolbar, settings, isRecordingMode }) {
+        this._canvases = canvases;
         this._textEntryManager = textEntryManager;
         this._toolbar = toolbar;
         this._settings = settings;
@@ -104,7 +104,7 @@ export class ScreenshotCapture {
         if (!ui._cursor.visible)
             cursorTexture = null;
 
-        const hasStrokes = this._annotations?.hasStrokes ?? false;
+        const hasStrokes = this._canvases?.hasStrokes ?? false;
         const strokeData = (hasStrokes && !ocr) ? this._buildStrokeData() : null;
 
         return await _capture(
@@ -442,7 +442,7 @@ export class ScreenshotCapture {
 
         return {
             selX, selY, selW, selH,
-            strokes: this._annotations.strokeData,
+            strokes: this._canvases.strokeData,
             stageScale: global.stage.scale_factor || 1,
         };
     }

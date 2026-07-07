@@ -15,9 +15,8 @@ import { DragTool } from './dragTool.js';
 import { ShortcutDispatcher } from './shortcutDispatcher.js';
 import { isRapidOcrAvailable, createSettingsButton } from './gradiaIntegration.js';
 import { OcrSelector } from './ocrSelector.js';
-import { MonitorManager } from './monitorManager.js';
-import { AnnotationManager } from './annotationManager.js';
 import { TextEntryManager } from './textEntryManager.js';
+import { CanvasCollection } from './canvasCollection.js';
 import { destroyActiveToast } from './screenshotToast.js';
 import { BlurSelector } from './blurSelector.js';
 import { SelectionClearer } from './selectionClearPatch.js';
@@ -44,8 +43,8 @@ export default class GradiaCompanion extends Extension {
         this._originalSaveScreenshot = Main.screenshotUI._saveScreenshot.bind(Main.screenshotUI);
         this._gradiaSettings = new GradiaSettings(this);
         this._toolbar = null;
-        this._monitors = null;
-        this._annotations = null;
+        this._canvases = null;
+        this._canvases = null;
         this._textEntryManager = null;
         this._dragDeactivateId = 0;
 
@@ -107,7 +106,7 @@ export default class GradiaCompanion extends Extension {
     }
 
     _updateTrashButton() {
-        const sel = this._annotations.selected;
+        const sel = this._canvases.selected;
         if (!sel) {
             this._hideTrashButton();
             return;
@@ -140,7 +139,7 @@ export default class GradiaCompanion extends Extension {
                 reactive: true,
             });
             this._trashButton.connect('clicked', () => {
-                if (this._annotations.deleteSelected())
+                if (this._canvases.deleteSelected())
                     this._hideTrashButton();
             });
             primaryBin.insert_child_below(this._trashButton, Main.screenshotUI._panel);
@@ -203,7 +202,7 @@ export default class GradiaCompanion extends Extension {
         if (this._blurSelector.blockSize === oldSize)
             return Clutter.EVENT_STOP;
 
-        this._monitors.forEachCanvas(c => this._blurSelector.refreshPreview(c));
+        this._canvases.forEachCanvas(c => this._blurSelector.refreshPreview(c));
         return Clutter.EVENT_STOP;
     }
 
@@ -211,7 +210,7 @@ export default class GradiaCompanion extends Extension {
         const tool = this._toolbar?.selectedTool;
         const mode = this._blurSelector?.mode;
         const lw = this._toolbar?.lineWidth || 8;
-        this._monitors.forEachCanvas(c => {
+        this._canvases.forEachCanvas(c => {
             if (tool === 'blur' && mode === 'brush')
                 c.showCursor(lw / 2);
             else if (tool === 'blur' && mode === 'selection')
@@ -229,8 +228,8 @@ export default class GradiaCompanion extends Extension {
         const drawing = this._isDrawingTool(id);
         const dragging = id === 'drag';
 
-        this._monitors.forEachCanvas(c => c.setTool(id));
-        this._monitors.forEachOverlay(o => { o.reactive = drawing || dragging; });
+        this._canvases.forEachCanvas(c => c.setTool(id));
+        this._canvases.forEachOverlay(o => { o.reactive = drawing || dragging; });
 
         if (id === 'blur')
             this._screenshotCapture.ensureCache();
@@ -277,8 +276,8 @@ export default class GradiaCompanion extends Extension {
         if (this._toolbar)
             this._toolbar.setSelectionToolVisible(!screenMode);
 
-        this._monitors.forEachCanvas(c => { c.opacity = show ? 255 : 0; });
-        this._monitors.forEachOverlay(o => {
+        this._canvases.forEachCanvas(c => { c.opacity = show ? 255 : 0; });
+        this._canvases.forEachOverlay(o => {
             o.opacity = show ? 255 : 0;
             if (!show)
                 o.reactive = false;
@@ -369,14 +368,13 @@ export default class GradiaCompanion extends Extension {
 
         const ui = Main.screenshotUI;
 
-        this._monitors = new MonitorManager();
-        this._annotations = new AnnotationManager(this._monitors);
+        this._canvases = new CanvasCollection();
         const monitorBins = ui._monitorBins ?? [];
         const binsToUse = monitorBins.length > 0
             ? monitorBins
             : (ui._primaryMonitorBin ? [ui._primaryMonitorBin] : []);
 
-        this._monitors.createForBins(binsToUse,
+        this._canvases.createForBins(binsToUse,
             (bin) => {
                 const canvas = new DrawingCanvas({
                     style: 'background-color: transparent;',
@@ -453,12 +451,12 @@ export default class GradiaCompanion extends Extension {
         this._toolbar = new Toolbar({
     extensionPath: this.path,
     gradiaSettings: this._gradiaSettings,
-    hasSelection: () => !!this._annotations.selected,
-    hasVisibleCanvas: () => this._monitors?.allCanvasesVisible() ?? true,
+    hasSelection: () => !!this._canvases.selected,
+    hasVisibleCanvas: () => this._canvases?.allCanvasesVisible() ?? true,
 });
-        this._textEntryManager = new TextEntryManager(this._toolbar, this._monitors);
+        this._textEntryManager = new TextEntryManager(this._toolbar, this._canvases);
         this._screenshotCapture = new ScreenshotCapture({
-            annotations: this._annotations,
+            canvases: this._canvases,
             textEntryManager: this._textEntryManager,
             toolbar: this._toolbar,
             settings: this._settings,
@@ -468,8 +466,7 @@ export default class GradiaCompanion extends Extension {
         this._screenshotCapture.ensureCache();
         this._dragTool = new DragTool({
             toolbar: this._toolbar,
-            monitors: this._monitors,
-            annotations: this._annotations,
+            canvases: this._canvases,
         });
 
         this._blurSelector = new BlurSelector({
@@ -487,7 +484,7 @@ export default class GradiaCompanion extends Extension {
 
         this._ocrSelector = new OcrSelector({
             toolbar: this._toolbar,
-            canvases: this._monitors.canvases,
+            canvases: this._canvases.canvases,
             extensionPath: this.path,
             screenshotFn: async () => {
                 const file = await this._screenshotCapture.capture({ ocr: true, portalMode: this._portalMode });
@@ -506,7 +503,7 @@ export default class GradiaCompanion extends Extension {
         });
         ui._showPointerButtonContainer.insert_child_below(this._settingsButton, ui._showPointerButton);
 
-        this._monitors.forEachCanvas(c => {
+        this._canvases.forEachCanvas(c => {
             c.applyProps({ color: this._toolbar.selectedColor, lineWidth: this._toolbar.lineWidth });
             c.setTool(this._toolbar.selectedTool);
             c._onStrokeCommitted = (stroke) => this._blurSelector.onStrokeCommitted(c, stroke);
@@ -581,7 +578,7 @@ export default class GradiaCompanion extends Extension {
         if (dragBtn) {
             this._dragDeactivateId = dragBtn.connect('notify::checked', () => {
                 if (!dragBtn.checked) {
-                    this._monitors.clearSelections();
+                    this._canvases.clearSelections();
                     this._hideTrashButton();
                 }
             });
@@ -590,9 +587,9 @@ export default class GradiaCompanion extends Extension {
         this._toolbar.connect('tool-property-changed', (_toolbar, which) => {
             if (which === 'color') {
                 const color = this._toolbar.selectedColor;
-                this._monitors.forEachCanvas(c => c.applyProps({ color }));
+                this._canvases.forEachCanvas(c => c.applyProps({ color }));
 
-                const sel = this._annotations.selected;
+                const sel = this._canvases.selected;
                 if (sel) {
                     sel.stroke.color = color;
                     sel.canvas.queue_repaint();
@@ -603,7 +600,7 @@ export default class GradiaCompanion extends Extension {
 
             if (which === 'lineWidth') {
                 const lineWidth = this._toolbar.lineWidth;
-                this._monitors.forEachCanvas(c => {
+                this._canvases.forEachCanvas(c => {
                     c.applyProps({ lineWidth });
 
                     if (this._textEntryManager?.hasPending && this._toolbar.selectedTool === 'text')
@@ -618,7 +615,7 @@ export default class GradiaCompanion extends Extension {
                     c.queue_repaint();
                 });
 
-                const sel = this._annotations.selected;
+                const sel = this._canvases.selected;
                 if (sel) {
                     sel.stroke.strokeWidth = lineWidth;
                     sel.canvas.queue_repaint();
@@ -631,32 +628,32 @@ export default class GradiaCompanion extends Extension {
         });
 
         this._toolbar.connect('undo', () => {
-            if (!this._monitors?.allCanvasesVisible())
+            if (!this._canvases?.allCanvasesVisible())
                 return;
             if (this._textEntryManager?.isActive) {
                 this._textEntryManager.cancel();
                 return;
             }
             if (this._toolbar.selectedTool === 'drag') {
-                if (this._annotations.deleteSelected()) {
+                if (this._canvases.deleteSelected()) {
                     this._hideTrashButton();
                     return;
                 }
             }
-            this._annotations.undo();
+            this._canvases.undo();
         });
 
         this._toolbar.connect('clear', () => {
-            if (!this._monitors?.allCanvasesVisible())
+            if (!this._canvases?.allCanvasesVisible())
                 return;
             this._textEntryManager?.cancel();
-            this._annotations.clear();
+            this._canvases.clear();
             this._hideTrashButton();
         });
 
         if (isRapidOcrAvailable()) {
             this._toolbar.connect('ocr-trigger', () => {
-                this._monitors.clearSelections();
+                this._canvases.clearSelections();
                 this._hideTrashButton();
                 this._toolbar.clearToolSelection();
                 this._ocrSelector?.activate();
@@ -696,9 +693,9 @@ export default class GradiaCompanion extends Extension {
             setAreaSelectorHandlesVisible(selector, true);
         }
 
-        this._monitors?.destroy();
-        this._monitors = null;
-        this._annotations = null;
+        this._canvases?.destroy();
+        this._canvases = null;
+        this._canvases = null;
         this._screenshotCapture = null;
 
         if (this._selectionHintLabel) {
