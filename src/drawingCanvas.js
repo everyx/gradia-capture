@@ -29,8 +29,7 @@ export const DrawingCanvas = GObject.registerClass(
             this._dragGrab = null;
             this._stampCounter = 1;
             this._selectedStroke = null;
-            this._blurMode = 'brush';
-            this._blurBlockSize = 16;
+
             this._showCursor = false;
             this._cursorX = 0;
             this._cursorY = 0;
@@ -55,8 +54,7 @@ export const DrawingCanvas = GObject.registerClass(
         }
         setStrokeWidth(w) { this._strokeWidth = w; }
 
-        setBlurMode(mode) { this._blurMode = mode; }
-        setBlockSize(size) { this._blurBlockSize = size; }
+
 
         showCursor(r) { this._showCursor = true; this._cursorRadius = r; this._updateCursorStyle(); this.queue_repaint(); }
         hideCursor(cursorType) { this._showCursor = false; this._customCursorType = cursorType; this._updateCursorStyle(); this.queue_repaint(); }
@@ -184,8 +182,9 @@ export const DrawingCanvas = GObject.registerClass(
             };
 
             if (this._toolId === 'blur') {
-                this._currentStroke.blurMode = this._blurMode;
-                this._currentStroke.blockSize = this._blurBlockSize;
+                const state = this._getBlurState?.() ?? { mode: 'brush', blockSize: 16 };
+                this._currentStroke.blurMode = state.mode;
+                this._currentStroke.blockSize = state.blockSize;
             }
 
             if (tool.isStamp) {
@@ -258,7 +257,7 @@ export const DrawingCanvas = GObject.registerClass(
         }
 
         _applyDragCursor() {
-            if (this._toolId === 'blur' && this._blurMode === 'selection')
+            if (this._toolId === 'blur' && this._getBlurState?.().mode === 'selection')
                 this.set_cursor_type(Clutter.CursorType.CROSSHAIR);
             else
                 this.set_cursor_type(Clutter.CursorType.NONE);
@@ -342,35 +341,10 @@ export const DrawingCanvas = GObject.registerClass(
 
             const ss = global.stage.scale_factor || 1;
 
-            for (const stroke of allStrokes) {
-                if (stroke.toolId !== 'blur') continue;
-                if (stroke === this._currentStroke) continue;
-
-                if (stroke.previewSurface) {
-                    const tl = this._stageToLocal(stroke.previewOrigin.x, stroke.previewOrigin.y);
-                    if (tl) {
-                        const ds = stroke.previewScale || ss;
-                        cr.save();
-                        cr.translate(tl.x, tl.y);
-                        cr.scale(1 / ds, 1 / ds);
-                        cr.setSourceSurface(stroke.previewSurface, 0, 0);
-                        const srcPat = cr.getSource();
-                        if (srcPat && stroke.previewScale === 1) srcPat.setFilter(Cairo.Filter.NEAREST);
-                        cr.paint();
-                        cr.restore();
-                    }
-                }
-            }
-
-            for (const stroke of allStrokes) {
-                if (stroke._previewDragSurface && !stroke.previewSurface && stroke._previewDragOrigin) {
-                    const tl = this._stageToLocal(stroke._previewDragOrigin.x, stroke._previewDragOrigin.y);
-                    if (tl) {
-                        cr.setSourceSurface(stroke._previewDragSurface, tl.x, tl.y);
-                        const pat = cr.getSource();
-                        if (pat) pat.setFilter(Cairo.Filter.NEAREST);
-                        cr.paint();
-                    }
+            if (this._onRenderBlurStroke) {
+                for (const stroke of allStrokes) {
+                    if (stroke.toolId !== 'blur') continue;
+                    this._onRenderBlurStroke(cr, stroke, ss);
                 }
             }
 

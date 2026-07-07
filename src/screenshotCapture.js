@@ -6,7 +6,6 @@ import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
 import { getToolDef } from './tools.js';
-import { pixelatePixbufAlongStroke, pixelatePixbufRect } from './pixelate.js';
 
 export class ScreenshotCapture {
     constructor({ annotations, textEntryManager, toolbar, settings, isRecordingMode }) {
@@ -19,6 +18,7 @@ export class ScreenshotCapture {
         this._capturePromise = null;
         this.captureGeometry = null;
         this.captureScale = 1;
+        this.blurSelector = null;
     }
 
     async capture({ copyOnly = false, ocr = false, externalSave = false, portalMode = false } = {}) {
@@ -365,35 +365,9 @@ export class ScreenshotCapture {
         }
 
         let basePixbuf = pixbuf;
-        for (const stroke of blurStrokes) {
-            const sp = stroke.stagePoints;
-            if (sp.length < 2) continue;
-            const pointsAbs = sp.map(p => ({
-                x: (p.x / stageScale - selX) * scaleX,
-                y: (p.y / stageScale - selY) * scaleY,
-            }));
-            const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
-            const blockSize = stroke.blockSize || 16;
-            const regionAbs = {
-                x: 0, y: 0,
-                w: basePixbuf.get_width(),
-                h: basePixbuf.get_height(),
-            };
-            const originAbs = {
-                x: Math.round((sp[0].x / stageScale - selX) * scaleX),
-                y: Math.round((sp[0].y / stageScale - selY) * scaleY),
-            };
-
-            if ((stroke.blurMode || 'brush') === 'selection') {
-                if (pointsAbs.length >= 2) {
-                    basePixbuf = pixelatePixbufRect(basePixbuf, regionAbs, pointsAbs[0], pointsAbs[pointsAbs.length - 1], blockSize, originAbs.x, originAbs.y);
-                }
-            } else {
-                basePixbuf = pixelatePixbufAlongStroke(basePixbuf, regionAbs, pointsAbs, lw, blockSize, originAbs.x, originAbs.y);
-            }
-
-            if (!basePixbuf)
-                return null;
+        if (blurStrokes.length > 0 && this.blurSelector) {
+            basePixbuf = this.blurSelector.composeOutput(basePixbuf, blurStrokes, { stageScale, selX, selY, selW, selH });
+            if (!basePixbuf) return null;
         }
 
         if (annotStrokes.length === 0)

@@ -185,8 +185,6 @@ export const Toolbar = GObject.registerClass({
         'undo': {},
         'clear': {},
         'ocr-trigger': {},
-        'blur-mode-changed': { param_types: [GObject.TYPE_STRING] },
-        'block-size-changed': { param_types: [GObject.TYPE_INT] },
     },
 }, class Toolbar extends St.BoxLayout {
     _init(params = {}) {
@@ -208,8 +206,6 @@ export const Toolbar = GObject.registerClass({
         this._selectedColor = COLORS[1].hex;
         this._selectedTool = TOOLS[0].id;
         this._lineWidth = 4;
-        this._blurMode = 'brush';
-        this._blurBlockSize = 16;
         this._toolButtons = [];
         this._blurToolBtn = null;
         this._toolEntries = new Map();
@@ -258,14 +254,12 @@ export const Toolbar = GObject.registerClass({
     _buildBlurMenu() {
         this._blurMenu = new BlurMenu({ extensionPath: this._extensionPath });
         this._blurMenu.connect('mode-changed', (_m, mode) => {
-            this._blurMode = mode;
-            this.emit('blur-mode-changed', mode);
+            if (this._blurSelector) this._blurSelector.setMode(mode);
             this._saveCurrentToolEntry();
             this._updateDrawingControlsSensitivity();
         });
         this._blurMenu.connect('block-size-changed', (_m, size) => {
-            this._blurBlockSize = size;
-            this.emit('block-size-changed', size);
+            if (this._blurSelector) this._blurSelector.setBlockSize(size);
             this._saveCurrentToolEntry();
         });
     }
@@ -321,7 +315,7 @@ export const Toolbar = GObject.registerClass({
         const hasSelection = this._hasSelection?.() ?? false;
         const enabled = drawing || hasSelection;
         const isBlur = this._selectedTool === 'blur';
-        const isBlurSelection = isBlur && this._blurMode === 'selection';
+        const isBlurSelection = isBlur && (this._blurSelector?.mode === 'selection');
 
         this._colorButton.reactive = enabled && !isBlur;
         this._colorButton.opacity = enabled && !isBlur ? 255 : 80;
@@ -335,9 +329,19 @@ export const Toolbar = GObject.registerClass({
     _saveCurrentToolEntry() {
         this._settings?.saveToolEntry(this._selectedTool, this._selectedColor, this._lineWidth);
         this._toolEntries?.set(this._selectedTool, {
-            blurMode: this._blurMode,
-            blockSize: this._blurBlockSize,
+            blurMode: this._blurSelector?.mode ?? 'brush',
+            blockSize: this._blurSelector?.blockSize ?? 16,
         });
+    }
+
+    setBlurSelector(blurSelector) {
+        this._blurSelector = blurSelector;
+        const blurState = this._toolEntries?.get('blur');
+        if (blurState) {
+            blurSelector.restoreState(blurState);
+            this._blurMenu?.setMode(blurSelector.mode);
+            this._blurMenu?.setBlockSize(blurSelector.blockSize);
+        }
     }
 
     _restoreToolEntry(toolId) {
@@ -345,16 +349,14 @@ export const Toolbar = GObject.registerClass({
         const { color, lineWidth } = this._settings.getToolEntry(toolId, this._selectedColor, this._lineWidth);
         this._applyColor(color);
         this._applyLineWidth(lineWidth);
-
-        if (toolId === 'blur') {
+        if (toolId === 'blur' && this._blurSelector) {
             const blurState = this._toolEntries?.get(toolId);
             if (blurState) {
-                this._blurMode = blurState.blurMode ?? 'brush';
-                this._blurBlockSize = blurState.blockSize ?? 16;
+                this._blurSelector.restoreState(blurState);
             }
             if (this._blurMenu) {
-                this._blurMenu.setMode(this._blurMode);
-                this._blurMenu.setBlockSize(this._blurBlockSize);
+                this._blurMenu.setMode(this._blurSelector.mode);
+                this._blurMenu.setBlockSize(this._blurSelector.blockSize);
             }
         }
     }
