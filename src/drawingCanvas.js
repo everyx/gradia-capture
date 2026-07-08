@@ -3,7 +3,7 @@ import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
-import { getToolDef } from './tools.js';
+import { getToolDef } from './tools/index.js';
 
 const MAX_CANVAS_WIDTH = 1920;
 const MAX_CANVAS_HEIGHT = 1080;
@@ -51,7 +51,7 @@ export const DrawingCanvas = GObject.registerClass(
 
         applyProps(props) {
             if (props.color !== undefined) this._strokeColor = props.color;
-            if (props.lineWidth !== undefined) this._strokeWidth = props.lineWidth;
+            if (props.size !== undefined) this._strokeWidth = props.size;
         }
         setTool(id) {
             this._toolId = id;

@@ -15,7 +15,6 @@ export class DragTool {
 
         if (result) {
             this._toolbar.syncToStroke(result.stroke);
-            this._toolbar.updateDrawingControlsSensitivity();
 
             this.active = true;
             this._startX = stageX;

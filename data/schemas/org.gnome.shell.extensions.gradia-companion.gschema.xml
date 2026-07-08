@@ -1,10 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
   <schema id="org.gnome.shell.extensions.gradia-companion" path="/org/gnome/shell/extensions/gradia-companion/">
-    <key name="tool-settings" type="a{s(sd)}">
-      <default>{'freehand': ('#000000', 3.0), 'rectangle': ('#000000', 3.0), 'solid-rectangle': ('#000000', 3.0), 'highlighter': ('#ffdd00', 4.0), 'arrow': ('#000000', 3.0), 'stamp': ('#000000', 3.0)}</default>
-      <summary>Per-tool color and line width</summary>
-    </key>
     <key name="screenshot-format" type="s">
       <default>'png'</default>
       <summary>File format for saved screenshots</summary>
@@ -21,5 +17,54 @@
       <default>true</default>
       <summary>Composite transient windows when capturing a window screenshot</summary>
     </key>
+
+    <child name="tool-freehand" schema="org.gnome.shell.extensions.gradia-companion.tool.freehand"/>
+    <child name="tool-rectangle" schema="org.gnome.shell.extensions.gradia-companion.tool.rectangle"/>
+    <child name="tool-solid-rectangle" schema="org.gnome.shell.extensions.gradia-companion.tool.solid-rectangle"/>
+    <child name="tool-highlighter" schema="org.gnome.shell.extensions.gradia-companion.tool.highlighter"/>
+    <child name="tool-arrow" schema="org.gnome.shell.extensions.gradia-companion.tool.arrow"/>
+    <child name="tool-stamp" schema="org.gnome.shell.extensions.gradia-companion.tool.stamp"/>
+    <child name="tool-text" schema="org.gnome.shell.extensions.gradia-companion.tool.text"/>
+    <child name="tool-blur" schema="org.gnome.shell.extensions.gradia-companion.tool.blur"/>
+  </schema>
+
+  <schema id="org.gnome.shell.extensions.gradia-companion.tool.freehand" path="/org/gnome/shell/extensions/gradia-companion/tool/freehand/">
+    <key name="color" type="s"><default>'#000000'</default><summary>Stroke color</summary></key>
+    <key name="size" type="d"><default>3.0</default><summary>Stroke size</summary></key>
+  </schema>
+
+  <schema id="org.gnome.shell.extensions.gradia-companion.tool.rectangle" path="/org/gnome/shell/extensions/gradia-companion/tool/rectangle/">
+    <key name="color" type="s"><default>'#000000'</default><summary>Stroke color</summary></key>
+    <key name="size" type="d"><default>3.0</default><summary>Stroke size</summary></key>
+  </schema>
+
+  <schema id="org.gnome.shell.extensions.gradia-companion.tool.solid-rectangle" path="/org/gnome/shell/extensions/gradia-companion/tool/solid-rectangle/">
+    <key name="color" type="s"><default>'#000000'</default><summary>Fill color</summary></key>
+  </schema>
+
+  <schema id="org.gnome.shell.extensions.gradia-companion.tool.highlighter" path="/org/gnome/shell/extensions/gradia-companion/tool/highlighter/">
+    <key name="color" type="s"><default>'#ffdd00'</default><summary>Highlighter color</summary></key>
+    <key name="size" type="d"><default>4.0</default><summary>Highlighter size</summary></key>
+  </schema>
+
+  <schema id="org.gnome.shell.extensions.gradia-companion.tool.arrow" path="/org/gnome/shell/extensions/gradia-companion/tool/arrow/">
+    <key name="color" type="s"><default>'#000000'</default><summary>Arrow color</summary></key>
+    <key name="size" type="d"><default>3.0</default><summary>Arrow size</summary></key>
+  </schema>
+
+  <schema id="org.gnome.shell.extensions.gradia-companion.tool.stamp" path="/org/gnome/shell/extensions/gradia-companion/tool/stamp/">
+    <key name="color" type="s"><default>'#000000'</default><summary>Stamp color</summary></key>
+    <key name="size" type="d"><default>3.0</default><summary>Stamp size</summary></key>
+  </schema>
+
+  <schema id="org.gnome.shell.extensions.gradia-companion.tool.text" path="/org/gnome/shell/extensions/gradia-companion/tool/text/">
+    <key name="color" type="s"><default>'#000000'</default><summary>Text color</summary></key>
+    <key name="size" type="d"><default>4.0</default><summary>Font size</summary></key>
+  </schema>
+
+  <schema id="org.gnome.shell.extensions.gradia-companion.tool.blur" path="/org/gnome/shell/extensions/gradia-companion/tool/blur/">
+    <key name="mode" type="s"><default>'brush'</default><summary>Blur mode (brush or selection)</summary></key>
+    <key name="size" type="d"><default>4.0</default><summary>Blur brush size</summary></key>
+    <key name="block-size" type="i"><default>16</default><summary>Pixelate block size</summary></key>
   </schema>
 </schemalist>

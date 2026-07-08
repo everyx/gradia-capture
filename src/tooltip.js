@@ -15,6 +15,7 @@ export const Tooltip = GObject.registerClass(
                 style_class: 'screenshot-ui-tooltip',
                 visible: false,
             });
+            this._destroyed = false;
             this._timeoutId = null;
             this._side = side;
             this._hoverId = widget.connect('notify::hover', () => {
@@ -23,6 +24,7 @@ export const Tooltip = GObject.registerClass(
             });
             this._destroyId = widget.connect('destroy', () => this.destroy());
             this.connect('destroy', () => {
+                this._destroyed = true;
                 widget.disconnect(this._hoverId);
                 widget.disconnect(this._destroyId);
             });
@@ -31,7 +33,7 @@ export const Tooltip = GObject.registerClass(
             if (this._timeoutId) return;
             this._timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
                 this._timeoutId = null;
-                this._show(widget);
+                if (!this._destroyed) this._show(widget);
                 return GLib.SOURCE_REMOVE;
             });
         }
@@ -42,6 +44,7 @@ export const Tooltip = GObject.registerClass(
             return gap > 0 ? gap : DEFAULT_GAP;
         }
         _show(widget) {
+            if (this._destroyed || !widget.get_stage()) return;
             const e = widget.get_transformed_extents();
             const [wx, wy, ww, wh] = [e.get_x(), e.get_y(), e.get_width(), e.get_height()];
             const cx = Math.floor(wx + (ww - this.width) / 2);
@@ -62,7 +65,7 @@ export const Tooltip = GObject.registerClass(
                 GLib.source_remove(this._timeoutId);
                 this._timeoutId = null;
             }
-            this.hide();
+            if (!this._destroyed) this.hide();
         }
     },
 );

@@ -5,7 +5,7 @@ import St from 'gi://St';
 
 import { initI18n } from './i18n.js';
 import { Toolbar, TRASH_BUTTON_RADIUS } from './toolbar.js';
-import { getToolDef } from './tools.js';
+import { getToolDef } from './tools/index.js';
 import { DrawingCanvas, DrawingInputOverlay } from './drawingCanvas.js';
 import { GradiaSettings } from './settings.js';
 import { ResolutionOverlay } from './resolutionOverlay.js';
@@ -179,12 +179,24 @@ export default class GradiaCompanion extends Extension {
         return Clutter.EVENT_STOP;
     }
 
+    _applyToLastStroke(propName, value) {
+        this._canvases.forEachCanvas((c) => {
+            const strokes = c.strokes;
+            if (strokes.length === 0) return;
+            const last = strokes[strokes.length - 1];
+            if (last.toolId !== (this._toolbar.activePropsToolId ?? this._toolbar.selectedTool)) return;
+            if (c.selectedStroke === last) return;
+            last[propName] = value;
+            c.queue_repaint();
+        });
+    }
+
     _updateBrushCursor() {
         const tool = this._toolbar?.selectedTool;
         const mode = this._blurSelector?.mode;
-        const lw = this._toolbar?.lineWidth || 8;
+        const sz = this._toolbar?.size || 8;
         this._canvases.forEachCanvas((c) => {
-            if (tool === 'blur' && mode === 'brush') c.showCursor(lw / 2);
+            if (tool === 'blur' && mode === 'brush') c.showCursor(sz / 2);
             else if (tool === 'blur' && mode === 'selection') c.hideCursor(Clutter.CursorType.CROSSHAIR);
             else c.hideCursor();
         });
@@ -403,7 +415,6 @@ export default class GradiaCompanion extends Extension {
                     if (this._toolbar?.selectedTool === 'drag' && this._dragTool) {
                         this._dragTool.release();
                         this._updateTrashButton();
-                        this._toolbar.updateDrawingControlsSensitivity();
                         return Clutter.EVENT_STOP;
                     }
                     return Clutter.EVENT_PROPAGATE;
@@ -442,11 +453,8 @@ export default class GradiaCompanion extends Extension {
             captureRegion: (r) => this._screenshotCapture.captureRegion(r),
             getRegionSync: (r) => this._screenshotCapture.getRegionSync(r),
             stageScale: Main.screenshotUI._scale || 1,
-            onBlockSizeChanged: (size) => this._toolbar.blurMenu?.setBlockSize(size),
-            onModeChanged: (mode) => {
-                this._toolbar.blurMenu?.setMode(mode);
-                this._updateBrushCursor();
-            },
+            onBlockSizeChanged: (size) => this._toolbar?._onBlurBlockSizeChanged(size),
+            onModeChanged: (mode) => this._updateBrushCursor(),
         });
         this._toolbar.setBlurSelector(this._blurSelector);
         this._screenshotCapture.blurSelector = this._blurSelector;
@@ -472,7 +480,7 @@ export default class GradiaCompanion extends Extension {
         ui._showPointerButtonContainer.insert_child_below(this._settingsButton, ui._showPointerButton);
 
         this._canvases.forEachCanvas((c) => {
-            c.applyProps({ color: this._toolbar.selectedColor, lineWidth: this._toolbar.lineWidth });
+            c.applyProps({ color: this._toolbar.selectedColor, size: this._toolbar.size });
             c.setTool(this._toolbar.selectedTool);
             c._onStrokeCommitted = (stroke) => this._blurSelector.onStrokeCommitted(c, stroke);
             c._onStrokePreview = (canvas, stroke) => {
@@ -488,8 +496,7 @@ export default class GradiaCompanion extends Extension {
 
         this._primaryBin = primaryBin;
         ui.add_child(this._toolbar);
-        if (this._toolbar.colorMenu) ui.add_child(this._toolbar.colorMenu);
-        if (this._toolbar.blurMenu) ui.add_child(this._toolbar.blurMenu);
+        if (this._toolbar.toolPropsMenu) ui.add_child(this._toolbar.toolPropsMenu);
         this._repositionToolbar();
 
         this._resolutionOverlay = new ResolutionOverlay(primaryBin);
@@ -552,46 +559,39 @@ export default class GradiaCompanion extends Extension {
             });
         }
 
-        this._toolbar.connect('tool-property-changed', (_toolbar, which) => {
-            if (which === 'color') {
-                const color = this._toolbar.selectedColor;
-                this._canvases.forEachCanvas((c) => c.applyProps({ color }));
+        this._toolbar.connect('tool-property-changed', (_toolbar, payload) => {
+            const props = JSON.parse(payload);
+            const STROKE_KEY_MAP = { size: 'strokeWidth' };
 
-                const sel = this._canvases.selected;
-                if (sel) {
-                    sel.stroke.color = color;
-                    sel.canvas.queue_repaint();
-                }
+            this._canvases.forEachCanvas((c) => c.applyProps(props));
 
-                this._textEntryManager?.updateColor(color);
+            for (const [key, value] of Object.entries(props)) {
+                if (value === undefined || key === 'mode') continue;
+                const skip = key === 'size'
+                    && this._textEntryManager?.hasPending
+                    && this._toolbar.selectedTool === 'text';
+                if (!skip)
+                    this._applyToLastStroke(STROKE_KEY_MAP[key] || key, value);
             }
 
-            if (which === 'lineWidth') {
-                const lineWidth = this._toolbar.lineWidth;
-                this._canvases.forEachCanvas((c) => {
-                    c.applyProps({ lineWidth });
-
-                    if (this._textEntryManager?.hasPending && this._toolbar.selectedTool === 'text') return;
-
-                    const strokes = c.strokes;
-                    if (strokes.length === 0) return;
-                    const last = strokes[strokes.length - 1];
-                    if (last.toolId !== this._toolbar.selectedTool) return;
-                    if (c.selectedStroke === last) return;
-                    last.strokeWidth = lineWidth;
-                    c.queue_repaint();
-                });
-
-                const sel = this._canvases.selected;
-                if (sel) {
-                    sel.stroke.strokeWidth = lineWidth;
-                    sel.canvas.queue_repaint();
-                    this._updateTrashButton();
+            const sel = this._canvases.selected;
+            if (sel) {
+                for (const [key, value] of Object.entries(props)) {
+                    if (value === undefined || key === 'mode') continue;
+                    sel.stroke[STROKE_KEY_MAP[key] || key] = value;
                 }
+                sel.canvas.queue_repaint();
+                this._updateTrashButton();
+            }
 
-                this._textEntryManager?.updateLineWidth(lineWidth);
+            if (props.color !== undefined)
+                this._textEntryManager?.updateColor(props.color);
+            if (props.size !== undefined)
+                this._textEntryManager?.updateSize(props.size);
+            if (props.size !== undefined || props.mode !== undefined)
                 this._updateBrushCursor();
-            }
+            if (props.blockSize !== undefined || props.mode !== undefined)
+                this._canvases.forEachCanvas((c) => this._blurSelector.refreshPreview(c));
         });
 
         this._toolbar.connect('undo', () => {

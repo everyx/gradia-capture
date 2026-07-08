@@ -36,6 +36,7 @@ gnome-extensions pack dist \
     --out-dir=dist \
     --extra-source="icons" \
     --extra-source="schemas" \
+    --extra-source="tools" \
     $(find dist -maxdepth 1 \( -name '*.js' -o -name '*.py' \) ! -name 'extension.js' ! -name 'prefs.js' -printf '--extra-source=%f ')
 echo "Packing Done!"
 

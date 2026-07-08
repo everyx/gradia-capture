@@ -1,6 +1,6 @@
 import Clutter from 'gi://Clutter';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import { TOOL_SHORTCUTS } from './tools.js';
+import { TOOL_SHORTCUTS } from './tools/index.js';
 
 const MODE_BUTTONS = [
     ['_windowButton', '_windowButtonId'],
@@ -110,7 +110,7 @@ export class ShortcutDispatcher {
         });
 
         this._scrollId = ui.connect('scroll-event', (_actor, event) => {
-            this._toolbar.scrollLineWidth(event.get_scroll_direction());
+            this._toolbar.scrollSize(event.get_scroll_direction(), event);
             return Clutter.EVENT_PROPAGATE;
         });
 

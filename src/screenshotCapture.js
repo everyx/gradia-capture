@@ -5,7 +5,7 @@ import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
-import { getToolDef } from './tools.js';
+import { getToolDef } from './tools/index.js';
 import { getCaptureContext } from './captureContext.js';
 
 export class ScreenshotCapture {

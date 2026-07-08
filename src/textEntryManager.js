@@ -46,7 +46,7 @@ export class TextEntryManager {
         this._pendingStroke = {
             color: this._toolbar.selectedColor,
             toolId: 'text',
-            strokeWidth: this._toolbar.lineWidth,
+            strokeWidth: this._toolbar.size,
             stagePoints: [{ x: stageX, y: stageY }],
             text: '',
         };
@@ -84,7 +84,7 @@ export class TextEntryManager {
             }
             this._resizeIdle = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
                 this._resizeIdle = 0;
-                const fs = Math.max(8, Math.round(this._toolbar.lineWidth * 3));
+                const fs = Math.max(8, Math.round(this._toolbar.size * 3));
                 const [, naturalWidth] = clutterText.get_preferred_width(-1);
                 entry.set_width(Math.max(fs * MIN_WIDTH_CHARS, naturalWidth + fs));
 
@@ -154,7 +154,7 @@ export class TextEntryManager {
         }
     }
 
-    updateLineWidth(width) {
+    updateSize(width) {
         if (this._pendingStroke) {
             this._pendingStroke.strokeWidth = width;
             this._updateStyle();
@@ -197,7 +197,7 @@ export class TextEntryManager {
 
     _updateStyle() {
         if (!this._entry) return;
-        const fs = Math.max(8, Math.round(this._toolbar.lineWidth * 3));
+        const fs = Math.max(8, Math.round(this._toolbar.size * 3));
         const col = this._toolbar.selectedColor;
         this._entry.style = `
             color: ${col};
