@@ -9,6 +9,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { runRapidOcr } from './gradiaIntegration.js';
 import { attachTooltip } from './tooltip.js';
 import { getCaptureContext } from './captureContext.js';
+import { N_ } from './i18n.js';
 
 export class OcrSelector {
     constructor({ toolbar, canvases, extensionPath, screenshotFn }) {
@@ -462,7 +463,7 @@ export class OcrSelector {
                 style_class: 'gradia-ocr-copy-btn',
                 child: new St.Icon({ icon_name: 'edit-copy-symbolic', style: 'icon-size: 14px;' }),
             });
-            attachTooltip(this._copyBtn, 'Copy selected text', St.Side.RIGHT);
+            attachTooltip(this._copyBtn, N_('Copy selected text'), St.Side.RIGHT);
             this._copyBtn.connect('clicked', () => this.copySelected());
             if (Main.screenshotUI._panel) primaryBin.insert_child_below(this._copyBtn, Main.screenshotUI._panel);
             else primaryBin.add_child(this._copyBtn);

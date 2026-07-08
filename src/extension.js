@@ -3,6 +3,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 
+import { initI18n } from './i18n.js';
 import { Toolbar, TRASH_BUTTON_RADIUS } from './toolbar.js';
 import { getToolDef } from './tools.js';
 import { DrawingCanvas, DrawingInputOverlay } from './drawingCanvas.js';
@@ -21,6 +22,7 @@ import { SelectionClearer } from './selectionClearPatch.js';
 
 export default class GradiaCompanion extends Extension {
     enable() {
+        initI18n(this.dir);
         this._originalOpen = Main.screenshotUI.open.bind(Main.screenshotUI);
         this._originalSaveScreenshot = Main.screenshotUI._saveScreenshot.bind(Main.screenshotUI);
         this._gradiaSettings = new GradiaSettings(this);

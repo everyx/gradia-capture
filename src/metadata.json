@@ -7,5 +7,6 @@
         "kofi": "alexandervanhee"
     },
     "settings-schema": "org.gnome.shell.extensions.gradia-companion",
+    "gettext-domain": "gradia-capture",
     "shell-version": ["49", "50"]
 }

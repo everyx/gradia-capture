@@ -3,6 +3,8 @@ import GLib from 'gi://GLib';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import { _ } from './i18n.js';
+
 const DEFAULT_GAP = 6;
 
 export const Tooltip = GObject.registerClass(
@@ -66,7 +68,7 @@ export const Tooltip = GObject.registerClass(
 );
 
 export function attachTooltip(widget, text, side = St.Side.BOTTOM) {
-    const tooltip = new Tooltip(widget, text, side);
+    const tooltip = new Tooltip(widget, _(text), side);
     Main.uiGroup.add_child(tooltip);
     return tooltip;
 }

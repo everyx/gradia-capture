@@ -6,6 +6,10 @@
   "scripts": {
     "build": "./scripts/build.sh",
     "dev": "./scripts/dev.sh",
+    "gettext": "./scripts/gettext.sh",
+    "gettext:extract": "./scripts/gettext.sh extract",
+    "gettext:update": "./scripts/gettext.sh update",
+    "gettext:compile": "./scripts/gettext.sh compile",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "fmt": "oxfmt --write src/",

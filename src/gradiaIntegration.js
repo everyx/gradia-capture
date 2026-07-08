@@ -5,6 +5,7 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import { attachTooltip } from './tooltip.js';
+import { N_ } from './i18n.js';
 
 const GRADIA_FLATPAK_ID = 'be.alexandervanhee.gradia';
 const GRADIA_DESKTOP_ID = `${GRADIA_FLATPAK_ID}.desktop`;
@@ -95,6 +96,6 @@ export function createSettingsButton(onClick) {
         toggle_mode: false,
     });
     button.connect('clicked', () => onClick());
-    attachTooltip(button, 'Settings', St.Side.TOP);
+    attachTooltip(button, N_('Settings'), St.Side.TOP);
     return button;
 }

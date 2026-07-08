@@ -1,0 +1,306 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR Gavin Luo
+# This file is distributed under the same license as the gradia-capture package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: gradia-capture\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-08 07:26+0800\n"
+"PO-Revision-Date: 2026-07-08 00:07+0800\n"
+"Last-Translator: Gavin Luo <gavin@example.com>\n"
+"Language-Team: Chinese (Simplified) <zh_CN@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: src/gradiaIntegration.js:99
+msgid "Settings"
+msgstr "设置"
+
+#: src/ocrSelector.js:466
+msgid "Copy selected text"
+msgstr "复制选中文本"
+
+#: src/prefs.js:15
+msgid "Preferences"
+msgstr "偏好设置"
+
+#: src/prefs.js:59
+msgid "Support This Extension"
+msgstr ""
+
+#: src/prefs.js:66
+msgid "If you enjoy my work, consider donating!"
+msgstr ""
+
+#: src/prefs.js:72
+msgid "Donate ♥"
+msgstr ""
+
+#: src/prefs.js:89
+msgid "PNG"
+msgstr ""
+
+#: src/prefs.js:90
+msgid "WebP"
+msgstr ""
+
+#: src/prefs.js:91
+msgid "AVIF"
+msgstr ""
+
+#: src/prefs.js:94
+msgid "Screenshot"
+msgstr "截图"
+
+#: src/prefs.js:105
+msgid "File Format"
+msgstr "文件格式"
+
+#: src/prefs.js:106
+msgid "Changing this may slow down saving"
+msgstr ""
+
+#: src/prefs.js:124
+msgid "Disable Initial Selection"
+msgstr ""
+
+#: src/prefs.js:125
+msgid "Hide the default or last pre-selected area when the overlay opens"
+msgstr ""
+
+#: src/prefs.js:131
+msgid "Include Parent Windows"
+msgstr ""
+
+#: src/prefs.js:132
+msgid "Also capture parent windows when a transient window is selected"
+msgstr ""
+
+#: src/prefs.js:143
+msgid "Sound"
+msgstr "声音"
+
+#: src/prefs.js:144
+msgid "Play a shutter sound effect on capture"
+msgstr ""
+
+#: src/prefs.js:162
+msgid "Shortcuts"
+msgstr ""
+
+#: src/prefs.js:166
+msgid "Screenshot Mode"
+msgstr ""
+
+#: src/prefs.js:167
+msgid "Take Screenshot / Capture"
+msgstr ""
+
+#: src/prefs.js:168
+msgid "Copy to Clipboard"
+msgstr ""
+
+#: src/prefs.js:169
+msgid "Save As…"
+msgstr ""
+
+#: src/prefs.js:170
+msgid "Extract Text (OCR)"
+msgstr ""
+
+#: src/prefs.js:171
+msgid "Area Selection"
+msgstr ""
+
+#: src/prefs.js:172
+msgid "Screen Selection"
+msgstr ""
+
+#: src/prefs.js:173
+msgid "Window Selection"
+msgstr ""
+
+#: src/prefs.js:174
+msgid "Toggle Pointer Visibility"
+msgstr ""
+
+#: src/prefs.js:175
+msgid "Toggle Screen Recording"
+msgstr ""
+
+#: src/prefs.js:178
+msgid "Annotations"
+msgstr ""
+
+#: src/prefs.js:179
+msgid "Undo Last Stroke"
+msgstr ""
+
+#: src/prefs.js:180
+msgid "Delete Selected"
+msgstr ""
+
+#: src/prefs.js:181
+msgid "Crop Tool"
+msgstr ""
+
+#: src/prefs.js:182
+msgid "Drag Tool"
+msgstr ""
+
+#: src/prefs.js:183
+msgid "Freehand Tool"
+msgstr ""
+
+#: src/prefs.js:184
+msgid "Rectangle Tool"
+msgstr ""
+
+#: src/prefs.js:185
+msgid "Solid Rectangle Tool"
+msgstr ""
+
+#: src/prefs.js:186
+msgid "Highlighter Tool"
+msgstr ""
+
+#: src/prefs.js:187
+msgid "Arrow Tool"
+msgstr ""
+
+#: src/prefs.js:188
+msgid "Text Tool"
+msgstr ""
+
+#: src/prefs.js:189
+msgid "Number Stamp Tool"
+msgstr ""
+
+#: src/prefs.js:214
+msgid "Take a screenshot interactively"
+msgstr ""
+
+#: src/prefs.js:215
+msgid "Take a screencast interactively"
+msgstr ""
+
+#: src/prefs.js:216
+msgid "Take a screenshot of a window"
+msgstr ""
+
+#: src/prefs.js:217
+msgid "Take a screenshot"
+msgstr ""
+
+#: src/prefs.js:220
+msgid "System Keybindings"
+msgstr ""
+
+#: src/prefs.js:221
+msgid "Configurable in Settings → Keyboard."
+msgstr ""
+
+#: src/toolbar.js:16
+msgid "White"
+msgstr ""
+
+#: src/toolbar.js:17
+msgid "Black"
+msgstr ""
+
+#: src/toolbar.js:18
+msgid "Red"
+msgstr ""
+
+#: src/toolbar.js:19
+msgid "Orange"
+msgstr ""
+
+#: src/toolbar.js:20
+msgid "Yellow"
+msgstr ""
+
+#: src/toolbar.js:21
+msgid "Green"
+msgstr ""
+
+#: src/toolbar.js:22
+msgid "Blue"
+msgstr ""
+
+#: src/toolbar.js:23
+msgid "Purple"
+msgstr ""
+
+#: src/toolbar.js:173
+msgid "Brush"
+msgstr "画笔"
+
+#: src/toolbar.js:173
+msgid "Selection"
+msgstr "选区"
+
+#: src/toolbar.js:460
+msgid "Color"
+msgstr "颜色"
+
+#: src/toolbar.js:536
+msgid "Text Recognition"
+msgstr "文字识别"
+
+#: src/toolbar.js:550
+msgid "Undo"
+msgstr "撤销"
+
+#: src/toolbar.js:561
+msgid "Clear all"
+msgstr "清除全部"
+
+#: src/toolbar.js:604 src/tools.js:77
+msgid "Crop"
+msgstr "裁剪"
+
+#: src/toolbar.js:604
+msgid "Pick Display"
+msgstr "选择显示器"
+
+#: src/tools.js:88
+msgid "Drag"
+msgstr "拖拽"
+
+#: src/tools.js:100
+msgid "Freehand"
+msgstr "自由绘制"
+
+#: src/tools.js:119
+msgid "Rectangle"
+msgstr "矩形"
+
+#: src/tools.js:139
+msgid "Solid Rectangle"
+msgstr "实心矩形"
+
+#: src/tools.js:158
+msgid "Highlighter"
+msgstr "荧光笔"
+
+#: src/tools.js:178
+msgid "Arrow"
+msgstr "箭头"
+
+#: src/tools.js:210
+msgid "Text"
+msgstr "文字"
+
+#: src/tools.js:267
+msgid "Number Stamp"
+msgstr "数字标记"
+
+#: src/tools.js:311
+msgid "Blur"
+msgstr "模糊"
