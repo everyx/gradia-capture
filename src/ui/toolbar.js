@@ -3,12 +3,11 @@ import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
 
-import { TOOLS, DrawingTool, getToolDef } from './tools/index.js';
-import { attachTooltip } from './tooltip.js';
-import { _, N_ } from './i18n.js';
+import { TOOLS, DrawingTool, getToolDef } from '../annotation/tools/index.js';
+import { attachTooltip } from '../platform/tooltip.js';
+import { _ } from '../platform/i18n.js';
 import { ToolPropsMenu, SIZE_MIN, SIZE_MAX, BLUR_SIZE_MAX } from './toolPropsMenu.js';
-
-export const TRASH_BUTTON_RADIUS = 16;
+import { TOOLBAR_GROUPS, SEP } from './toolbarLayout.js';
 
 function makeIcon(spec, extensionPath = '') {
     if (spec.startsWith('/') || spec.startsWith('icons/')) {
@@ -38,7 +37,9 @@ export const Toolbar = GObject.registerClass(
                 style_class: 'screenshot-ui-panel gradia-toolbar',
                 x_align: Clutter.ActorAlign.CENTER,
                 y_align: Clutter.ActorAlign.START,
-                x_expand: false, y_expand: false, reactive: true,
+                x_expand: false,
+                y_expand: false,
+                reactive: true,
                 ...rest,
             });
 
@@ -50,6 +51,7 @@ export const Toolbar = GObject.registerClass(
             this._popupStagePressIds = new Map();
             this._hasSelection = hasSelection ?? (() => false);
             this._hasVisibleCanvas = hasVisibleCanvas ?? (() => true);
+            this._groupButtons = {};
 
             if (gradiaSettings) {
                 const changed = (key, value) => this.emit('tool-property-changed', JSON.stringify({ [key]: value }));
@@ -61,16 +63,14 @@ export const Toolbar = GObject.registerClass(
                 }
             }
 
-            this._buildToolButtons();
-            this._addSeparator();
-            this._buildActionButtons();
-            this._addSeparator();
-            this._buildOcrButton();
+            this._buildFromLayout();
 
             this._toolPropsMenu = new ToolPropsMenu({ extensionPath: this._extensionPath });
             this._wirePropsMenu();
 
-            this.connect('notify::visible', () => { if (!this.visible) this._hidePopup(this._toolPropsMenu); });
+            this.connect('notify::visible', () => {
+                if (!this.visible) this._hidePopup(this._toolPropsMenu);
+            });
             this.connect('destroy', () => this._onDestroy());
         }
 
@@ -78,7 +78,10 @@ export const Toolbar = GObject.registerClass(
             const popup = this._toolPropsMenu;
             if (popup) {
                 const id = this._popupStagePressIds.get(popup);
-                if (id !== undefined) { global.stage.disconnect(id); this._popupStagePressIds.delete(popup); }
+                if (id !== undefined) {
+                    global.stage.disconnect(id);
+                    this._popupStagePressIds.delete(popup);
+                }
             }
             this._toolPropsMenu = null;
         }
@@ -87,21 +90,33 @@ export const Toolbar = GObject.registerClass(
             const conn = (signal, handler) => this._toolPropsMenu.connect(signal, handler);
 
             conn('color-changed', (_m, hex) => {
-                if (this._activeTool) { this._activeTool.set('color', hex); this._activeTool.save(); }
+                if (this._activeTool) {
+                    this._activeTool.set('color', hex);
+                    this._activeTool.save();
+                }
             });
 
             conn('size-changed', (_m, size) => {
-                if (this._activeTool) { this._activeTool.set('size', size); this._activeTool.save(); }
+                if (this._activeTool) {
+                    this._activeTool.set('size', size);
+                    this._activeTool.save();
+                }
             });
 
             conn('block-size-changed', (_m, size) => {
                 if (this._blurSelector) this._blurSelector.setBlockSize(size);
-                if (this._activeTool) { this._activeTool.set('blockSize', size); this._activeTool.save(); }
+                if (this._activeTool) {
+                    this._activeTool.set('blockSize', size);
+                    this._activeTool.save();
+                }
             });
 
             conn('mode-changed', (_m, mode) => {
                 if (this._blurSelector) this._blurSelector.setMode(mode);
-                if (this._activeTool) { this._activeTool.set('mode', mode); this._activeTool.save(); }
+                if (this._activeTool) {
+                    this._activeTool.set('mode', mode);
+                    this._activeTool.save();
+                }
                 if (this._toolPropsMenu.visible)
                     this._toolPropsMenu.updateWhenModeChanged('blur', this._blurPropsForMenu());
             });
@@ -116,7 +131,8 @@ export const Toolbar = GObject.registerClass(
                 popup.disconnect(cb);
                 popup.reposition({ triggerBtn, toolbar: this, ...this._lastReposition });
             });
-            this._popupStagePressIds.set(popup,
+            this._popupStagePressIds.set(
+                popup,
                 global.stage.connect('button-press-event', (_stage, event) => {
                     const target = event.get_source();
                     if (target && (popup.contains(target) || triggerBtn?.contains(target)))
@@ -129,7 +145,10 @@ export const Toolbar = GObject.registerClass(
 
         _hidePopup(popup) {
             const id = this._popupStagePressIds.get(popup);
-            if (id !== undefined) { global.stage.disconnect(id); this._popupStagePressIds.delete(popup); }
+            if (id !== undefined) {
+                global.stage.disconnect(id);
+                this._popupStagePressIds.delete(popup);
+            }
             if (popup.get_stage()) popup.hide();
         }
 
@@ -138,27 +157,26 @@ export const Toolbar = GObject.registerClass(
             popup.reposition({ triggerBtn, toolbar: this, ...this._lastReposition });
         }
 
-        _isDrawingTool(id) { return getToolDef(id) instanceof DrawingTool; }
+        _isDrawingTool(id) {
+            return getToolDef(id) instanceof DrawingTool;
+        }
 
         _emitLoadedProps() {
             if (!this._activeTool) return;
             for (const entry of this._activeTool.propSchema) {
                 const v = this._activeTool.get(entry.key);
-                if (v !== undefined)
-                    this.emit('tool-property-changed', JSON.stringify({ [entry.key]: v }));
+                if (v !== undefined) this.emit('tool-property-changed', JSON.stringify({ [entry.key]: v }));
             }
         }
 
-        _findTool(toolId) { return getToolDef(toolId); }
-
         _blurPropsForMenu() {
-            const t = this._findTool('blur');
+            const t = getToolDef('blur');
             return { mode: t?.get('mode') ?? 'brush', size: t?.get('size') ?? 4, blockSize: t?.get('blockSize') ?? 16 };
         }
 
         setBlurSelector(blurSelector) {
             this._blurSelector = blurSelector;
-            const t = this._findTool('blur');
+            const t = getToolDef('blur');
             if (!t) return;
             blurSelector.restoreState({
                 blurMode: t.get('mode') ?? 'brush',
@@ -167,12 +185,11 @@ export const Toolbar = GObject.registerClass(
         }
 
         syncToStroke(stroke) {
-            const tool = this._findTool(stroke.toolId);
+            const tool = getToolDef(stroke.toolId);
             if (!(tool instanceof DrawingTool)) return;
 
             tool.set('color', stroke.color, { silent: true });
-            if (stroke.strokeWidth !== undefined)
-                tool.set('size', stroke.strokeWidth, { silent: true });
+            if (stroke.strokeWidth !== undefined) tool.set('size', stroke.strokeWidth, { silent: true });
 
             if (this._isDrawingTool(stroke.toolId)) {
                 this._activeTool = tool;
@@ -188,7 +205,7 @@ export const Toolbar = GObject.registerClass(
             if (!btn) return;
 
             this._propsToolBtn = btn;
-            const tool = this._findTool(toolId);
+            const tool = getToolDef(toolId);
 
             if (toolId === 'blur') {
                 this._toolPropsMenu.showForTool('blur', this._blurPropsForMenu());
@@ -202,26 +219,67 @@ export const Toolbar = GObject.registerClass(
         }
 
         _onBlurBlockSizeChanged(size) {
-            if (this._toolPropsMenu?._blockSliderSetValue)
-                this._toolPropsMenu._blockSliderSetValue(size);
+            if (this._toolPropsMenu?._blockSliderSetValue) this._toolPropsMenu._blockSliderSetValue(size);
         }
 
-        _buildToolButtons() {
-            for (let i = 0; i < TOOLS.length; i++) {
-                const tool = TOOLS[i];
-                const btn = new St.Button({
-                    child: makeIcon(tool.icon, this._extensionPath),
-                    style_class: 'screenshot-ui-type-button gradia-square-button',
-                    toggle_mode: true,
-                    checked: tool.id === this._selectedTool,
-                    y_align: Clutter.ActorAlign.CENTER,
-                });
-                btn._toolId = tool.id;
-                btn.connect('clicked', () => this.selectTool(tool.id));
-                this.add_child(btn);
-                this._toolButtons.push(btn);
-                btn._tooltip = attachTooltip(btn, tool.name);
-                if (i === 1) this._addSeparator();
+        _buildFromLayout() {
+            for (const group of TOOLBAR_GROUPS) {
+                const groupButtons = [];
+                for (const item of group.items) {
+                    if (item === SEP) {
+                        this._addSeparator();
+                        continue;
+                    }
+                    const btn = item.type === 'tool' ? this._buildToolButton(item.id) : this._buildActionButton(item);
+                    groupButtons.push(btn);
+                }
+                this._groupButtons[group.id] = groupButtons;
+            }
+        }
+
+        _buildToolButton(id) {
+            const tool = getToolDef(id);
+            const btn = new St.Button({
+                child: makeIcon(tool.icon, this._extensionPath),
+                style_class: 'screenshot-ui-type-button gradia-square-button',
+                toggle_mode: true,
+                checked: tool.id === this._selectedTool,
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+            btn._toolId = tool.id;
+            btn.connect('clicked', () => this.selectTool(tool.id));
+            this.add_child(btn);
+            this._toolButtons.push(btn);
+            btn._tooltip = attachTooltip(btn, tool.name);
+            return btn;
+        }
+
+        _buildActionButton(def) {
+            const btn = new St.Button({
+                child: makeIcon(def.icon, this._extensionPath),
+                style_class: 'screenshot-ui-type-button gradia-square-button',
+                reactive: true,
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+            btn.connect('clicked', () => this.emit(def.signal));
+            this.add_child(btn);
+            attachTooltip(btn, def.tooltip);
+            if (def.id === 'ocr') {
+                this._ocrButton = btn;
+                this._ocrIcon = btn.get_child();
+                this._ocrDone = false;
+            } else if (def.id === 'undo') {
+                this._undoBtn = btn;
+            } else if (def.id === 'clear') {
+                this._clearBtn = btn;
+            }
+            return btn;
+        }
+
+        setGroupEnabled(groupId, enabled) {
+            for (const btn of this._groupButtons[groupId] ?? []) {
+                btn.reactive = enabled;
+                btn.opacity = enabled ? 255 : 80;
             }
         }
 
@@ -231,8 +289,10 @@ export const Toolbar = GObject.registerClass(
             if (this._ocrIcon) this._ocrButton.set_child(this._ocrIcon);
             this._ocrButton.remove_all_transitions();
             this._ocrButton.ease_property('opacity', 128, {
-                duration: 500, mode: Clutter.AnimationMode.EASE_IN_OUT_QUAD,
-                repeat_count: -1, auto_reverse: true,
+                duration: 500,
+                mode: Clutter.AnimationMode.EASE_IN_OUT_QUAD,
+                repeat_count: -1,
+                auto_reverse: true,
             });
         }
 
@@ -262,41 +322,9 @@ export const Toolbar = GObject.registerClass(
             this._clearBtn.opacity = visible ? 255 : 80;
         }
 
-        _buildOcrButton() {
-            const btn = new St.Button({
-                child: makeIcon('scanner-symbolic', this._extensionPath),
-                style_class: 'screenshot-ui-type-button gradia-square-button',
-                reactive: true, y_align: Clutter.ActorAlign.CENTER,
-            });
-            btn.connect('clicked', () => this.emit('ocr-trigger'));
-            this.add_child(btn);
-            this._ocrButton = btn;
-            this._ocrIcon = btn.get_child();
-            attachTooltip(btn, N_('Text Recognition'));
-            this._ocrDone = false;
+        _addSeparator() {
+            this.add_child(new St.Widget({ style_class: 'gradia-separator', y_expand: true }));
         }
-
-        _buildActionButtons() {
-            this._undoBtn = new St.Button({
-                child: makeIcon('edit-undo-symbolic', this._extensionPath),
-                style_class: 'screenshot-ui-type-button gradia-square-button',
-                reactive: true, y_align: Clutter.ActorAlign.CENTER,
-            });
-            this._undoBtn.connect('clicked', () => this.emit('undo'));
-            this.add_child(this._undoBtn);
-            attachTooltip(this._undoBtn, N_('Undo'));
-
-            this._clearBtn = new St.Button({
-                child: makeIcon('user-trash-symbolic', this._extensionPath),
-                style_class: 'screenshot-ui-type-button gradia-square-button',
-                reactive: true, y_align: Clutter.ActorAlign.CENTER,
-            });
-            this._clearBtn.connect('clicked', () => this.emit('clear'));
-            this.add_child(this._clearBtn);
-            attachTooltip(this._clearBtn, N_('Clear all'));
-        }
-
-        _addSeparator() { this.add_child(new St.Widget({ style_class: 'gradia-separator', y_expand: true })); }
 
         selectTool(id) {
             const btn = this._toolButtons.find((b) => b._toolId === id);
@@ -310,12 +338,11 @@ export const Toolbar = GObject.registerClass(
 
             if (this._isDrawingTool(id)) {
                 this._activePropsTool = id;
-                this._activeTool = this._findTool(id);
+                this._activeTool = getToolDef(id);
                 if (id === prevTool && this._toolPropsMenu.visible) {
                     this._hidePopup(this._toolPropsMenu);
                 } else {
-                    if (id !== prevTool)
-                        this._emitLoadedProps();
+                    if (id !== prevTool) this._emitLoadedProps();
                     this._showPropsPopup(id);
                 }
             } else {
@@ -350,10 +377,8 @@ export const Toolbar = GObject.registerClass(
             const oldSize = this._activeTool.get('size') ?? 4;
             const max = this._sizeMax();
             let limit;
-            if (direction === Clutter.ScrollDirection.UP)
-                limit = Math.min(max, oldSize + step);
-            else if (direction === Clutter.ScrollDirection.DOWN)
-                limit = Math.max(SIZE_MIN, oldSize - step);
+            if (direction === Clutter.ScrollDirection.UP) limit = Math.min(max, oldSize + step);
+            else if (direction === Clutter.ScrollDirection.DOWN) limit = Math.max(SIZE_MIN, oldSize - step);
             else if (direction === Clutter.ScrollDirection.SMOOTH && event) {
                 const [, dy] = event.get_scroll_delta();
                 const d = dy < 0 ? step : dy > 0 ? -step : 0;
@@ -366,9 +391,13 @@ export const Toolbar = GObject.registerClass(
                 this._toolPropsMenu._sizeSliderSetValue(limit);
         }
 
-        _sizeMax() { return this._selectedTool === 'blur' ? BLUR_SIZE_MAX : SIZE_MAX; }
+        _sizeMax() {
+            return this._selectedTool === 'blur' ? BLUR_SIZE_MAX : SIZE_MAX;
+        }
 
-        hideColorMenu() { this._hidePopup(this._toolPropsMenu); }
+        hideColorMenu() {
+            this._hidePopup(this._toolPropsMenu);
+        }
 
         reposition({ selectionRect, monitorRect }) {
             const [, natW] = this.get_preferred_width(-1);
@@ -379,10 +408,15 @@ export const Toolbar = GObject.registerClass(
             let targetX, targetY;
 
             if (selectionRect) {
-                const selTop = selectionRect.y, selHeight = selectionRect.height, selRight = selectionRect.x + selectionRect.width;
-                const localMonBottom = monitorRect.y + monitorRect.height, localMonRight = monitorRect.x + monitorRect.width;
-                const yAbove = Math.round(selTop - natH), yBelow = Math.round(selTop + selHeight);
-                const spaceAbove = Math.round(selTop), spaceBelow = Math.round(localMonBottom - selTop - selHeight);
+                const selTop = selectionRect.y,
+                    selHeight = selectionRect.height,
+                    selRight = selectionRect.x + selectionRect.width;
+                const localMonBottom = monitorRect.y + monitorRect.height,
+                    localMonRight = monitorRect.x + monitorRect.width;
+                const yAbove = Math.round(selTop - natH),
+                    yBelow = Math.round(selTop + selHeight);
+                const spaceAbove = Math.round(selTop),
+                    spaceBelow = Math.round(localMonBottom - selTop - selHeight);
                 if (spaceAbove >= natH) targetY = yAbove;
                 else if (spaceBelow >= natH) targetY = yBelow;
                 else targetY = 0;
@@ -399,14 +433,30 @@ export const Toolbar = GObject.registerClass(
                 this._repositionPopup(this._toolPropsMenu, this._propsToolBtn);
         }
 
-        get selectedTool() { return this._selectedTool; }
-        get activePropsToolId() { return this._activePropsTool; }
-        get selectedColor() { return this._activeTool?.get('color') ?? '#000000'; }
-        get size() { return this._activeTool?.get('size') ?? 4; }
-        get colorMenu() { return null; }
-        get blurMenu() { return null; }
-        get toolPropsMenu() { return this._toolPropsMenu; }
+        get selectedTool() {
+            return this._selectedTool;
+        }
+        get activePropsToolId() {
+            return this._activePropsTool;
+        }
+        get selectedColor() {
+            return this._activeTool?.get('color') ?? '#000000';
+        }
+        get size() {
+            return this._activeTool?.get('size') ?? 4;
+        }
+        get colorMenu() {
+            return null;
+        }
+        get blurMenu() {
+            return null;
+        }
+        get toolPropsMenu() {
+            return this._toolPropsMenu;
+        }
 
-        getToolButton(toolId) { return this._toolButtons.find((b) => b._toolId === toolId) || null; }
+        getToolButton(toolId) {
+            return this._toolButtons.find((b) => b._toolId === toolId) || null;
+        }
     },
 );

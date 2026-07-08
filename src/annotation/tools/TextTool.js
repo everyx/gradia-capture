@@ -3,22 +3,42 @@ import Pango from 'gi://Pango';
 import PangoCairo from 'gi://PangoCairo';
 import Clutter from 'gi://Clutter';
 
-import { N_ } from '../i18n.js';
+import { N_ } from '../../platform/i18n.js';
 import { DrawingTool } from './DrawingTool.js';
 import { SELECTION_PADDING, hexToRgb, rectHit } from './shared.js';
 
 export class TextTool extends DrawingTool {
-    get id() { return 'text'; }
-    get name() { return N_('Text'); }
-    get icon() { return 'icons/text-insert2-symbolic.svg'; }
-    get keybindings() { return [Clutter.KEY_8, Clutter.KEY_exclam, Clutter.KEY_t]; }
-    get propSchema() { return [{ key: 'color', type: 's', default: '#000000' }, { key: 'size', type: 'd', default: 4 }]; }
-    beginStroke() { return { text: '' }; }
+    get id() {
+        return 'text';
+    }
+    get name() {
+        return N_('Text');
+    }
+    get icon() {
+        return 'icons/text-insert2-symbolic.svg';
+    }
+    get keybindings() {
+        return [Clutter.KEY_8, Clutter.KEY_exclam, Clutter.KEY_t];
+    }
+    get propSchema() {
+        return [
+            { key: 'color', type: 's', default: '#000000' },
+            { key: 'size', type: 'd', default: 4 },
+        ];
+    }
+    beginStroke() {
+        return { text: '' };
+    }
     bounds(stroke) {
         const pt = stroke.stagePoints[0];
         const fontSize = Math.max(8, Math.round((stroke.strokeWidth ?? 4) * 3));
         if (!stroke.text)
-            return { minX: pt.x - SELECTION_PADDING, minY: pt.y - SELECTION_PADDING, maxX: pt.x + SELECTION_PADDING, maxY: pt.y + SELECTION_PADDING };
+            return {
+                minX: pt.x - SELECTION_PADDING,
+                minY: pt.y - SELECTION_PADDING,
+                maxX: pt.x + SELECTION_PADDING,
+                maxY: pt.y + SELECTION_PADDING,
+            };
         const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, 1, 1);
         const cr = new Cairo.Context(surface);
         const layout = PangoCairo.create_layout(cr);
@@ -28,7 +48,12 @@ export class TextTool extends DrawingTool {
         const [, extents] = layout.get_pixel_extents();
         cr.$dispose();
         surface.finish();
-        return { minX: pt.x - SELECTION_PADDING, minY: pt.y - SELECTION_PADDING, maxX: pt.x + extents.width + SELECTION_PADDING, maxY: pt.y + extents.height + SELECTION_PADDING };
+        return {
+            minX: pt.x - SELECTION_PADDING,
+            minY: pt.y - SELECTION_PADDING,
+            maxX: pt.x + extents.width + SELECTION_PADDING,
+            maxY: pt.y + extents.height + SELECTION_PADDING,
+        };
     }
     hitTest(stroke, sx, sy) {
         if (!stroke.text || stroke.stagePoints.length < 1) return false;

@@ -6,10 +6,10 @@ import PangoCairo from 'gi://PangoCairo';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import { runRapidOcr } from './gradiaIntegration.js';
-import { attachTooltip } from './tooltip.js';
-import { getCaptureContext } from './captureContext.js';
-import { N_ } from './i18n.js';
+import { runRapidOcr } from './backend.js';
+import { attachTooltip } from '../../platform/tooltip.js';
+import { getCaptureContext } from '../../capture/captureContext.js';
+import { N_ } from '../../platform/i18n.js';
 
 export class OcrSelector {
     constructor({ toolbar, canvases, extensionPath, screenshotFn }) {
@@ -41,6 +41,24 @@ export class OcrSelector {
 
     clearCache() {
         this._cacheResult = null;
+    }
+
+    handleKey(event) {
+        if (!this.isActive) return null;
+
+        const ctrl = event.get_state() & Clutter.ModifierType.CONTROL_MASK;
+        if (!ctrl) return null;
+
+        const sym = event.get_key_symbol();
+        if (sym === Clutter.KEY_c) {
+            this.copySelected();
+            return true;
+        }
+        if (sym === Clutter.KEY_a) {
+            this.selectAll();
+            return true;
+        }
+        return null;
     }
 
     async activate() {

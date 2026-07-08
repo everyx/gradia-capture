@@ -8,7 +8,7 @@ import {
     launchGradiaForScreenshot,
     openContainingFolder,
     openFileInDefaultApp,
-} from './gradiaIntegration.js';
+} from './gradiaApp.js';
 
 const TOAST_WIDTH = 250;
 const TOAST_MARGIN = 18;

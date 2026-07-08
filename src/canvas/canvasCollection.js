@@ -146,4 +146,16 @@ export class CanvasCollection {
         }
         return false;
     }
+
+    applyToLastStroke(toolId, propName, value) {
+        this.forEachCanvas((c) => {
+            const strokes = c.strokes;
+            if (strokes.length === 0) return;
+            const last = strokes[strokes.length - 1];
+            if (last.toolId !== toolId) return;
+            if (c.selectedStroke === last) return;
+            last[propName] = value;
+            c.queue_repaint();
+        });
+    }
 }

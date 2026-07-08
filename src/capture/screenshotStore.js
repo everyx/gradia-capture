@@ -7,7 +7,7 @@ import St from 'gi://St';
 import Cairo from 'gi://cairo';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import { showScreenshotToast } from './screenshotToast.js';
+import { showScreenshotToast } from '../platform/screenshotToast.js';
 
 function* _suffixes() {
     yield '';

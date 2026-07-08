@@ -3,7 +3,7 @@ import Pango from 'gi://Pango';
 import PangoCairo from 'gi://PangoCairo';
 import Clutter from 'gi://Clutter';
 
-import { N_ } from '../i18n.js';
+import { N_ } from '../../platform/i18n.js';
 import { DrawingTool } from './DrawingTool.js';
 import { SELECTION_PADDING, hexToRgb, rectHit } from './shared.js';
 
@@ -12,13 +12,30 @@ export class StampTool extends DrawingTool {
         super();
         this._counter = 0;
     }
-    get id() { return 'stamp'; }
-    get name() { return N_('Number Stamp'); }
-    get icon() { return 'icons/one-circle-symbolic.svg'; }
-    get keybindings() { return [Clutter.KEY_9, Clutter.KEY_ccedilla, Clutter.KEY_n]; }
-    get isStamp() { return true; }
-    get propSchema() { return [{ key: 'color', type: 's', default: '#000000' }, { key: 'size', type: 'd', default: 3 }]; }
-    beginStroke() { return { counter: ++this._counter }; }
+    get id() {
+        return 'stamp';
+    }
+    get name() {
+        return N_('Number Stamp');
+    }
+    get icon() {
+        return 'icons/one-circle-symbolic.svg';
+    }
+    get keybindings() {
+        return [Clutter.KEY_9, Clutter.KEY_ccedilla, Clutter.KEY_n];
+    }
+    get isStamp() {
+        return true;
+    }
+    get propSchema() {
+        return [
+            { key: 'color', type: 's', default: '#000000' },
+            { key: 'size', type: 'd', default: 3 },
+        ];
+    }
+    beginStroke() {
+        return { counter: ++this._counter };
+    }
     bounds(stroke) {
         const pt = stroke.stagePoints[0];
         const r = (stroke.strokeWidth ?? 4) * 5 + SELECTION_PADDING;

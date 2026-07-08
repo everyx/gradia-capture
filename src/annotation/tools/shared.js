@@ -35,7 +35,10 @@ export function hexToRgb(hex) {
 }
 
 export function rectBounds(pts, pad) {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
     for (const p of pts) {
         if (p.x < minX) minX = p.x;
         if (p.y < minY) minY = p.y;

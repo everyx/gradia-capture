@@ -1,5 +1,5 @@
 import Clutter from 'gi://Clutter';
-import { N_ } from '../i18n.js';
+import { N_ } from '../../platform/i18n.js';
 
 import { DrawingTool } from './DrawingTool.js';
 import { FreehandTool } from './FreehandTool.js';
@@ -15,8 +15,21 @@ export { DrawingTool };
 export { FreehandTool, RectangleTool, SolidRectangleTool, HighlighterTool, ArrowTool, TextTool, StampTool, BlurTool };
 
 export const TOOLS = [
-    { id: 'select', name: N_('Crop'), icon: 'icons/selection-opaque-3-symbolic.svg', keybindings: [Clutter.KEY_1, Clutter.KEY_ampersand, Clutter.KEY_q], isDrawing: false },
-    { id: 'drag', name: N_('Drag'), icon: 'icons/pointer-primary-click-symbolic.svg', keybindings: [Clutter.KEY_2, Clutter.KEY_eacute, Clutter.KEY_d], isDrawing: false, isDrag: true },
+    {
+        id: 'select',
+        name: N_('Crop'),
+        icon: 'icons/selection-opaque-3-symbolic.svg',
+        keybindings: [Clutter.KEY_1, Clutter.KEY_ampersand, Clutter.KEY_q],
+        isDrawing: false,
+    },
+    {
+        id: 'drag',
+        name: N_('Drag'),
+        icon: 'icons/pointer-primary-click-symbolic.svg',
+        keybindings: [Clutter.KEY_2, Clutter.KEY_eacute, Clutter.KEY_d],
+        isDrawing: false,
+        isDrag: true,
+    },
     new FreehandTool(),
     new RectangleTool(),
     new SolidRectangleTool(),

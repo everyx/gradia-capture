@@ -28,6 +28,29 @@ export class TextEntryManager {
         return !!this._pendingStroke;
     }
 
+    shouldSkipLastStroke() {
+        return this.hasPending;
+    }
+
+    handleKey(event) {
+        if (!this.isActive) return null;
+
+        const ctrl = event.get_state() & Clutter.ModifierType.CONTROL_MASK;
+        if (!ctrl) return null;
+
+        const sym = event.get_key_symbol();
+        if (
+            sym === Clutter.KEY_c ||
+            sym === Clutter.KEY_x ||
+            sym === Clutter.KEY_v ||
+            sym === Clutter.KEY_a ||
+            sym === Clutter.KEY_z
+        ) {
+            return { passthrough: true };
+        }
+        return null;
+    }
+
     activate(stageX, stageY) {
         if (this._entry) {
             this.commit();
@@ -159,6 +182,11 @@ export class TextEntryManager {
             this._pendingStroke.strokeWidth = width;
             this._updateStyle();
         }
+    }
+
+    onPropertyChanged(props) {
+        if (props.color !== undefined) this.updateColor(props.color);
+        if (props.size !== undefined) this.updateSize(props.size);
     }
 
     destroy() {

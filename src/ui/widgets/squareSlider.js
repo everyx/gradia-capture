@@ -21,14 +21,14 @@ export const SquareSlider = GObject.registerClass(
             const corner = 2;
 
             const handleY = height / 2;
-            let handleX = half + (width - 2 * half) * this._value / this._maxValue;
+            let handleX = half + ((width - 2 * half) * this._value) / this._maxValue;
             if (rtl) handleX = width - handleX;
 
             cr.save();
             cr.setSourceColor(themeNode.get_foreground_color());
             cr.translate(handleX - half, handleY - half);
-            cr.arc(corner, corner, corner, Math.PI, 3 * Math.PI / 2);
-            cr.arc(size - corner, corner, corner, 3 * Math.PI / 2, 2 * Math.PI);
+            cr.arc(corner, corner, corner, Math.PI, (3 * Math.PI) / 2);
+            cr.arc(size - corner, corner, corner, (3 * Math.PI) / 2, 2 * Math.PI);
             cr.arc(size - corner, size - corner, corner, 0, Math.PI / 2);
             cr.arc(corner, size - corner, corner, Math.PI / 2, Math.PI);
             cr.closePath();

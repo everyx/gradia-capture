@@ -1,6 +1,34 @@
 import Cairo from 'gi://cairo';
+import Clutter from 'gi://Clutter';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import GLib from 'gi://GLib';
+
+/*
+ * 坐标系不变式（blur 预览/提交路径）
+ *
+ * 三个度量空间的坐标：
+ *   stage 坐标    — 用户输入位置，单位=stage pixel（鼠标/actor 空间）
+ *   device 坐标   — 实际像素，= stage × _stageScale (= Main.screenshotUI._scale)
+ *   surface 坐标  — 马赛克 surface 内的偏移，原点对应抓取矩形的左上角
+ *
+ * 关键区域：
+ *   region       — 预览矩形（stage 坐标），= _computeBlurRegionBounds(stroke)
+ *   regionAbs    — region × _stageScale 取整后的 device 坐标
+ *   originAbs    — 第一个落笔点 × _stageScale 取整（block 栅格的锚点）
+ *                   **必须用绝对坐标锚定起点**，不可依赖 region，
+ *                   否则拖拽时已绘制的马赛克格子会随 region 滑动。
+ *
+ * 核心陷阱：分数 _stageScale 下
+ *   round(A × _stageScale) - round(B × _stageScale) ≠ round((A - B) × _stageScale)
+ * 差 ±1 device pixel → 可见抖动。
+ *
+ * 解法：surface 的放置原点必须用 regionAbs / _stageScale 而非 region。
+ *       因为 mask 与 block 坐标都相对于 regionAbs，放置也用 regionAbs/_stageScale，
+ *       三个量中的 regionAbs 在屏幕空间坐标里自然消掉：
+ *         mask 屏幕位置 = regionAbs/ds + (pts[i]×ds - regionAbs)/ds = pts[i] ✓
+ *         block 屏幕位置 = regionAbs/ds + (originAbs - regionAbs)/ds = originAbs/ds ✓
+ *       都不依赖 regionAbs → 无抖动。
+ */
 
 function _averageBlock(source, rowstride, nChannels, x0, y0, x1, y1, srcW = Infinity, srcH = Infinity) {
     let r = 0,
@@ -386,12 +414,22 @@ function _computeBlurRegionBounds(stroke) {
 }
 
 export class BlurSelector {
-    constructor({ captureRegion, getRegionSync, stageScale, onBlockSizeChanged, onModeChanged }) {
+    constructor({
+        captureRegion,
+        getRegionSync,
+        stageScale,
+        onBlockSizeChanged,
+        onModeChanged,
+        forEachCanvas,
+        ensureCache,
+    }) {
         this._captureRegion = captureRegion;
         this._getRegionSync = getRegionSync;
         this._stageScale = stageScale ?? 1;
         this._onBlockSizeChanged = onBlockSizeChanged ?? (() => {});
         this._onModeChanged = onModeChanged ?? (() => {});
+        this._forEachCanvas = forEachCanvas ?? (() => {});
+        this._ensureCache = ensureCache ?? (() => {});
 
         this._mode = 'brush';
         this._blockSize = 16;
@@ -425,6 +463,64 @@ export class BlurSelector {
     restoreState({ blurMode, blockSize }) {
         this._mode = blurMode ?? 'brush';
         this._blockSize = Math.max(4, Math.min(32, blockSize ?? 16));
+    }
+
+    registerCanvas(canvas) {
+        canvas._onStrokeCommitted = (stroke) => this.onStrokeCommitted(canvas, stroke);
+        canvas._onStrokePreview = (c, stroke) => {
+            stroke.blurMode = this._mode;
+            stroke.blockSize = this._blockSize;
+            this.onStrokePreview(c, stroke);
+        };
+        canvas._onScroll = (event) => this.handleScroll(event);
+        canvas._getBlurState = () => ({ mode: this._mode, blockSize: this._blockSize });
+        canvas._onRenderBlurStroke = (cr, stroke, ss, c) => this.renderPreviewSurface(cr, stroke, ss, c);
+    }
+
+    onActivate() {
+        this._ensureCache();
+    }
+
+    handleScroll(event) {
+        const mods = event.get_state();
+        if (!(mods & Clutter.ModifierType.CONTROL_MASK)) return Clutter.EVENT_PROPAGATE;
+
+        let delta = 0;
+        const direction = event.get_scroll_direction();
+        if (direction === Clutter.ScrollDirection.UP) delta = 2;
+        else if (direction === Clutter.ScrollDirection.DOWN) delta = -2;
+        else if (direction === Clutter.ScrollDirection.SMOOTH) {
+            const [, dy] = event.get_scroll_delta();
+            if (dy < 0) delta = 2;
+            else if (dy > 0) delta = -2;
+        }
+
+        if (delta === 0) return Clutter.EVENT_STOP;
+
+        const oldSize = this._blockSize;
+        this.adjustBlockSize(delta);
+        if (this._blockSize === oldSize) return Clutter.EVENT_STOP;
+
+        this._forEachCanvas((c) => this.refreshPreview(c));
+        return Clutter.EVENT_STOP;
+    }
+
+    refreshCursor(toolId, size) {
+        this._forEachCanvas((c) => {
+            if (toolId === 'blur' && this._mode === 'brush') c.showCursor((size ?? 8) / 2);
+            else if (toolId === 'blur' && this._mode === 'selection') c.hideCursor(Clutter.CursorType.CROSSHAIR);
+            else c.hideCursor();
+        });
+    }
+
+    handleHoverMotion(toolId, stageX, stageY) {
+        if (toolId === 'blur' && this._mode === 'brush') this._forEachCanvas((c) => c.moveCursor(stageX, stageY));
+    }
+
+    onPropertyChanged(props, toolId, size) {
+        if (props.size !== undefined || props.mode !== undefined) this.refreshCursor(toolId, size);
+        if (props.blockSize !== undefined || props.mode !== undefined)
+            this._forEachCanvas((c) => this.refreshPreview(c));
     }
 
     clearCache() {
@@ -495,6 +591,7 @@ export class BlurSelector {
         this._previewCache.pixbuf = pixbuf;
 
         this._buildDragSurface(stroke, region, regionAbs, originAbs, mode, blockSize, lw, ds);
+        this._previewCache.origin = { x: regionAbs.x / ds, y: regionAbs.y / ds };
         canvas.queue_repaint();
     }
 
@@ -550,7 +647,7 @@ export class BlurSelector {
                 if (surface) {
                     stroke.previewSurface = surface;
                     stroke.previewScale = ds;
-                    stroke.previewOrigin = { x: regionX, y: regionY };
+                    stroke.previewOrigin = { x: regionAbs.x / ds, y: regionAbs.y / ds };
                 }
             }
         } else {
@@ -567,7 +664,7 @@ export class BlurSelector {
             if (surface) {
                 stroke.previewSurface = surface;
                 stroke.previewScale = ds;
-                stroke.previewOrigin = { x: regionX, y: regionY };
+                stroke.previewOrigin = { x: regionAbs.x / ds, y: regionAbs.y / ds };
             }
         }
 
@@ -629,7 +726,7 @@ export class BlurSelector {
 
         ctx.$dispose();
         this._previewCache.surface = surf;
-        this._previewCache.origin = { x: region.x, y: region.y };
+        this._previewCache.origin = { x: regionAbs.x / ds, y: regionAbs.y / ds };
         this._previewCache.baked = false;
     }
 

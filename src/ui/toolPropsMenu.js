@@ -5,11 +5,11 @@ import St from 'gi://St';
 
 import { Slider } from 'resource:///org/gnome/shell/ui/slider.js';
 
-import { SquareSlider } from './squareSlider.js';
+import { SquareSlider } from './widgets/squareSlider.js';
 
-import { attachTooltip } from './tooltip.js';
+import { attachTooltip } from '../platform/tooltip.js';
 import { PopupMenu } from './popupMenu.js';
-import { N_ } from './i18n.js';
+import { N_ } from '../platform/i18n.js';
 
 export const SIZE_MIN = 1;
 export const SIZE_MAX = 16;
@@ -83,7 +83,9 @@ export const ToolPropsMenu = GObject.registerClass(
             }
         }
 
-        _isSolidRect(toolId) { return toolId === 'solid-rectangle'; }
+        _isSolidRect(toolId) {
+            return toolId === 'solid-rectangle';
+        }
 
         _buildColorSwatches(selectedHex) {
             for (const col of COLORS) {
@@ -135,7 +137,8 @@ export const ToolPropsMenu = GObject.registerClass(
         }
 
         _buildBlockSizeSlider(value) {
-            const min = BLOCK_SIZE_MIN, max = BLOCK_SIZE_MAX;
+            const min = BLOCK_SIZE_MIN,
+                max = BLOCK_SIZE_MAX;
             const slider = new SquareSlider((value - min) / (max - min));
             slider.style = 'width: 60px;';
             slider.y_align = Clutter.ActorAlign.CENTER;
@@ -158,9 +161,15 @@ export const ToolPropsMenu = GObject.registerClass(
 
         _buildModeToggle(currentMode) {
             for (const mode of BLUR_MODES) {
-                const child = mode === 'brush'
-                    ? new St.Widget({ style_class: 'gradia-swatch', style: 'background-color: #ffffff;' })
-                    : new St.Icon({ gicon: Gio.Icon.new_for_string(`${this._extensionPath}/icons/selection-opaque-3-symbolic.svg`), style: 'icon-size: 16px;' });
+                const child =
+                    mode === 'brush'
+                        ? new St.Widget({ style_class: 'gradia-swatch', style: 'background-color: #ffffff;' })
+                        : new St.Icon({
+                              gicon: Gio.Icon.new_for_string(
+                                  `${this._extensionPath}/icons/selection-opaque-3-symbolic.svg`,
+                              ),
+                              style: 'icon-size: 16px;',
+                          });
                 const btn = new St.Button({
                     style_class: 'screenshot-ui-type-button gradia-option-button',
                     style: 'border-color: transparent;',
@@ -176,7 +185,11 @@ export const ToolPropsMenu = GObject.registerClass(
             }
         }
 
-        updateWhenModeChanged(toolId, props) { this.showForTool(toolId, props); }
-        _addSep() { this.add_child(new St.Widget({ style_class: 'gradia-separator', y_expand: true })); }
+        updateWhenModeChanged(toolId, props) {
+            this.showForTool(toolId, props);
+        }
+        _addSep() {
+            this.add_child(new St.Widget({ style_class: 'gradia-separator', y_expand: true }));
+        }
     },
 );
