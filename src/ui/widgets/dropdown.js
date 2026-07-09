@@ -2,6 +2,8 @@ import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+
 export const Dropdown = GObject.registerClass(
     {
         Signals: {
@@ -11,7 +13,7 @@ export const Dropdown = GObject.registerClass(
     },
     class Dropdown extends St.BoxLayout {
         _init(params = {}) {
-            const { options = [], current = '', ...rest } = params;
+            const { options = [], current = '', overlayParent = null, ...rest } = params;
             super._init({
                 vertical: true,
                 style_class: 'gradia-dropdown',
@@ -20,6 +22,7 @@ export const Dropdown = GObject.registerClass(
 
             this._options = options;
             this._current = current;
+            this._overlayParent = overlayParent ?? Main.screenshotUI;
             this._btns = [];
             this._activeIndex = -1;
             this._stageId = 0;
@@ -43,9 +46,10 @@ export const Dropdown = GObject.registerClass(
             this._scroll.hscrollbar_policy = St.PolicyType.NEVER;
             this._list = new St.BoxLayout({ vertical: true });
             this._scroll.add_child(this._list);
+            this._scroll.connect('scroll-event', () => Clutter.EVENT_STOP);
 
             this._btn.connect('clicked', () => {
-                if (this._scroll.get_stage()) this.close();
+                if (this._scroll.get_parent()) this.close();
                 else this.open();
             });
 
@@ -106,7 +110,7 @@ export const Dropdown = GObject.registerClass(
         }
 
         open() {
-            if (this._scroll.get_stage()) return;
+            if (this._scroll.get_parent()) return;
 
             this.setCurrent(this._current);
             this._activeIndex = this._indexFor(this._current);
@@ -116,7 +120,7 @@ export const Dropdown = GObject.registerClass(
             const [, bh] = this._btn.get_transformed_size();
             this._scroll.set_size(Math.max(bw, 180), -1);
             this._scroll.set_position(Math.round(bx), Math.round(by + bh + 2));
-            global.stage.add_child(this._scroll);
+            this._overlayParent.add_child(this._scroll);
             this._scroll.show();
 
             this.grab_key_focus();
@@ -125,9 +129,9 @@ export const Dropdown = GObject.registerClass(
         }
 
         close() {
-            if (!this._scroll.get_stage()) return;
+            if (!this._scroll.get_parent()) return;
             this._scroll.hide();
-            global.stage.remove_child(this._scroll);
+            this._overlayParent.remove_child(this._scroll);
             this._disconnectStage();
             this.emit('open-state-changed', false);
         }
