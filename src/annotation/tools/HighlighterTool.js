@@ -3,7 +3,7 @@ import Clutter from 'gi://Clutter';
 
 import { N_ } from '../../platform/i18n.js';
 import { DrawingTool } from './DrawingTool.js';
-import { SELECTION_PADDING, hexToRgb, rectBounds, standardHitTest } from '../shared.js';
+import { hexToRgb } from '../shared.js';
 
 export class HighlighterTool extends DrawingTool {
     get id() {
@@ -24,11 +24,8 @@ export class HighlighterTool extends DrawingTool {
             { key: 'size', type: 'd', default: 4 },
         ];
     }
-    bounds(s) {
-        return rectBounds(s.stagePoints, SELECTION_PADDING + (s.strokeWidth ?? 4) * 4);
-    }
-    hitTest(s, x, y) {
-        return standardHitTest.call(this, s, x, y);
+    get paddingFactor() {
+        return 4;
     }
     render(cr, stroke, lineWidth) {
         if (stroke.points.length < 2) return;

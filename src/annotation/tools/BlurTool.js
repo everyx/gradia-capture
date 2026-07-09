@@ -3,7 +3,7 @@ import Clutter from 'gi://Clutter';
 
 import { N_ } from '../../platform/i18n.js';
 import { DrawingTool } from './DrawingTool.js';
-import { SELECTION_PADDING, createPixelatePattern, standardHitTest, rectBounds } from '../shared.js';
+import { createPixelatePattern } from '../shared.js';
 import { composeBlurStrokes } from './blur/engine.js';
 
 export class BlurTool extends DrawingTool {
@@ -29,11 +29,8 @@ export class BlurTool extends DrawingTool {
             { key: 'blockSize', gsKey: 'block-size', type: 'i', default: 16 },
         ];
     }
-    bounds(s) {
-        return rectBounds(s.stagePoints, SELECTION_PADDING + (s.strokeWidth ?? 8) / 2);
-    }
-    hitTest(s, x, y) {
-        return standardHitTest.call(this, s, x, y);
+    get paddingFactor() {
+        return 0.5;
     }
     render(cr, stroke, lineWidth) {
         if (stroke.points.length < 2) return;

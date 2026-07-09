@@ -2,7 +2,7 @@ import Clutter from 'gi://Clutter';
 
 import { N_ } from '../../platform/i18n.js';
 import { DrawingTool } from './DrawingTool.js';
-import { SELECTION_PADDING, hexToRgb, rectBounds, standardHitTest } from '../shared.js';
+import { hexToRgb } from '../shared.js';
 
 export class SolidRectangleTool extends DrawingTool {
     get id() {
@@ -20,11 +20,8 @@ export class SolidRectangleTool extends DrawingTool {
     get propSchema() {
         return [{ key: 'color', type: 's', default: '#000000' }];
     }
-    bounds(s) {
-        return rectBounds(s.stagePoints, SELECTION_PADDING);
-    }
-    hitTest(s, x, y) {
-        return standardHitTest.call(this, s, x, y);
+    get paddingFactor() {
+        return 0;
     }
     render(cr, stroke, _lineWidth) {
         if (stroke.points.length < 2) return;

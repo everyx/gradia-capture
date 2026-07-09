@@ -1,3 +1,5 @@
+import { SELECTION_PADDING, rectBounds, rectHit } from '../shared.js';
+
 export class DrawingTool {
     constructor() {
         this._props = {};
@@ -26,6 +28,10 @@ export class DrawingTool {
     }
     get isDrawing() {
         return true;
+    }
+
+    get paddingFactor() {
+        return 1;
     }
 
     _attach(settings, onChanged) {
@@ -67,11 +73,12 @@ export class DrawingTool {
     beginStroke() {
         return {};
     }
-    bounds(_stroke) {
-        return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    bounds(stroke) {
+        const w = stroke.strokeWidth ?? 4;
+        return rectBounds(stroke.stagePoints, SELECTION_PADDING + this.paddingFactor * w);
     }
-    hitTest(_stroke, _sx, _sy) {
-        return false;
+    hitTest(stroke, sx, sy) {
+        return rectHit(this.bounds(stroke), sx, sy);
     }
     render(_cr, _stroke, _size) {}
 
