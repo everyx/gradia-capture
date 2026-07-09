@@ -97,6 +97,7 @@ export class ScreenshotCapture {
                 { copy: shouldCopy, save: shouldSave, externalSave, format, playSound, tempFile: ocr },
             );
             if (portalMode || ocr) return capturePromise;
+            capturePromise.catch((e) => console.error(`gradia: screenshot save failed: ${e}\n${e?.stack ?? ''}`));
             return true;
         };
 
@@ -303,10 +304,12 @@ export class ScreenshotCapture {
 
         let surface = null;
         let cr = null;
+        let imgW = 0;
+        let imgH = 0;
         for (const s of overlay) {
             if (!cr) {
-                const imgW = underlaid.get_width();
-                const imgH = underlaid.get_height();
+                imgW = underlaid.get_width();
+                imgH = underlaid.get_height();
                 surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, imgW, imgH);
                 cr = new Cairo.Context(surface);
                 imports.gi.Gdk.cairo_set_source_pixbuf(cr, underlaid, 0, 0);
@@ -317,13 +320,7 @@ export class ScreenshotCapture {
 
         if (cr) {
             cr.$dispose();
-            const result = imports.gi.Gdk.pixbuf_get_from_surface(
-                surface,
-                0,
-                0,
-                surface.get_width(),
-                surface.get_height(),
-            );
+            const result = imports.gi.Gdk.pixbuf_get_from_surface(surface, 0, 0, imgW, imgH);
             surface = null;
             if (result) return { pixbuf: result };
         }
