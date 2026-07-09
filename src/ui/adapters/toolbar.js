@@ -3,9 +3,9 @@ import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
 
-import { TOOLS, getToolDef } from '../annotation/tools/index.js';
-import { attachTooltip } from '../platform/tooltip.js';
-import { _ } from '../platform/i18n.js';
+import { TOOLS, getToolDef } from '../../annotation/tools/index.js';
+import { attachTooltip } from '../../platform/tooltip.js';
+import { _ } from '../../platform/i18n.js';
 import { ToolPropsMenu, SIZE_MIN, SIZE_MAX, BLUR_SIZE_MAX } from './toolPropsMenu.js';
 import { TOOLBAR_GROUPS, SEP } from './toolbarLayout.js';
 

@@ -1,4 +1,4 @@
-import { N_ } from '../platform/i18n.js';
+import { N_ } from '../../platform/i18n.js';
 
 const SEP = {};
 

@@ -7,9 +7,9 @@ import { Slider } from 'resource:///org/gnome/shell/ui/slider.js';
 
 import { SquareSlider } from '../widgets/squareSlider.js';
 
-import { attachTooltip } from '../platform/tooltip.js';
+import { attachTooltip } from '../../platform/tooltip.js';
 import { PopupMenu } from './popupMenu.js';
-import { N_ } from '../platform/i18n.js';
+import { N_ } from '../../platform/i18n.js';
 
 export const SIZE_MIN = 1;
 export const SIZE_MAX = 16;
