@@ -3,11 +3,16 @@ import Clutter from 'gi://Clutter';
 
 import { N_ } from '../../platform/i18n.js';
 import { DrawingTool } from './DrawingTool.js';
-import { SELECTION_PADDING, createPixelatePattern, standardHitTest, rectBounds } from './shared.js';
+import { createPixelatePattern } from '../shared.js';
+import { composeBlurStrokes } from './blur/engine.js';
+import { MENU_KIND, SIZE_MIN, BLUR_SIZE_MAX, BLOCK_SIZE_MIN, BLOCK_SIZE_MAX } from '../../platform/menuSchema.js';
 
 export class BlurTool extends DrawingTool {
     get id() {
         return 'blur';
+    }
+    get phase() {
+        return 'underlay';
     }
     get name() {
         return N_('Blur');
@@ -25,11 +30,43 @@ export class BlurTool extends DrawingTool {
             { key: 'blockSize', gsKey: 'block-size', type: 'i', default: 16 },
         ];
     }
-    bounds(s) {
-        return rectBounds(s.stagePoints, SELECTION_PADDING + (s.strokeWidth ?? 8) / 2);
+    get paddingFactor() {
+        return 0.5;
     }
-    hitTest(s, x, y) {
-        return standardHitTest.call(this, s, x, y);
+    getMenuItems() {
+        const mode = this.get('mode') ?? 'brush';
+        const items = [
+            {
+                kind: MENU_KIND.TOGGLE,
+                key: 'mode',
+                value: mode,
+                options: [
+                    { value: 'brush', swatch: '#ffffff', label: N_('Brush') },
+                    { value: 'selection', icon: 'icons/selection-opaque-3-symbolic.svg', label: N_('Selection') },
+                ],
+            },
+        ];
+        if (mode === 'brush') {
+            items.push({
+                kind: MENU_KIND.SLIDER,
+                key: 'size',
+                min: SIZE_MIN,
+                max: BLUR_SIZE_MAX,
+                label: N_('Brush Size'),
+                value: this.get('size'),
+            });
+        }
+        items.push({
+            kind: MENU_KIND.SLIDER,
+            key: 'blockSize',
+            min: BLOCK_SIZE_MIN,
+            max: BLOCK_SIZE_MAX,
+            step: 2,
+            variant: 'square',
+            label: N_('Block Size'),
+            value: this.get('blockSize'),
+        });
+        return items;
     }
     render(cr, stroke, lineWidth) {
         if (stroke.points.length < 2) return;
@@ -51,5 +88,14 @@ export class BlurTool extends DrawingTool {
             cr.stroke();
         }
         cr.restore();
+    }
+
+    bindCapabilities(stroke) {
+        stroke.phase = this.phase;
+        stroke.hitBounds = () => this.bounds(stroke);
+        stroke.paintTo = (pixbuf, ctx) => {
+            if (!pixbuf) return pixbuf;
+            return composeBlurStrokes(pixbuf, [stroke], ctx);
+        };
     }
 }

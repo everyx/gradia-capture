@@ -1,11 +1,10 @@
-import Cairo from 'gi://cairo';
 import Pango from 'gi://Pango';
 import PangoCairo from 'gi://PangoCairo';
 import Clutter from 'gi://Clutter';
 
 import { N_ } from '../../platform/i18n.js';
 import { DrawingTool } from './DrawingTool.js';
-import { SELECTION_PADDING, hexToRgb, rectHit } from './shared.js';
+import { SELECTION_PADDING, hexToRgb } from '../shared.js';
 
 export class StampTool extends DrawingTool {
     constructor() {
@@ -40,10 +39,6 @@ export class StampTool extends DrawingTool {
         const pt = stroke.stagePoints[0];
         const r = (stroke.strokeWidth ?? 4) * 5 + SELECTION_PADDING;
         return { minX: pt.x - r, minY: pt.y - r, maxX: pt.x + r, maxY: pt.y + r };
-    }
-    hitTest(stroke, sx, sy) {
-        if (stroke.stagePoints.length < 1) return false;
-        return rectHit(this.bounds(stroke), sx, sy);
     }
     render(cr, stroke, lineWidth) {
         if (stroke.points.length < 1) return;

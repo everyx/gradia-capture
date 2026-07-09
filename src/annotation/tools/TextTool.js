@@ -5,7 +5,7 @@ import Clutter from 'gi://Clutter';
 
 import { N_ } from '../../platform/i18n.js';
 import { DrawingTool } from './DrawingTool.js';
-import { SELECTION_PADDING, hexToRgb, rectHit } from './shared.js';
+import { SELECTION_PADDING, hexToRgb } from '../shared.js';
 
 export class TextTool extends DrawingTool {
     get id() {
@@ -54,10 +54,6 @@ export class TextTool extends DrawingTool {
             maxX: pt.x + extents.width + SELECTION_PADDING,
             maxY: pt.y + extents.height + SELECTION_PADDING,
         };
-    }
-    hitTest(stroke, sx, sy) {
-        if (!stroke.text || stroke.stagePoints.length < 1) return false;
-        return rectHit(this.bounds(stroke), sx, sy);
     }
     render(cr, stroke, lineWidth) {
         if (!stroke.text || stroke.points.length < 1) return;

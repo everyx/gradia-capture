@@ -3,6 +3,8 @@ import Clutter from 'gi://Clutter';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import GLib from 'gi://GLib';
 
+import { stageToImageCoords, imageScaleFactors, stageLineWidth } from '../../../platform/stageToImage.js';
+
 /*
  * 坐标系不变式（blur 预览/提交路径）
  *
@@ -419,21 +421,48 @@ export class BlurSelector {
         getRegionSync,
         stageScale,
         onBlockSizeChanged,
-        onModeChanged,
         forEachCanvas,
         ensureCache,
+        toolbar,
+        bus,
     }) {
         this._captureRegion = captureRegion;
         this._getRegionSync = getRegionSync;
         this._stageScale = stageScale ?? 1;
         this._onBlockSizeChanged = onBlockSizeChanged ?? (() => {});
-        this._onModeChanged = onModeChanged ?? (() => {});
         this._forEachCanvas = forEachCanvas ?? (() => {});
         this._ensureCache = ensureCache ?? (() => {});
+        this._toolbar = toolbar ?? null;
 
         this._mode = 'brush';
         this._blockSize = 16;
         this._previewCache = { pixbuf: null };
+
+        this._forEachCanvas((c) => this.registerCanvas(c));
+
+        if (bus) {
+            bus.connect('tool-changed', (id) => {
+                if (id === 'blur') {
+                    this.onActivate();
+                    this.refreshCursor(id, this._toolbar?.size);
+                }
+            });
+            if (this._toolbar) {
+                this._toolbar.connect('tool-property-changed', (_, payload) => {
+                    const props = JSON.parse(payload);
+                    if (props.mode !== undefined) this.setMode(props.mode);
+                    if (props.blockSize !== undefined) this.setBlockSize(props.blockSize);
+                    this.onPropertyChanged(props, this._toolbar?.selectedTool, this._toolbar?.size);
+                });
+            }
+            bus.connect('hover', (stageX, stageY) => {
+                this.handleHoverMotion(this._toolbar?.selectedTool, stageX, stageY);
+            });
+        }
+
+        this._onModeChanged = () => this.refreshCursor(this._toolbar?.selectedTool, this._toolbar?.size);
+
+        if (this._toolbar) this.restoreState(this._toolbar.blurInitialState);
     }
 
     get mode() {
@@ -506,10 +535,16 @@ export class BlurSelector {
     }
 
     refreshCursor(toolId, size) {
+        const [px, py] = global.get_pointer();
         this._forEachCanvas((c) => {
-            if (toolId === 'blur' && this._mode === 'brush') c.showCursor((size ?? 8) / 2);
-            else if (toolId === 'blur' && this._mode === 'selection') c.hideCursor(Clutter.CursorType.CROSSHAIR);
-            else c.hideCursor();
+            if (toolId === 'blur' && this._mode === 'brush') {
+                c.moveCursor(px, py);
+                c.showCursor((size ?? 8) / 2);
+            } else if (toolId === 'blur' && this._mode === 'selection') {
+                c.hideCursor(Clutter.CursorType.CROSSHAIR);
+            } else {
+                c.hideCursor();
+            }
         });
     }
 
@@ -756,59 +791,52 @@ export class BlurSelector {
         }
     }
 
-    composeOutput(basePixbuf, strokes, { stageScale, selX, selY, selW, selH }) {
-        const imgWidth = basePixbuf.get_width();
-        const imgHeight = basePixbuf.get_height();
-        const scaleX = imgWidth / selW;
-        const scaleY = imgHeight / selH;
+    composeOutput(basePixbuf, strokes, ctx) {
+        return composeBlurStrokes(basePixbuf, strokes, ctx);
+    }
+}
 
-        let result = basePixbuf;
-        for (const stroke of strokes) {
-            const sp = stroke.stagePoints;
-            if (sp.length < 2) continue;
-            const pointsAbs = sp.map((p) => ({
-                x: (p.x / stageScale - selX) * scaleX,
-                y: (p.y / stageScale - selY) * scaleY,
-            }));
-            const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
-            const blockSize = stroke.blockSize || 16;
-            const regionAbs = {
-                x: 0,
-                y: 0,
-                w: result.get_width(),
-                h: result.get_height(),
-            };
-            const originAbs = {
-                x: Math.round((sp[0].x / stageScale - selX) * scaleX),
-                y: Math.round((sp[0].y / stageScale - selY) * scaleY),
-            };
+export function composeBlurStrokes(basePixbuf, strokes, { stageScale, selX, selY, selW, selH }) {
+    const imgWidth = basePixbuf.get_width();
+    const imgHeight = basePixbuf.get_height();
+    const { scaleX, scaleY } = imageScaleFactors(imgWidth, imgHeight, selW, selH);
 
-            if ((stroke.blurMode || 'brush') === 'selection') {
-                if (pointsAbs.length >= 2) {
-                    result = _pixelatePixbufRect(
-                        result,
-                        regionAbs,
-                        pointsAbs[0],
-                        pointsAbs[pointsAbs.length - 1],
-                        blockSize,
-                        originAbs.x,
-                        originAbs.y,
-                    );
-                }
-            } else {
-                result = _pixelatePixbufAlongStroke(
+    let result = basePixbuf;
+    for (const stroke of strokes) {
+        const sp = stroke.stagePoints;
+        if (sp.length < 2) continue;
+        const pointsAbs = stageToImageCoords(sp, { stageScale, selX, selY, scaleX, scaleY });
+        const lw = stageLineWidth(stroke.strokeWidth, scaleX, scaleY);
+        const blockSize = stroke.blockSize || 16;
+        const regionAbs = {
+            x: 0,
+            y: 0,
+            w: result.get_width(),
+            h: result.get_height(),
+        };
+        const originCoords = stageToImageCoords([sp[0]], { stageScale, selX, selY, scaleX, scaleY });
+        const originAbs = {
+            x: Math.round(originCoords[0].x),
+            y: Math.round(originCoords[0].y),
+        };
+
+        if ((stroke.blurMode || 'brush') === 'selection') {
+            if (pointsAbs.length >= 2) {
+                result = _pixelatePixbufRect(
                     result,
                     regionAbs,
-                    pointsAbs,
-                    lw,
+                    pointsAbs[0],
+                    pointsAbs[pointsAbs.length - 1],
                     blockSize,
                     originAbs.x,
                     originAbs.y,
                 );
             }
-
-            if (!result) return null;
+        } else {
+            result = _pixelatePixbufAlongStroke(result, regionAbs, pointsAbs, lw, blockSize, originAbs.x, originAbs.y);
         }
-        return result;
+
+        if (!result) return null;
     }
+    return result;
 }

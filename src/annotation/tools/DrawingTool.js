@@ -1,8 +1,17 @@
+import { SELECTION_PADDING, rectBounds, rectHit } from '../shared.js';
+import { MENU_KIND, SIZE_MIN, SIZE_MAX } from '../../platform/menuSchema.js';
+import { N_ } from '../../platform/i18n.js';
+import { stageToImageCoords, imageScaleFactors, stageLineWidth } from '../../platform/stageToImage.js';
+
 export class DrawingTool {
     constructor() {
         this._props = {};
         this._settings = null;
         this._onChanged = null;
+    }
+
+    get phase() {
+        return 'overlay';
     }
 
     get propSchema() {
@@ -22,6 +31,10 @@ export class DrawingTool {
     }
     get isDrawing() {
         return true;
+    }
+
+    get paddingFactor() {
+        return 1;
     }
 
     _attach(settings, onChanged) {
@@ -60,14 +73,61 @@ export class DrawingTool {
         return this._props[key];
     }
 
+    getMenuItems() {
+        const items = [];
+        for (const entry of this.propSchema) {
+            if (entry.key === 'color') {
+                items.push({ kind: MENU_KIND.COLOR, key: 'color', value: this.get('color') });
+            } else if (entry.key === 'size') {
+                items.push({
+                    kind: MENU_KIND.SLIDER,
+                    key: 'size',
+                    min: SIZE_MIN,
+                    max: SIZE_MAX,
+                    label: N_('Size'),
+                    value: this.get('size'),
+                });
+            }
+        }
+        return items;
+    }
+
     beginStroke() {
         return {};
     }
-    bounds(_stroke) {
-        return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    bounds(stroke) {
+        const w = stroke.strokeWidth ?? 4;
+        return rectBounds(stroke.stagePoints, SELECTION_PADDING + this.paddingFactor * w);
     }
-    hitTest(_stroke, _sx, _sy) {
-        return false;
+    hitTest(stroke, sx, sy) {
+        return rectHit(this.bounds(stroke), sx, sy);
     }
     render(_cr, _stroke, _size) {}
+
+    bindCapabilities(stroke) {
+        stroke.phase = this.phase;
+        stroke.hitBounds = () => this.bounds(stroke);
+        stroke.paintTo = (cr, ctx) => {
+            if (!cr || !this.render) return;
+            const { selX, selY, selW, selH, stageScale } = ctx;
+            if (selW <= 0 || selH <= 0) return;
+            const imgW = cr.getTarget()?.getWidth?.() ?? 0;
+            const imgH = cr.getTarget()?.getHeight?.() ?? 0;
+            const { scaleX, scaleY } = imageScaleFactors(imgW, imgH, selW, selH);
+            const converted = stageToImageCoords(stroke.stagePoints, { stageScale, selX, selY, scaleX, scaleY });
+            const lw = stageLineWidth(stroke.strokeWidth, scaleX, scaleY);
+            this.render(
+                cr,
+                {
+                    color: stroke.color,
+                    points: converted,
+                    counter: stroke.counter,
+                    text: stroke.text,
+                    blurMode: stroke.blurMode,
+                    blockSize: stroke.blockSize,
+                },
+                lw,
+            );
+        };
+    }
 }

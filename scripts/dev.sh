@@ -22,6 +22,6 @@ echo ""
 # dbus-run-session gnome-shell --devkit --wayland --virtual-monitor 960x1080@1.25 2>&1 \
 dbus-run-session gnome-shell --devkit --wayland 2>&1 \
   | tee "$LOG_FILE" \
-  | grep -v '^$' \
+  | grep -v -E '(^$|a11y|libmutter|Gjs_status_remoteAccess_ScreenSharingIndicator)' \
   | grep --line-buffered -E '(gradia|\[text\]|Gjs|JS ERROR|EXTENSION|Warning|CRITICAL)' \
     || true

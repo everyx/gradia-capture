@@ -5,8 +5,54 @@ import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
-import { getToolDef } from '../annotation/tools/index.js';
 import { getCaptureContext } from './captureContext.js';
+import { orderByPhase, splitByPhase } from '../board/strokeOrder.js';
+
+function pixbufRegionCopy(full, stageRect, scale) {
+    const cx = Math.round(stageRect.x * scale);
+    const cy = Math.round(stageRect.y * scale);
+    const cw = Math.round(stageRect.w * scale);
+    const ch = Math.round(stageRect.h * scale);
+
+    const fw = full.get_width();
+    const fh = full.get_height();
+    if (cx >= fw || cy >= fh || cx + cw <= 0 || cy + ch <= 0) return null;
+    const cx2 = Math.max(0, Math.min(cx, fw - 1));
+    const cy2 = Math.max(0, Math.min(cy, fh - 1));
+    const cw2 = Math.min(cw, fw - cx2);
+    const ch2 = Math.min(ch, fh - cy2);
+    if (cw2 <= 0 || ch2 <= 0) return null;
+
+    const fullPixels = full.get_pixels();
+    const fullRstride = full.get_rowstride();
+    const nch = full.get_n_channels();
+    const correctStride = cw2 * nch;
+    const newData = new Uint8Array(cw2 * ch2 * nch);
+
+    for (let y = 0; y < ch2; y++) {
+        const srcBase = (cy2 + y) * fullRstride + cx2 * nch;
+        const dstBase = y * correctStride;
+        for (let x = 0; x < cw2; x++) {
+            const si = srcBase + x * nch;
+            const di = dstBase + x * nch;
+            newData[di] = fullPixels[si];
+            newData[di + 1] = fullPixels[si + 1];
+            newData[di + 2] = fullPixels[si + 2];
+            if (nch >= 4) newData[di + 3] = fullPixels[si + 3];
+        }
+    }
+
+    const bytes = GLib.Bytes.new(newData);
+    return GdkPixbuf.Pixbuf.new_from_bytes(
+        bytes,
+        GdkPixbuf.Colorspace.RGB,
+        nch >= 4,
+        full.get_bits_per_sample(),
+        cw2,
+        ch2,
+        correctStride,
+    );
+}
 
 export class ScreenshotCapture {
     constructor({ canvases, textEntryManager, toolbar, settings, isRecordingMode }) {
@@ -19,7 +65,6 @@ export class ScreenshotCapture {
         this._capturePromise = null;
         this.captureGeometry = null;
         this.captureScale = 1;
-        this.blurSelector = null;
     }
 
     async capture({ copyOnly = false, ocr = false, externalSave = false, portalMode = false } = {}) {
@@ -52,6 +97,7 @@ export class ScreenshotCapture {
                 { copy: shouldCopy, save: shouldSave, externalSave, format, playSound, tempFile: ocr },
             );
             if (portalMode || ocr) return capturePromise;
+            capturePromise.catch((e) => console.error(`gradia: screenshot save failed: ${e}\n${e?.stack ?? ''}`));
             return true;
         };
 
@@ -222,109 +268,16 @@ export class ScreenshotCapture {
     }
 
     async captureRegion(stageRect) {
-        const ui = Main.screenshotUI;
         if (!this._cachedFullPixbuf) {
             const ok = await this._ensureFullCapture();
             if (!ok) return null;
         }
-
-        const ds = ui._scale || 1;
-        const cx = Math.round(stageRect.x * ds);
-        const cy = Math.round(stageRect.y * ds);
-        const cw = Math.round(stageRect.w * ds);
-        const ch = Math.round(stageRect.h * ds);
-
-        const fw = this._cachedFullPixbuf.get_width();
-        const fh = this._cachedFullPixbuf.get_height();
-        if (cx >= fw || cy >= fh || cx + cw <= 0 || cy + ch <= 0) return null;
-        const cx2 = Math.max(0, Math.min(cx, fw - 1));
-        const cy2 = Math.max(0, Math.min(cy, fh - 1));
-        const cw2 = Math.min(cw, fw - cx2);
-        const ch2 = Math.min(ch, fh - cy2);
-        if (cw2 <= 0 || ch2 <= 0) return null;
-
-        const full = this._cachedFullPixbuf;
-        const fullPixels = full.get_pixels();
-        const fullRstride = full.get_rowstride();
-        const nch = full.get_n_channels();
-        const correctStride = cw2 * nch;
-        const newData = new Uint8Array(cw2 * ch2 * nch);
-
-        for (let y = 0; y < ch2; y++) {
-            const srcBase = (cy2 + y) * fullRstride + cx2 * nch;
-            const dstBase = y * correctStride;
-            for (let x = 0; x < cw2; x++) {
-                const si = srcBase + x * nch;
-                const di = dstBase + x * nch;
-                newData[di] = fullPixels[si];
-                newData[di + 1] = fullPixels[si + 1];
-                newData[di + 2] = fullPixels[si + 2];
-                if (nch >= 4) newData[di + 3] = fullPixels[si + 3];
-            }
-        }
-
-        const bytes = GLib.Bytes.new(newData);
-        const region = GdkPixbuf.Pixbuf.new_from_bytes(
-            bytes,
-            GdkPixbuf.Colorspace.RGB,
-            nch >= 4,
-            full.get_bits_per_sample(),
-            cw2,
-            ch2,
-            correctStride,
-        );
-        return region;
+        return pixbufRegionCopy(this._cachedFullPixbuf, stageRect, Main.screenshotUI._scale || 1);
     }
 
     getRegionSync(stageRect) {
         if (!this._cachedFullPixbuf) return null;
-
-        const ui = Main.screenshotUI;
-        const ds = ui._scale || 1;
-        const cx = Math.round(stageRect.x * ds);
-        const cy = Math.round(stageRect.y * ds);
-        const cw = Math.round(stageRect.w * ds);
-        const ch = Math.round(stageRect.h * ds);
-
-        const full = this._cachedFullPixbuf;
-        const fw = full.get_width();
-        const fh = full.get_height();
-        if (cx >= fw || cy >= fh || cx + cw <= 0 || cy + ch <= 0) return null;
-        const cx2 = Math.max(0, Math.min(cx, fw - 1));
-        const cy2 = Math.max(0, Math.min(cy, fh - 1));
-        const cw2 = Math.min(cw, fw - cx2);
-        const ch2 = Math.min(ch, fh - cy2);
-        if (cw2 <= 0 || ch2 <= 0) return null;
-
-        const fullPixels = full.get_pixels();
-        const fullRstride = full.get_rowstride();
-        const nch = full.get_n_channels();
-        const correctStride = cw2 * nch;
-        const newData = new Uint8Array(cw2 * ch2 * nch);
-
-        for (let y = 0; y < ch2; y++) {
-            const srcBase = (cy2 + y) * fullRstride + cx2 * nch;
-            const dstBase = y * correctStride;
-            for (let x = 0; x < cw2; x++) {
-                const si = srcBase + x * nch;
-                const di = dstBase + x * nch;
-                newData[di] = fullPixels[si];
-                newData[di + 1] = fullPixels[si + 1];
-                newData[di + 2] = fullPixels[si + 2];
-                if (nch >= 4) newData[di + 3] = fullPixels[si + 3];
-            }
-        }
-
-        const bytes = GLib.Bytes.new(newData);
-        return GdkPixbuf.Pixbuf.new_from_bytes(
-            bytes,
-            GdkPixbuf.Colorspace.RGB,
-            nch >= 4,
-            full.get_bits_per_sample(),
-            cw2,
-            ch2,
-            correctStride,
-        );
+        return pixbufRegionCopy(this._cachedFullPixbuf, stageRect, Main.screenshotUI._scale || 1);
     }
 
     async ensureCache() {
@@ -337,74 +290,42 @@ export class ScreenshotCapture {
         const { selX, selY, selW, selH, strokes, stageScale } = data;
         if (selW <= 0 || selH <= 0) return null;
 
-        const imgWidth = pixbuf.get_width();
-        const imgHeight = pixbuf.get_height();
-        const scaleX = imgWidth / selW;
-        const scaleY = imgHeight / selH;
+        const ctx = { selX, selY, selW, selH, stageScale };
 
-        const blurStrokes = [];
-        const annotStrokes = [];
-        for (const stroke of strokes) {
-            const tool = getToolDef(stroke.toolId);
-            if (!tool) continue;
-            if (stroke.toolId === 'blur') blurStrokes.push(stroke);
-            else annotStrokes.push(stroke);
+        const { underlay, overlay } = splitByPhase(orderByPhase(strokes));
+
+        let out = pixbuf;
+        for (const s of underlay) {
+            out = s.paintTo(out, ctx);
+            if (!out) return null;
         }
 
-        let basePixbuf = pixbuf;
-        if (blurStrokes.length > 0 && this.blurSelector) {
-            basePixbuf = this.blurSelector.composeOutput(basePixbuf, blurStrokes, {
-                stageScale,
-                selX,
-                selY,
-                selW,
-                selH,
-            });
-            if (!basePixbuf) return null;
-        }
-
-        if (annotStrokes.length === 0) return { pixbuf: basePixbuf };
+        const underlaid = out;
 
         let surface = null;
         let cr = null;
-        for (const stroke of annotStrokes) {
-            const tool = getToolDef(stroke.toolId);
-            if (!tool || !tool.render) continue;
-
-            const converted = stroke.stagePoints.map((p) => ({
-                x: (p.x / stageScale - selX) * scaleX,
-                y: (p.y / stageScale - selY) * scaleY,
-            }));
-            const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
-
+        let imgW = 0;
+        let imgH = 0;
+        for (const s of overlay) {
             if (!cr) {
-                surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, imgWidth, imgHeight);
+                imgW = underlaid.get_width();
+                imgH = underlaid.get_height();
+                surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, imgW, imgH);
                 cr = new Cairo.Context(surface);
-                imports.gi.Gdk.cairo_set_source_pixbuf(cr, basePixbuf, 0, 0);
+                imports.gi.Gdk.cairo_set_source_pixbuf(cr, underlaid, 0, 0);
                 cr.paint();
             }
-
-            tool.render(
-                cr,
-                {
-                    color: stroke.color,
-                    points: converted,
-                    counter: stroke.counter,
-                    text: stroke.text,
-                },
-                lw,
-            );
+            s.paintTo(cr, ctx);
         }
 
         if (cr) {
             cr.$dispose();
-            cr = null;
-            const result = imports.gi.Gdk.pixbuf_get_from_surface(surface, 0, 0, imgWidth, imgHeight);
+            const result = imports.gi.Gdk.pixbuf_get_from_surface(surface, 0, 0, imgW, imgH);
             surface = null;
             if (result) return { pixbuf: result };
         }
 
-        return { pixbuf: basePixbuf };
+        return { pixbuf: underlaid };
     }
 
     _buildStrokeData() {

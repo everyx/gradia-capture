@@ -3,10 +3,11 @@ import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
 
-import { TOOLS, DrawingTool, getToolDef } from '../annotation/tools/index.js';
-import { attachTooltip } from '../platform/tooltip.js';
-import { _ } from '../platform/i18n.js';
-import { ToolPropsMenu, SIZE_MIN, SIZE_MAX, BLUR_SIZE_MAX } from './toolPropsMenu.js';
+import { TOOLS, getToolDef } from '../../annotation/tools/index.js';
+import { attachTooltip } from '../../platform/tooltip.js';
+import { _ } from '../../platform/i18n.js';
+import { ToolPropsMenu } from './toolPropsMenu.js';
+import { SIZE_MIN, SIZE_MAX, BLUR_SIZE_MAX } from '../../platform/menuSchema.js';
 import { TOOLBAR_GROUPS, SEP } from './toolbarLayout.js';
 
 function makeIcon(spec, extensionPath = '') {
@@ -56,7 +57,7 @@ export const Toolbar = GObject.registerClass(
             if (gradiaSettings) {
                 const changed = (key, value) => this.emit('tool-property-changed', JSON.stringify({ [key]: value }));
                 for (const t of TOOLS) {
-                    if (t instanceof DrawingTool) {
+                    if (t.isDrawing) {
                         t._attach(gradiaSettings, changed);
                         t.load();
                     }
@@ -75,50 +76,28 @@ export const Toolbar = GObject.registerClass(
         }
 
         _onDestroy() {
-            const popup = this._toolPropsMenu;
-            if (popup) {
-                const id = this._popupStagePressIds.get(popup);
-                if (id !== undefined) {
-                    global.stage.disconnect(id);
-                    this._popupStagePressIds.delete(popup);
-                }
-            }
+            if (this._toolPropsMenu) this._disconnectStagePress(this._toolPropsMenu);
             this._toolPropsMenu = null;
         }
 
+        _disconnectStagePress(popup) {
+            const id = this._popupStagePressIds.get(popup);
+            if (id !== undefined) {
+                global.stage.disconnect(id);
+                this._popupStagePressIds.delete(popup);
+            }
+        }
+
         _wirePropsMenu() {
-            const conn = (signal, handler) => this._toolPropsMenu.connect(signal, handler);
-
-            conn('color-changed', (_m, hex) => {
-                if (this._activeTool) {
-                    this._activeTool.set('color', hex);
-                    this._activeTool.save();
+            this._toolPropsMenu.connect('property-changed', (_m, payload) => {
+                const { key, value } = JSON.parse(payload);
+                if (!this._activeTool) return;
+                this._activeTool.set(key, value);
+                this._activeTool.save();
+                if (this._toolPropsMenu.visible) {
+                    this._toolPropsMenu.render(this._activeTool.getMenuItems());
+                    this._repositionPopup(this._toolPropsMenu, this._propsToolBtn);
                 }
-            });
-
-            conn('size-changed', (_m, size) => {
-                if (this._activeTool) {
-                    this._activeTool.set('size', size);
-                    this._activeTool.save();
-                }
-            });
-
-            conn('block-size-changed', (_m, size) => {
-                if (this._blurSelector) this._blurSelector.setBlockSize(size);
-                if (this._activeTool) {
-                    this._activeTool.set('blockSize', size);
-                    this._activeTool.save();
-                }
-            });
-
-            conn('mode-changed', (_m, mode) => {
-                if (this._blurSelector) this._blurSelector.setMode(mode);
-                if (this._activeTool) {
-                    this._activeTool.set('mode', mode);
-                    this._activeTool.save();
-                }
-                if (this._toolPropsMenu.visible)
-                    this._toolPropsMenu.updateWhenModeChanged('blur', this._blurPropsForMenu());
             });
         }
 
@@ -131,6 +110,7 @@ export const Toolbar = GObject.registerClass(
                 popup.disconnect(cb);
                 popup.reposition({ triggerBtn, toolbar: this, ...this._lastReposition });
             });
+            this._disconnectStagePress(popup);
             this._popupStagePressIds.set(
                 popup,
                 global.stage.connect('button-press-event', (_stage, event) => {
@@ -144,11 +124,7 @@ export const Toolbar = GObject.registerClass(
         }
 
         _hidePopup(popup) {
-            const id = this._popupStagePressIds.get(popup);
-            if (id !== undefined) {
-                global.stage.disconnect(id);
-                this._popupStagePressIds.delete(popup);
-            }
+            this._disconnectStagePress(popup);
             if (popup.get_stage()) popup.hide();
         }
 
@@ -158,7 +134,7 @@ export const Toolbar = GObject.registerClass(
         }
 
         _isDrawingTool(id) {
-            return getToolDef(id) instanceof DrawingTool;
+            return getToolDef(id)?.isDrawing ?? false;
         }
 
         _emitLoadedProps() {
@@ -169,24 +145,9 @@ export const Toolbar = GObject.registerClass(
             }
         }
 
-        _blurPropsForMenu() {
-            const t = getToolDef('blur');
-            return { mode: t?.get('mode') ?? 'brush', size: t?.get('size') ?? 4, blockSize: t?.get('blockSize') ?? 16 };
-        }
-
-        setBlurSelector(blurSelector) {
-            this._blurSelector = blurSelector;
-            const t = getToolDef('blur');
-            if (!t) return;
-            blurSelector.restoreState({
-                blurMode: t.get('mode') ?? 'brush',
-                blockSize: t.get('blockSize') ?? 16,
-            });
-        }
-
         syncToStroke(stroke) {
             const tool = getToolDef(stroke.toolId);
-            if (!(tool instanceof DrawingTool)) return;
+            if (!tool?.isDrawing) return;
 
             tool.set('color', stroke.color, { silent: true });
             if (stroke.strokeWidth !== undefined) tool.set('size', stroke.strokeWidth, { silent: true });
@@ -205,21 +166,13 @@ export const Toolbar = GObject.registerClass(
             if (!btn) return;
 
             this._propsToolBtn = btn;
-            const tool = getToolDef(toolId);
-
-            if (toolId === 'blur') {
-                this._toolPropsMenu.showForTool('blur', this._blurPropsForMenu());
-            } else {
-                const props = { color: tool.get('color') ?? '#000000' };
-                if (toolId !== 'solid-rectangle') props.size = tool.get('size') ?? 4;
-                this._toolPropsMenu.showForTool(toolId, props);
-            }
-
+            this._activeTool = getToolDef(toolId);
+            this._toolPropsMenu.render(this._activeTool.getMenuItems());
             this._showPopup(this._toolPropsMenu, btn);
         }
 
         _onBlurBlockSizeChanged(size) {
-            if (this._toolPropsMenu?._blockSliderSetValue) this._toolPropsMenu._blockSliderSetValue(size);
+            this._toolPropsMenu?.setValue('blockSize', size);
         }
 
         _buildFromLayout() {
@@ -387,15 +340,14 @@ export const Toolbar = GObject.registerClass(
             if (limit === undefined || limit === oldSize) return;
             this._activeTool.set('size', limit);
             this._activeTool.save();
-            if (this._toolPropsMenu?.visible && this._toolPropsMenu._sizeSliderSetValue)
-                this._toolPropsMenu._sizeSliderSetValue(limit);
+            if (this._toolPropsMenu?.visible) this._toolPropsMenu.setValue('size', limit);
         }
 
         _sizeMax() {
             return this._selectedTool === 'blur' ? BLUR_SIZE_MAX : SIZE_MAX;
         }
 
-        hideColorMenu() {
+        hidePropsPopup() {
             this._hidePopup(this._toolPropsMenu);
         }
 
@@ -438,6 +390,13 @@ export const Toolbar = GObject.registerClass(
         }
         get activePropsToolId() {
             return this._activePropsTool;
+        }
+        get blurInitialState() {
+            const t = getToolDef('blur');
+            return {
+                blurMode: t?.get('mode') ?? 'brush',
+                blockSize: t?.get('blockSize') ?? 16,
+            };
         }
         get selectedColor() {
             return this._activeTool?.get('color') ?? '#000000';

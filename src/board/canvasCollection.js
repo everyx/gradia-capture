@@ -1,8 +1,53 @@
+import { getToolDef } from '../annotation/tools/index.js';
+import { addEmitter } from '../platform/emitter.js';
+
 export class CanvasCollection {
-    constructor() {
+    constructor({ bus } = {}) {
         this._canvasList = [];
         this._overlays = [];
         this._bins = [];
+        this._toolbar = null;
+        addEmitter(this);
+
+        if (bus) {
+            bus.connect('tool-changed', (id) => {
+                const drawing = getToolDef(id)?.isDrawing ?? false;
+                const dragging = id === 'drag';
+                this.forEachCanvas((c) => c.setTool(id));
+                this.forEachOverlay((o) => {
+                    o.reactive = drawing || dragging;
+                });
+            });
+        }
+    }
+
+    setToolbar(toolbar, { skipLastStroke } = {}) {
+        this._toolbar = toolbar;
+        this._skipLastStroke = skipLastStroke ?? (() => false);
+        toolbar.connect('tool-property-changed', (_t, payload) => {
+            const props = JSON.parse(payload);
+            const STROKE_KEY_MAP = { size: 'strokeWidth' };
+
+            this.forEachCanvas((c) => c.applyProps(props));
+
+            const sel = this.selected;
+
+            for (const [key, value] of Object.entries(props)) {
+                if (value === undefined || key === 'mode') continue;
+                const mappedKey = STROKE_KEY_MAP[key] || key;
+
+                if (!this._skipLastStroke()) {
+                    const toolId = toolbar.activePropsToolId ?? toolbar.selectedTool;
+                    this.applyToLastStroke(toolId, mappedKey, value);
+                }
+
+                if (sel) {
+                    sel.stroke[mappedKey] = value;
+                }
+            }
+
+            if (sel) sel.canvas.queue_repaint();
+        });
     }
 
     get canvases() {
@@ -85,7 +130,7 @@ export class CanvasCollection {
         const strokes = [];
         this.forEachCanvas((c) => {
             for (const s of c.strokes) {
-                strokes.push({
+                const copy = {
                     color: s.color,
                     toolId: s.toolId,
                     counter: s.counter,
@@ -94,7 +139,9 @@ export class CanvasCollection {
                     blurMode: s.blurMode,
                     blockSize: s.blockSize,
                     stagePoints: s.stagePoints.map((p) => ({ x: p.x, y: p.y })),
-                });
+                };
+                getToolDef(s.toolId)?.bindCapabilities?.(copy);
+                strokes.push(copy);
             }
         });
         return strokes;
