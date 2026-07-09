@@ -57,6 +57,9 @@ export const DrawingCanvas = GObject.registerClass(
         setTool(id) {
             this._toolId = id;
             if (id !== 'drag') this._selectedStroke = null;
+            this._showCursor = false;
+            this._customCursorType = undefined;
+            this._updateCursorStyle();
         }
 
         showCursor(r) {

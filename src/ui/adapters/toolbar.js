@@ -399,6 +399,10 @@ export const Toolbar = GObject.registerClass(
             this._hidePopup(this._toolPropsMenu);
         }
 
+        hidePropsPopup() {
+            this._hidePopup(this._toolPropsMenu);
+        }
+
         reposition({ selectionRect, monitorRect }) {
             const [, natW] = this.get_preferred_width(-1);
             const natH = this.get_preferred_height(-1)[1];

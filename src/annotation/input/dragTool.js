@@ -51,6 +51,7 @@ export class DragTool {
             this._grab = global.stage.grab(this._canvases.getOverlay(idx));
         } else {
             this.active = false;
+            this._toolbar.hidePropsPopup?.();
         }
         this._updateTrash();
     }
