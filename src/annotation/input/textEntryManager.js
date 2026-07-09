@@ -3,7 +3,7 @@ import GLib from 'gi://GLib';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import { getToolDef } from '../annotation/tools/index.js';
+import { getToolDef } from '../tools/index.js';
 
 const MIN_WIDTH_CHARS = 4;
 
