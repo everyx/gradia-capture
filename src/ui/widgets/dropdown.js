@@ -39,7 +39,7 @@ export const Dropdown = GObject.registerClass(
             this._scroll.vscrollbar_policy = St.PolicyType.AUTOMATIC;
             this._scroll.hscrollbar_policy = St.PolicyType.NEVER;
             this._list = new St.BoxLayout({ vertical: true });
-            this._scroll.add_actor(this._list);
+            this._scroll.add_child(this._list);
             this.add_child(this._scroll);
 
             this._btn.connect('clicked', () => {
