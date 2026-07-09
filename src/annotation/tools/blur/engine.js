@@ -3,6 +3,8 @@ import Clutter from 'gi://Clutter';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import GLib from 'gi://GLib';
 
+import { stageToImageCoords, imageScaleFactors, stageLineWidth } from '../../../platform/stageToImage.js';
+
 /*
  * 坐标系不变式（blur 预览/提交路径）
  *
@@ -797,18 +799,14 @@ export class BlurSelector {
 export function composeBlurStrokes(basePixbuf, strokes, { stageScale, selX, selY, selW, selH }) {
     const imgWidth = basePixbuf.get_width();
     const imgHeight = basePixbuf.get_height();
-    const scaleX = imgWidth / selW;
-    const scaleY = imgHeight / selH;
+    const { scaleX, scaleY } = imageScaleFactors(imgWidth, imgHeight, selW, selH);
 
     let result = basePixbuf;
     for (const stroke of strokes) {
         const sp = stroke.stagePoints;
         if (sp.length < 2) continue;
-        const pointsAbs = sp.map((p) => ({
-            x: (p.x / stageScale - selX) * scaleX,
-            y: (p.y / stageScale - selY) * scaleY,
-        }));
-        const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
+        const pointsAbs = stageToImageCoords(sp, { stageScale, selX, selY, scaleX, scaleY });
+        const lw = stageLineWidth(stroke.strokeWidth, scaleX, scaleY);
         const blockSize = stroke.blockSize || 16;
         const regionAbs = {
             x: 0,
@@ -816,9 +814,10 @@ export function composeBlurStrokes(basePixbuf, strokes, { stageScale, selX, selY
             w: result.get_width(),
             h: result.get_height(),
         };
+        const originCoords = stageToImageCoords([sp[0]], { stageScale, selX, selY, scaleX, scaleY });
         const originAbs = {
-            x: Math.round((sp[0].x / stageScale - selX) * scaleX),
-            y: Math.round((sp[0].y / stageScale - selY) * scaleY),
+            x: Math.round(originCoords[0].x),
+            y: Math.round(originCoords[0].y),
         };
 
         if ((stroke.blurMode || 'brush') === 'selection') {

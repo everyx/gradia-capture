@@ -30,22 +30,23 @@ export class CanvasCollection {
 
             this.forEachCanvas((c) => c.applyProps(props));
 
-            if (!this._skipLastStroke()) {
-                for (const [key, value] of Object.entries(props)) {
-                    if (value === undefined || key === 'mode') continue;
+            const sel = this.selected;
+
+            for (const [key, value] of Object.entries(props)) {
+                if (value === undefined || key === 'mode') continue;
+                const mappedKey = STROKE_KEY_MAP[key] || key;
+
+                if (!this._skipLastStroke()) {
                     const toolId = toolbar.activePropsToolId ?? toolbar.selectedTool;
-                    this.applyToLastStroke(toolId, STROKE_KEY_MAP[key] || key, value);
+                    this.applyToLastStroke(toolId, mappedKey, value);
+                }
+
+                if (sel) {
+                    sel.stroke[mappedKey] = value;
                 }
             }
 
-            const sel = this.selected;
-            if (sel) {
-                for (const [key, value] of Object.entries(props)) {
-                    if (value === undefined || key === 'mode') continue;
-                    sel.stroke[STROKE_KEY_MAP[key] || key] = value;
-                }
-                sel.canvas.queue_repaint();
-            }
+            if (sel) sel.canvas.queue_repaint();
         });
     }
 

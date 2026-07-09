@@ -1,8 +1,6 @@
 export function orderByPhase(strokes) {
-    return strokes
-        .map((s, i) => ({ s, i }))
-        .sort((a, b) => (a.s.phase === 'underlay' ? 0 : 1) - (b.s.phase === 'underlay' ? 0 : 1) || a.i - b.i)
-        .map((o) => o.s);
+    const { underlay, overlay } = splitByPhase(strokes);
+    return [...underlay, ...overlay];
 }
 
 export function splitByPhase(strokes) {

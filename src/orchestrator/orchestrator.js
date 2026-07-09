@@ -60,6 +60,18 @@ export class Orchestrator {
         this._ocrSelector?.clearCache();
         if (this._toolbar) return;
 
+        const primaryBin = this._setupCanvases();
+        if (!primaryBin) return;
+
+        this._setupTooling(primaryBin);
+        this._wireAllSignals();
+        this._setupUI(primaryBin);
+
+        this._setTool('select');
+        this._updateVisibilityForMode();
+    }
+
+    _setupCanvases() {
         const ui = Main.screenshotUI;
 
         this._canvases = new CanvasCollection({ bus: this._bus });
@@ -106,9 +118,10 @@ export class Orchestrator {
             },
         );
 
-        const primaryBin = ui._primaryMonitorBin;
-        if (!primaryBin) return;
+        return ui._primaryMonitorBin;
+    }
 
+    _setupTooling(primaryBin) {
         this._toolbar = new Toolbar({
             extensionPath: this._extensionPath,
             gradiaSettings: this._gradiaSettings,
@@ -180,10 +193,26 @@ export class Orchestrator {
                 },
             },
         };
+    }
 
+    _wireAllSignals() {
         this._wireSignals();
 
         if (!isRapidOcrAvailable()) this._toolbar.setOcrAvailable(false);
+
+        this._wireModeAndDragSignals();
+        this._dispatcher = new ShortcutDispatcher({
+            toolbar: this._toolbar,
+            ocrSelector: this._ocrSelector,
+            textEntryManager: this._textEntryManager,
+            dragTool: this._dragTool,
+            execute: (intent) => this.execute(intent),
+        });
+        this._dispatcher.connect();
+    }
+
+    _setupUI(primaryBin) {
+        const ui = Main.screenshotUI;
 
         this._settingsButton = createSettingsButton(() => {
             Main.screenshotUI.close();
@@ -202,16 +231,6 @@ export class Orchestrator {
         this._repositionToolbar();
 
         this._resolutionOverlay = new ResolutionOverlay(primaryBin);
-
-        this._dispatcher = new ShortcutDispatcher({
-            toolbar: this._toolbar,
-            ocrSelector: this._ocrSelector,
-            textEntryManager: this._textEntryManager,
-            dragTool: this._dragTool,
-            execute: (intent) => this.execute(intent),
-        });
-        this._wireModeAndDragSignals();
-        this._dispatcher.connect();
 
         if (this._settings.get_boolean('clear-selection')) {
             this._selectionClearer.patch(ui._areaSelector);
@@ -236,9 +255,6 @@ export class Orchestrator {
                 ui._areaSelector.disconnect(hideLabelId);
             });
         }
-
-        this._setTool('select');
-        this._updateVisibilityForMode();
     }
 
     removeUI() {

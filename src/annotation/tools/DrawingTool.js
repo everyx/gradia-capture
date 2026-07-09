@@ -1,6 +1,7 @@
 import { SELECTION_PADDING, rectBounds, rectHit } from '../shared.js';
 import { MENU_KIND, SIZE_MIN, SIZE_MAX } from '../../platform/menuSchema.js';
 import { N_ } from '../../platform/i18n.js';
+import { stageToImageCoords, imageScaleFactors, stageLineWidth } from '../../platform/stageToImage.js';
 
 export class DrawingTool {
     constructor() {
@@ -111,13 +112,10 @@ export class DrawingTool {
             const { selX, selY, selW, selH, stageScale } = ctx;
             if (selW <= 0 || selH <= 0) return;
             const imgW = cr.getTarget()?.getWidth?.() ?? 0;
-            const scaleX = selW > 0 ? imgW / selW : 1;
-            const scaleY = selH > 0 ? (cr.getTarget()?.getHeight?.() ?? 0) / selH : 1;
-            const converted = stroke.stagePoints.map((p) => ({
-                x: (p.x / stageScale - selX) * scaleX,
-                y: (p.y / stageScale - selY) * scaleY,
-            }));
-            const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
+            const imgH = cr.getTarget()?.getHeight?.() ?? 0;
+            const { scaleX, scaleY } = imageScaleFactors(imgW, imgH, selW, selH);
+            const converted = stageToImageCoords(stroke.stagePoints, { stageScale, selX, selY, scaleX, scaleY });
+            const lw = stageLineWidth(stroke.strokeWidth, scaleX, scaleY);
             this.render(
                 cr,
                 {
