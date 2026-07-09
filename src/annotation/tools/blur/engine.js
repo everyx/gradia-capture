@@ -535,10 +535,16 @@ export class BlurSelector {
     }
 
     refreshCursor(toolId, size) {
+        const [px, py] = global.get_pointer();
         this._forEachCanvas((c) => {
-            if (toolId === 'blur' && this._mode === 'brush') c.showCursor((size ?? 8) / 2);
-            else if (toolId === 'blur' && this._mode === 'selection') c.hideCursor(Clutter.CursorType.CROSSHAIR);
-            else c.hideCursor();
+            if (toolId === 'blur' && this._mode === 'brush') {
+                c.moveCursor(px, py);
+                c.showCursor((size ?? 8) / 2);
+            } else if (toolId === 'blur' && this._mode === 'selection') {
+                c.hideCursor(Clutter.CursorType.CROSSHAIR);
+            } else {
+                c.hideCursor();
+            }
         });
     }
 
