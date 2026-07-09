@@ -447,10 +447,14 @@ export class BlurSelector {
                     this.refreshCursor(id, this._toolbar?.size);
                 }
             });
-            bus.connect('tool-property-changed', (payload) => {
-                const props = JSON.parse(payload);
-                this.onPropertyChanged(props, this._toolbar?.selectedTool, this._toolbar?.size);
-            });
+            if (this._toolbar) {
+                this._toolbar.connect('tool-property-changed', (_, payload) => {
+                    const props = JSON.parse(payload);
+                    if (props.mode !== undefined) this.setMode(props.mode);
+                    if (props.blockSize !== undefined) this.setBlockSize(props.blockSize);
+                    this.onPropertyChanged(props, this._toolbar?.selectedTool, this._toolbar?.size);
+                });
+            }
             bus.connect('hover', (stageX, stageY) => {
                 this.handleHoverMotion(this._toolbar?.selectedTool, stageX, stageY);
             });
