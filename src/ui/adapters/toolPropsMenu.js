@@ -6,7 +6,7 @@ import St from 'gi://St';
 import { Slider } from 'resource:///org/gnome/shell/ui/slider.js';
 
 import { SquareSlider } from '../widgets/squareSlider.js';
-import { Dropdown } from '../widgets/dropdown.js';
+import { FontPicker } from '../widgets/fontPicker.js';
 
 import { attachTooltip } from '../../platform/tooltip.js';
 import { PopupMenu } from './popupMenu.js';
@@ -213,29 +213,28 @@ export const ToolPropsMenu = GObject.registerClass(
                 style_class: 'gradia-menu-group gradia-select-group',
             });
 
-            const dropdown = new Dropdown({
+            const picker = new FontPicker({
                 options: item.options,
                 current: item.value,
-                overlayParent: this.get_parent(),
             });
-            dropdown.connect('selected', (_d, value) => this._emit(item.key, value));
-            dropdown.connect('open-state-changed', (_d, open) => {
-                if (open) this._containmentExtras.add(dropdown.listActor);
-                else this._containmentExtras.delete(dropdown.listActor);
+            picker.connect('selected', (_d, value) => this._emit(item.key, value));
+            picker.connect('open-state-changed', (_d, open) => {
+                if (open) this._containmentExtras.add(picker.listActor);
+                else this._containmentExtras.delete(picker.listActor);
             });
             this.connect('hide', () => {
-                dropdown.close();
-                this._containmentExtras.delete(dropdown.listActor);
+                picker.close();
+                this._containmentExtras.delete(picker.listActor);
             });
-            group.add_child(dropdown);
-            if (item.label) attachTooltip(dropdown.triggerButton, item.label);
+            group.add_child(picker);
+            if (item.label) attachTooltip(picker.triggerButton, item.label);
 
             return {
                 group,
-                setValue: (v) => dropdown.setCurrent(v),
+                setValue: (v) => picker.setCurrent(v),
                 update: (it) => {
-                    dropdown.setOptions(it.options);
-                    dropdown.setCurrent(it.value);
+                    picker.setOptions(it.options);
+                    picker.setCurrent(it.value);
                 },
             };
         }

@@ -2,14 +2,20 @@ import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
-export const Dropdown = GObject.registerClass(
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import { PopupMenu as ShellPopupMenu, PopupMenuManager } from 'resource:///org/gnome/shell/ui/popupMenu.js';
+
+const ROW_HEIGHT = 28;
+const MAX_HEIGHT = 340;
+
+export const FontPicker = GObject.registerClass(
     {
         Signals: {
             selected: { param_types: [GObject.TYPE_STRING] },
             'open-state-changed': { param_types: [GObject.TYPE_BOOLEAN] },
         },
     },
-    class Dropdown extends St.BoxLayout {
+    class FontPicker extends St.BoxLayout {
         _init(params = {}) {
             const { options = [], current = '', ...rest } = params;
             super._init({
@@ -22,7 +28,6 @@ export const Dropdown = GObject.registerClass(
             this._current = current;
             this._btns = [];
             this._activeIndex = -1;
-            this._stageId = 0;
             this._keyId = 0;
 
             this._btn = new St.Button({
@@ -35,29 +40,19 @@ export const Dropdown = GObject.registerClass(
             this._btn.add_child(this._btnLabel);
             this.add_child(this._btn);
 
-            this._scroll = new St.ScrollView({
-                style_class: 'gradia-dropdown-scroll',
-                style: 'max-height: 240px;',
-                visible: false,
-            });
-            this._scroll.vscrollbar_policy = St.PolicyType.AUTOMATIC;
-            this._scroll.hscrollbar_policy = St.PolicyType.NEVER;
-            this._list = new St.BoxLayout({ vertical: true });
-            this._scroll.add_child(this._list);
-            this.add_child(this._scroll);
+            this._menu = new ShellPopupMenu.PopupMenu(this._btn, 0, St.Side.BOTTOM);
+            this._menuManager = new PopupMenuManager(this._btn);
+            this._menuManager.addMenu(this._menu);
+
+            this._buildList();
+            Main.screenshotUI.add_child(this._menu.actor);
 
             this._btn.connect('clicked', () => {
-                if (this._scroll.visible) this.close();
+                if (this._menu.isOpen) this._menu.close();
                 else this.open();
             });
 
-            this.connect('hide', () => this.close());
-            this.connect('destroy', () => {
-                this._disconnectStage();
-                this._disconnectKey();
-            });
-
-            this._build();
+            this.connect('destroy', () => this._disconnectKey());
         }
 
         get triggerButton() {
@@ -65,7 +60,7 @@ export const Dropdown = GObject.registerClass(
         }
 
         get listActor() {
-            return this._scroll;
+            return this._menu.actor;
         }
 
         setOptions(options) {
@@ -79,7 +74,19 @@ export const Dropdown = GObject.registerClass(
             for (const b of this._btns) b.checked = b._value === current;
         }
 
-        _build() {
+        _buildList() {
+            const scroll = new St.ScrollView({
+                style_class: 'gradia-dropdown-scroll',
+                style: `max-height: ${MAX_HEIGHT}px;`,
+            });
+            scroll.vscrollbar_policy = St.PolicyType.AUTOMATIC;
+            scroll.hscrollbar_policy = St.PolicyType.NEVER;
+            scroll.connect('scroll-event', () => Clutter.EVENT_STOP);
+            const list = new St.BoxLayout({ vertical: true });
+            scroll.add_child(list);
+            this._scroll = scroll;
+            this._list = list;
+
             for (const opt of this._options) {
                 const btn = new St.Button({
                     style_class: 'gradia-dropdown-item',
@@ -90,19 +97,17 @@ export const Dropdown = GObject.registerClass(
                 });
                 btn.set_child(new St.Label({ text: opt }));
                 btn._value = opt;
-                btn.connect('clicked', () => {
-                    this.close();
-                    this.emit('selected', opt);
-                });
-                this._list.add_child(btn);
+                btn.connect('clicked', () => this._select(opt));
+                list.add_child(btn);
                 this._btns.push(btn);
             }
+            this._menu.box.add_child(scroll);
         }
 
         _rebuild() {
             for (const b of this._btns) b.destroy();
             this._btns = [];
-            this._build();
+            this._buildList();
         }
 
         _indexFor(value) {
@@ -110,23 +115,24 @@ export const Dropdown = GObject.registerClass(
         }
 
         open() {
-            if (this._scroll.visible) return;
-
+            if (this._menu.isOpen) return;
             this.setCurrent(this._current);
             this._activeIndex = this._indexFor(this._current);
-            this._scroll.show();
-
-            this._connectStage();
+            this._menu.open();
             this._connectKey();
             this.emit('open-state-changed', true);
         }
 
         close() {
-            if (!this._scroll.visible) return;
-            this._scroll.hide();
-            this._disconnectStage();
+            if (!this._menu.isOpen) return;
+            this._menu.close();
             this._disconnectKey();
             this.emit('open-state-changed', false);
+        }
+
+        _select(value) {
+            this.close();
+            this.emit('selected', value);
         }
 
         _move(delta) {
@@ -140,9 +146,7 @@ export const Dropdown = GObject.registerClass(
 
         _selectActive() {
             if (this._activeIndex < 0) return;
-            const value = this._btns[this._activeIndex]._value;
-            this.close();
-            this.emit('selected', value);
+            this._select(this._btns[this._activeIndex]._value);
         }
 
         _onKey(event) {
@@ -166,26 +170,9 @@ export const Dropdown = GObject.registerClass(
             return Clutter.EVENT_PROPAGATE;
         }
 
-        _connectStage() {
-            if (this._stageId) return;
-            this._stageId = global.stage.connect('button-press-event', (_stage, event) => {
-                const target = event.get_source();
-                if (target && (this.contains(target) || this._scroll.contains(target))) return Clutter.EVENT_PROPAGATE;
-                this.close();
-                return Clutter.EVENT_PROPAGATE;
-            });
-        }
-
         _connectKey() {
             if (this._keyId) return;
             this._keyId = global.stage.connect('key-press-event', (_stage, event) => this._onKey(event));
-        }
-
-        _disconnectStage() {
-            if (this._stageId) {
-                global.stage.disconnect(this._stageId);
-                this._stageId = 0;
-            }
         }
 
         _disconnectKey() {
