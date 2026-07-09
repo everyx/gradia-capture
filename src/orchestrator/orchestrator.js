@@ -316,6 +316,12 @@ export class Orchestrator {
                 if (this._contextUndelegate[this._toolbar.selectedTool]?.()) return;
                 this._canvases.undo();
                 break;
+            case 'clear':
+                if (!this._canvases?.allCanvasesVisible()) return;
+                this._textEntryManager?.cancel();
+                this._canvases.clear();
+                this._dragTool?.refresh();
+                break;
             case 'copy':
                 if (!this._isRecordingMode() && !this.portalMode) {
                     this._screenshotCapture.capture({ copyOnly: true, portalMode: this.portalMode }).then((result) => {
@@ -513,22 +519,8 @@ export class Orchestrator {
             this._textEntryManager?.onPropertyChanged(props);
         });
 
-        this._toolbar.connect('undo', () => {
-            if (!this._canvases?.allCanvasesVisible()) return;
-            if (this._textEntryManager?.isActive) {
-                this._textEntryManager.cancel();
-                return;
-            }
-            if (this._contextUndelegate[this._toolbar.selectedTool]?.()) return;
-            this._canvases.undo();
-        });
-
-        this._toolbar.connect('clear', () => {
-            if (!this._canvases?.allCanvasesVisible()) return;
-            this._textEntryManager?.cancel();
-            this._canvases.clear();
-            this._dragTool?.refresh();
-        });
+        this._toolbar.connect('undo', () => this.execute('undo'));
+        this._toolbar.connect('clear', () => this.execute('clear'));
 
         if (isRapidOcrAvailable()) {
             this._toolbar.connect('ocr-trigger', () => {
