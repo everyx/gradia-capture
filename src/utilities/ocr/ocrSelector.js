@@ -6,7 +6,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { runRapidOcr } from './backend.js';
 import { splitBlocks } from './ocrText.js';
 import { groupBlocksToLines } from './ocrLines.js';
-import { attachTooltip } from '../../platform/tooltip.js';
+import { SelectionCornerButton } from '../../ui/widgets/selectionCornerButton.js';
 import { getCaptureContext } from '../../capture/captureContext.js';
 import { N_ } from '../../platform/i18n.js';
 
@@ -125,10 +125,7 @@ export class OcrSelector {
             this._overlay.destroy();
             this._overlay = null;
         }
-        if (this._copyBtn) {
-            this._copyBtn.destroy();
-            this._copyBtn = null;
-        }
+        this._cornerBtn?.hide();
         this._blockData = null;
         if (restoreCanvas) {
             for (const canvas of this._canvases) canvas.show();
@@ -161,6 +158,10 @@ export class OcrSelector {
 
     destroy() {
         this.deactivate(false);
+        if (this._cornerBtn) {
+            this._cornerBtn.destroy();
+            this._cornerBtn = null;
+        }
         if (this._toast) {
             this._toast.destroy();
             this._toast = null;
@@ -349,30 +350,26 @@ export class OcrSelector {
         border.queue_repaint();
         this._selBorder = border;
 
-        this._showCopyBtn(uMaxX + PAD, uMinY - PAD, primaryBin);
+        this._showCopyBtn(uMaxX, uMinY, uMaxY, primaryBin);
     }
 
-    _showCopyBtn(stageRX, stageTY, primaryBin) {
+    _showCopyBtn(uMaxX, uMinY, uMaxY, primaryBin) {
         if (!primaryBin) return;
-        if (!this._copyBtn) {
-            this._copyBtn = new St.Button({
-                style_class: 'gradia-ocr-copy-btn',
-                child: new St.Icon({ icon_name: 'edit-copy-symbolic', style: 'icon-size: 14px;' }),
+        if (!this._cornerBtn) {
+            this._cornerBtn = new SelectionCornerButton({
+                parentBin: primaryBin,
+                iconName: 'edit-copy-symbolic',
+                iconSize: 14,
+                styleClass: 'gradia-selection-trash gradia-circle-button',
+                onClick: () => this.copySelected(),
+                tooltipText: N_('Copy selected text'),
             });
-            attachTooltip(this._copyBtn, N_('Copy selected text'), St.Side.RIGHT);
-            this._copyBtn.connect('clicked', () => this.copySelected());
-            if (Main.screenshotUI._panel) primaryBin.insert_child_below(this._copyBtn, Main.screenshotUI._panel);
-            else primaryBin.add_child(this._copyBtn);
         }
-        const [ok, lx, ly] = primaryBin.transform_stage_point(stageRX - 16, stageTY - 24);
-        if (ok) {
-            this._copyBtn.set_position(Math.round(lx), Math.round(ly));
-            this._copyBtn.show();
-        }
+        this._cornerBtn.show(uMaxX + PAD, uMinY - PAD - 8);
     }
 
     _hideCopyBtn() {
-        this._copyBtn?.hide();
+        this._cornerBtn?.hide();
     }
 
     _hideSelBorder() {

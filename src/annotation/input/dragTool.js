@@ -1,10 +1,7 @@
 import Clutter from 'gi://Clutter';
-import St from 'gi://St';
-import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import { addEmitter } from '../../platform/emitter.js';
-
-const TRASH_RADIUS = 16;
+import { SelectionCornerButton } from '../../ui/widgets/selectionCornerButton.js';
 
 export class DragTool {
     constructor({ toolbar, canvases, parentBin, bus }) {
@@ -17,7 +14,14 @@ export class DragTool {
         this._startY = 0;
         this._canvas = null;
         this._grab = null;
-        this._trashBtn = null;
+        this._cornerBtn = new SelectionCornerButton({
+            parentBin,
+            iconName: 'user-trash-symbolic',
+            styleClass: 'gradia-selection-trash gradia-circle-button',
+            onClick: () => {
+                if (this._canvases.deleteSelected()) this._updateTrash();
+            },
+        });
 
         addEmitter(this);
         if (bus) {
@@ -107,57 +111,26 @@ export class DragTool {
 
     destroy() {
         this.release();
-        this._destroyTrash();
+        this._cornerBtn.destroy();
     }
 
     _updateTrash() {
         const sel = this._canvases.selected;
         if (!sel) {
-            this._hideTrash();
+            this._cornerBtn.hide();
             return;
         }
 
         const bounds = sel.stroke.hitBounds?.();
         if (!bounds) {
-            this._hideTrash();
+            this._cornerBtn.hide();
             return;
         }
 
-        if (!this._trashBtn) this._buildTrash();
-
-        const [ok, lx, ly] = this._parentBin.transform_stage_point(bounds.maxX, bounds.minY);
-        if (!ok) {
-            this._hideTrash();
-            return;
-        }
-
-        this._trashBtn.set_position(Math.round(lx - TRASH_RADIUS), Math.round(ly - TRASH_RADIUS));
-        this._trashBtn.show();
+        this._cornerBtn.show(bounds.maxX, bounds.minY);
     }
 
     _hideTrash() {
-        this._trashBtn?.hide();
-    }
-
-    _destroyTrash() {
-        if (this._trashBtn) {
-            this._trashBtn.destroy();
-            this._trashBtn = null;
-        }
-    }
-
-    _buildTrash() {
-        this._trashBtn = new St.Button({
-            style_class: 'gradia-selection-trash gradia-circle-button',
-            child: new St.Icon({
-                icon_name: 'user-trash-symbolic',
-                style: 'icon-size: 16px;',
-            }),
-            reactive: true,
-        });
-        this._trashBtn.connect('clicked', () => {
-            if (this._canvases.deleteSelected()) this._updateTrash();
-        });
-        this._parentBin.insert_child_below(this._trashBtn, Main.screenshotUI._panel);
+        this._cornerBtn.hide();
     }
 }
