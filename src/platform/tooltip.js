@@ -25,6 +25,10 @@ export const Tooltip = GObject.registerClass(
             this._destroyId = widget.connect('destroy', () => this.destroy());
             this.connect('destroy', () => {
                 this._destroyed = true;
+                if (this._timeoutId) {
+                    GLib.source_remove(this._timeoutId);
+                    this._timeoutId = null;
+                }
                 widget.disconnect(this._hoverId);
                 widget.disconnect(this._destroyId);
             });
@@ -38,13 +42,13 @@ export const Tooltip = GObject.registerClass(
             });
         }
         _getGap() {
-            if (this._side !== St.Side.TOP) return DEFAULT_GAP;
+            if (this._side !== St.Side.TOP || !this.get_stage()) return DEFAULT_GAP;
             const node = this.get_theme_node();
             const gap = node?.get_length('-y-offset');
             return gap > 0 ? gap : DEFAULT_GAP;
         }
         _show(widget) {
-            if (this._destroyed || !widget.get_stage()) return;
+            if (this._destroyed || !this.get_stage() || !widget.get_stage()) return;
             const e = widget.get_transformed_extents();
             const [wx, wy, ww, wh] = [e.get_x(), e.get_y(), e.get_width(), e.get_height()];
             const cx = Math.floor(wx + (ww - this.width) / 2);
