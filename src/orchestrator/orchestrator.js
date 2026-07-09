@@ -16,6 +16,7 @@ import { isRapidOcrAvailable } from '../utilities/ocr/backend.js';
 import { createSettingsButton } from '../platform/gradiaApp.js';
 import { BlurSelector } from '../annotation/tools/blur/engine.js';
 import { ShortcutDispatcher } from './shortcutDispatcher.js';
+import { addEmitter } from '../platform/emitter.js';
 
 export class Orchestrator {
     constructor({ extensionPath, settings, gradiaSettings, selectionClearer, getPortalMode, openPreferences }) {
@@ -45,9 +46,10 @@ export class Orchestrator {
         this._dragStartedId = 0;
         this._dragEndedId = 0;
 
-        this._contextActivate = {};
         this._contextUndelegate = {};
         this._inputRegistry = {};
+
+        this._bus = addEmitter({});
     }
 
     get portalMode() {
@@ -60,7 +62,7 @@ export class Orchestrator {
 
         const ui = Main.screenshotUI;
 
-        this._canvases = new CanvasCollection();
+        this._canvases = new CanvasCollection({ bus: this._bus });
         const monitorBins = ui._monitorBins ?? [];
         const binsToUse = monitorBins.length > 0 ? monitorBins : ui._primaryMonitorBin ? [ui._primaryMonitorBin] : [];
 
@@ -113,7 +115,7 @@ export class Orchestrator {
             hasSelection: () => !!this._canvases.selected,
             hasVisibleCanvas: () => this._canvases?.allCanvasesVisible() ?? true,
         });
-        this._textEntryManager = new TextEntryManager(this._toolbar, this._canvases);
+        this._textEntryManager = new TextEntryManager(this._toolbar, this._canvases, { bus: this._bus });
         this._screenshotCapture = new ScreenshotCapture({
             canvases: this._canvases,
             textEntryManager: this._textEntryManager,
@@ -127,6 +129,7 @@ export class Orchestrator {
             toolbar: this._toolbar,
             canvases: this._canvases,
             parentBin: primaryBin,
+            bus: this._bus,
         });
 
         this._blurSelector = new BlurSelector({
@@ -135,6 +138,8 @@ export class Orchestrator {
             stageScale: Main.screenshotUI._scale || 1,
             forEachCanvas: (fn) => this._canvases.forEachCanvas(fn),
             ensureCache: () => this._screenshotCapture.ensureCache(),
+            toolbar: this._toolbar,
+            bus: this._bus,
             onBlockSizeChanged: (size) => this._toolbar?._onBlurBlockSizeChanged(size),
             onModeChanged: () => this._blurSelector.refreshCursor(this._toolbar?.selectedTool, this._toolbar?.size),
         });
@@ -149,12 +154,6 @@ export class Orchestrator {
                 return { file, scale: this._screenshotCapture.captureScale || 1 };
             },
         });
-        this._contextActivate = {
-            blur: (id, size) => {
-                this._blurSelector.onActivate();
-                this._blurSelector.refreshCursor(id, size);
-            },
-        };
         this._contextUndelegate = {
             drag: () => this._canvases.deleteSelected() && (this._dragTool?.refresh(), true),
         };
@@ -356,19 +355,11 @@ export class Orchestrator {
             this._toolbar.setOcrIdle();
         }
 
-        if (id !== this._lastSetToolId) this._dragTool?.onDeactivate();
         this._lastSetToolId = id;
         this._activeInput = this._inputRegistry[id] ?? null;
 
-        const drawing = this._isDrawingTool(id);
-        const dragging = id === 'drag';
+        this._bus.emit('tool-changed', id);
 
-        this._canvases.forEachCanvas((c) => c.setTool(id));
-        this._canvases.forEachOverlay((o) => {
-            o.reactive = drawing || dragging;
-        });
-
-        this._contextActivate[id]?.(id, this._toolbar?.size);
         this._updateAreaSelectorState(id);
         this._toolbar.updateUndoClearSensitivity();
     }

@@ -1,10 +1,23 @@
 import { getToolDef } from '../annotation/tools/index.js';
+import { addEmitter } from '../platform/emitter.js';
 
 export class CanvasCollection {
-    constructor() {
+    constructor({ bus } = {}) {
         this._canvasList = [];
         this._overlays = [];
         this._bins = [];
+        addEmitter(this);
+
+        if (bus) {
+            bus.connect('tool-changed', (id) => {
+                const drawing = getToolDef(id)?.isDrawing ?? false;
+                const dragging = id === 'drag';
+                this.forEachCanvas((c) => c.setTool(id));
+                this.forEachOverlay((o) => {
+                    o.reactive = drawing || dragging;
+                });
+            });
+        }
     }
 
     get canvases() {

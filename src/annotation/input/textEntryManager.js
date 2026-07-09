@@ -4,11 +4,12 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { getToolDef } from '../tools/index.js';
+import { addEmitter } from '../../platform/emitter.js';
 
 const MIN_WIDTH_CHARS = 4;
 
 export class TextEntryManager {
-    constructor(toolbar, canvases) {
+    constructor(toolbar, canvases, { bus } = {}) {
         this._toolbar = toolbar;
         this._canvases = canvases;
 
@@ -19,6 +20,13 @@ export class TextEntryManager {
         this._deactivateId = 0;
         this._idleSourceId = 0;
         this._committing = false;
+
+        addEmitter(this);
+        if (bus) {
+            bus.connect('tool-changed', (id) => {
+                if (id !== 'text') this.commit();
+            });
+        }
     }
 
     get isActive() {

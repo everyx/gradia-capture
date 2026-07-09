@@ -2,10 +2,12 @@ import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import { addEmitter } from '../../platform/emitter.js';
+
 const TRASH_RADIUS = 16;
 
 export class DragTool {
-    constructor({ toolbar, canvases, parentBin }) {
+    constructor({ toolbar, canvases, parentBin, bus }) {
         this._toolbar = toolbar;
         this._canvases = canvases;
         this._parentBin = parentBin;
@@ -16,6 +18,13 @@ export class DragTool {
         this._canvas = null;
         this._grab = null;
         this._trashBtn = null;
+
+        addEmitter(this);
+        if (bus) {
+            bus.connect('tool-changed', (id) => {
+                if (id !== 'drag') this.onDeactivate();
+            });
+        }
     }
 
     refresh() {

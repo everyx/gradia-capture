@@ -422,6 +422,8 @@ export class BlurSelector {
         onModeChanged,
         forEachCanvas,
         ensureCache,
+        toolbar,
+        bus,
     }) {
         this._captureRegion = captureRegion;
         this._getRegionSync = getRegionSync;
@@ -430,10 +432,20 @@ export class BlurSelector {
         this._onModeChanged = onModeChanged ?? (() => {});
         this._forEachCanvas = forEachCanvas ?? (() => {});
         this._ensureCache = ensureCache ?? (() => {});
+        this._toolbar = toolbar ?? null;
 
         this._mode = 'brush';
         this._blockSize = 16;
         this._previewCache = { pixbuf: null };
+
+        if (bus) {
+            bus.connect('tool-changed', (id) => {
+                if (id === 'blur') {
+                    this.onActivate();
+                    this.refreshCursor(id, this._toolbar?.size);
+                }
+            });
+        }
     }
 
     get mode() {
