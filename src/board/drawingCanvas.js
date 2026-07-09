@@ -4,6 +4,7 @@ import GObject from 'gi://GObject';
 import St from 'gi://St';
 
 import { getToolDef } from '../annotation/tools/index.js';
+import { orderByPhase } from './strokeOrder.js';
 
 const MAX_CANVAS_WIDTH = 1920;
 const MAX_CANVAS_HEIGHT = 1080;
@@ -343,9 +344,7 @@ export const DrawingCanvas = GObject.registerClass(
 
             const ss = global.stage.scale_factor || 1;
 
-            const ranked = [...allStrokes].sort(
-                (a, b) => (a.phase === 'underlay' ? 0 : 1) - (b.phase === 'underlay' ? 0 : 1),
-            );
+            const ranked = orderByPhase(allStrokes);
 
             let stampCounter = 1;
 

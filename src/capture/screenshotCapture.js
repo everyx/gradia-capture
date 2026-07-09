@@ -6,6 +6,7 @@ import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
 import { getCaptureContext } from './captureContext.js';
+import { orderByPhase, splitByPhase } from '../board/strokeOrder.js';
 
 function pixbufRegionCopy(full, stageRect, scale) {
     const cx = Math.round(stageRect.x * scale);
@@ -290,25 +291,19 @@ export class ScreenshotCapture {
 
         const ctx = { selX, selY, selW, selH, stageScale };
 
-        const ordered = strokes
-            .map((s, i) => ({ s, i }))
-            .sort((a, b) => (a.s.phase === 'underlay' ? 0 : 1) - (b.s.phase === 'underlay' ? 0 : 1) || a.i - b.i)
-            .map((o) => o.s);
+        const { underlay, overlay } = splitByPhase(orderByPhase(strokes));
 
         let out = pixbuf;
-        for (const s of ordered) {
-            if (s.phase === 'underlay') {
-                out = s.paintTo(out, ctx);
-                if (!out) return null;
-            }
+        for (const s of underlay) {
+            out = s.paintTo(out, ctx);
+            if (!out) return null;
         }
 
         const underlaid = out;
 
         let surface = null;
         let cr = null;
-        for (const s of ordered) {
-            if (s.phase !== 'overlay') continue;
+        for (const s of overlay) {
             if (!cr) {
                 const imgW = underlaid.get_width();
                 const imgH = underlaid.get_height();
