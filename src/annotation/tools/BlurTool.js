@@ -5,6 +5,7 @@ import { N_ } from '../../platform/i18n.js';
 import { DrawingTool } from './DrawingTool.js';
 import { createPixelatePattern } from '../shared.js';
 import { composeBlurStrokes } from './blur/engine.js';
+import { MENU_KIND, SIZE_MIN, BLUR_SIZE_MAX, BLOCK_SIZE_MIN, BLOCK_SIZE_MAX } from '../../platform/menuSchema.js';
 
 export class BlurTool extends DrawingTool {
     get id() {
@@ -31,6 +32,41 @@ export class BlurTool extends DrawingTool {
     }
     get paddingFactor() {
         return 0.5;
+    }
+    getMenuItems() {
+        const mode = this.get('mode') ?? 'brush';
+        const items = [
+            {
+                kind: MENU_KIND.TOGGLE,
+                key: 'mode',
+                value: mode,
+                options: [
+                    { value: 'brush', swatch: '#ffffff', label: N_('Brush') },
+                    { value: 'selection', icon: 'icons/selection-opaque-3-symbolic.svg', label: N_('Selection') },
+                ],
+            },
+        ];
+        if (mode === 'brush') {
+            items.push({
+                kind: MENU_KIND.SLIDER,
+                key: 'size',
+                min: SIZE_MIN,
+                max: BLUR_SIZE_MAX,
+                label: N_('Brush Size'),
+                value: this.get('size'),
+            });
+        }
+        items.push({
+            kind: MENU_KIND.SLIDER,
+            key: 'blockSize',
+            min: BLOCK_SIZE_MIN,
+            max: BLOCK_SIZE_MAX,
+            step: 2,
+            variant: 'square',
+            label: N_('Block Size'),
+            value: this.get('blockSize'),
+        });
+        return items;
     }
     render(cr, stroke, lineWidth) {
         if (stroke.points.length < 2) return;

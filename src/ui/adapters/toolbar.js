@@ -6,7 +6,8 @@ import St from 'gi://St';
 import { TOOLS, getToolDef } from '../../annotation/tools/index.js';
 import { attachTooltip } from '../../platform/tooltip.js';
 import { _ } from '../../platform/i18n.js';
-import { ToolPropsMenu, SIZE_MIN, SIZE_MAX, BLUR_SIZE_MAX } from './toolPropsMenu.js';
+import { ToolPropsMenu } from './toolPropsMenu.js';
+import { SIZE_MIN, SIZE_MAX, BLUR_SIZE_MAX } from '../../platform/menuSchema.js';
 import { TOOLBAR_GROUPS, SEP } from './toolbarLayout.js';
 
 function makeIcon(spec, extensionPath = '') {
@@ -75,50 +76,28 @@ export const Toolbar = GObject.registerClass(
         }
 
         _onDestroy() {
-            const popup = this._toolPropsMenu;
-            if (popup) {
-                const id = this._popupStagePressIds.get(popup);
-                if (id !== undefined) {
-                    global.stage.disconnect(id);
-                    this._popupStagePressIds.delete(popup);
-                }
-            }
+            if (this._toolPropsMenu) this._disconnectStagePress(this._toolPropsMenu);
             this._toolPropsMenu = null;
         }
 
+        _disconnectStagePress(popup) {
+            const id = this._popupStagePressIds.get(popup);
+            if (id !== undefined) {
+                global.stage.disconnect(id);
+                this._popupStagePressIds.delete(popup);
+            }
+        }
+
         _wirePropsMenu() {
-            const conn = (signal, handler) => this._toolPropsMenu.connect(signal, handler);
-
-            conn('color-changed', (_m, hex) => {
-                if (this._activeTool) {
-                    this._activeTool.set('color', hex);
-                    this._activeTool.save();
+            this._toolPropsMenu.connect('property-changed', (_m, payload) => {
+                const { key, value } = JSON.parse(payload);
+                if (!this._activeTool) return;
+                this._activeTool.set(key, value);
+                this._activeTool.save();
+                if (this._toolPropsMenu.visible) {
+                    this._toolPropsMenu.render(this._activeTool.getMenuItems());
+                    this._repositionPopup(this._toolPropsMenu, this._propsToolBtn);
                 }
-            });
-
-            conn('size-changed', (_m, size) => {
-                if (this._activeTool) {
-                    this._activeTool.set('size', size);
-                    this._activeTool.save();
-                }
-            });
-
-            conn('block-size-changed', (_m, size) => {
-                this.emit('tool-property-changed', JSON.stringify({ blockSize: size }));
-                if (this._activeTool) {
-                    this._activeTool.set('blockSize', size);
-                    this._activeTool.save();
-                }
-            });
-
-            conn('mode-changed', (_m, mode) => {
-                this.emit('tool-property-changed', JSON.stringify({ mode }));
-                if (this._activeTool) {
-                    this._activeTool.set('mode', mode);
-                    this._activeTool.save();
-                }
-                if (this._toolPropsMenu.visible)
-                    this._toolPropsMenu.updateWhenModeChanged('blur', this._blurPropsForMenu());
             });
         }
 
@@ -131,6 +110,7 @@ export const Toolbar = GObject.registerClass(
                 popup.disconnect(cb);
                 popup.reposition({ triggerBtn, toolbar: this, ...this._lastReposition });
             });
+            this._disconnectStagePress(popup);
             this._popupStagePressIds.set(
                 popup,
                 global.stage.connect('button-press-event', (_stage, event) => {
@@ -144,11 +124,7 @@ export const Toolbar = GObject.registerClass(
         }
 
         _hidePopup(popup) {
-            const id = this._popupStagePressIds.get(popup);
-            if (id !== undefined) {
-                global.stage.disconnect(id);
-                this._popupStagePressIds.delete(popup);
-            }
+            this._disconnectStagePress(popup);
             if (popup.get_stage()) popup.hide();
         }
 
@@ -167,11 +143,6 @@ export const Toolbar = GObject.registerClass(
                 const v = this._activeTool.get(entry.key);
                 if (v !== undefined) this.emit('tool-property-changed', JSON.stringify({ [entry.key]: v }));
             }
-        }
-
-        _blurPropsForMenu() {
-            const t = getToolDef('blur');
-            return { mode: t?.get('mode') ?? 'brush', size: t?.get('size') ?? 4, blockSize: t?.get('blockSize') ?? 16 };
         }
 
         syncToStroke(stroke) {
@@ -195,21 +166,13 @@ export const Toolbar = GObject.registerClass(
             if (!btn) return;
 
             this._propsToolBtn = btn;
-            const tool = getToolDef(toolId);
-
-            if (toolId === 'blur') {
-                this._toolPropsMenu.showForTool('blur', this._blurPropsForMenu());
-            } else {
-                const props = { color: tool.get('color') ?? '#000000' };
-                if (toolId !== 'solid-rectangle') props.size = tool.get('size') ?? 4;
-                this._toolPropsMenu.showForTool(toolId, props);
-            }
-
+            this._activeTool = getToolDef(toolId);
+            this._toolPropsMenu.render(this._activeTool.getMenuItems());
             this._showPopup(this._toolPropsMenu, btn);
         }
 
         _onBlurBlockSizeChanged(size) {
-            if (this._toolPropsMenu?._blockSliderSetValue) this._toolPropsMenu._blockSliderSetValue(size);
+            this._toolPropsMenu?.setValue('blockSize', size);
         }
 
         _buildFromLayout() {
@@ -377,8 +340,7 @@ export const Toolbar = GObject.registerClass(
             if (limit === undefined || limit === oldSize) return;
             this._activeTool.set('size', limit);
             this._activeTool.save();
-            if (this._toolPropsMenu?.visible && this._toolPropsMenu._sizeSliderSetValue)
-                this._toolPropsMenu._sizeSliderSetValue(limit);
+            if (this._toolPropsMenu?.visible) this._toolPropsMenu.setValue('size', limit);
         }
 
         _sizeMax() {

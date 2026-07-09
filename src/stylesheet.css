@@ -76,6 +76,10 @@
     margin-bottom: 2px;
 }
 
+.gradia-menu-group {
+    spacing: 2px;
+}
+
 .gradia-text-entry {
     background-color: transparent;
     border: 1.5px solid -st-accent-color;

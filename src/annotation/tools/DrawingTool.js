@@ -1,4 +1,6 @@
 import { SELECTION_PADDING, rectBounds, rectHit } from '../shared.js';
+import { MENU_KIND, SIZE_MIN, SIZE_MAX } from '../../platform/menuSchema.js';
+import { N_ } from '../../platform/i18n.js';
 
 export class DrawingTool {
     constructor() {
@@ -68,6 +70,25 @@ export class DrawingTool {
 
     get(key) {
         return this._props[key];
+    }
+
+    getMenuItems() {
+        const items = [];
+        for (const entry of this.propSchema) {
+            if (entry.key === 'color') {
+                items.push({ kind: MENU_KIND.COLOR, key: 'color', value: this.get('color') });
+            } else if (entry.key === 'size') {
+                items.push({
+                    kind: MENU_KIND.SLIDER,
+                    key: 'size',
+                    min: SIZE_MIN,
+                    max: SIZE_MAX,
+                    label: N_('Size'),
+                    value: this.get('size'),
+                });
+            }
+        }
+        return items;
     }
 
     beginStroke() {

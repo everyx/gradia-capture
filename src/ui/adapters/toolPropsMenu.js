@@ -9,13 +9,8 @@ import { SquareSlider } from '../widgets/squareSlider.js';
 
 import { attachTooltip } from '../../platform/tooltip.js';
 import { PopupMenu } from './popupMenu.js';
-import { N_ } from '../../platform/i18n.js';
-
-export const SIZE_MIN = 1;
-export const SIZE_MAX = 16;
-export const BLUR_SIZE_MAX = 64;
-export const BLOCK_SIZE_MIN = 4;
-export const BLOCK_SIZE_MAX = 32;
+import { MENU_KIND } from '../../platform/menuSchema.js';
+import { N_, _ } from '../../platform/i18n.js';
 
 const COLORS = [
     { name: N_('White'), hex: '#ffffff' },
@@ -28,168 +23,178 @@ const COLORS = [
     { name: N_('Purple'), hex: '#aa44ff' },
 ];
 
-const BLUR_MODES = ['brush', 'selection'];
-
 export const ToolPropsMenu = GObject.registerClass(
     {
         Signals: {
-            'color-changed': { param_types: [GObject.TYPE_STRING] },
-            'size-changed': { param_types: [GObject.TYPE_INT] },
-            'mode-changed': { param_types: [GObject.TYPE_STRING] },
-            'block-size-changed': { param_types: [GObject.TYPE_INT] },
+            'property-changed': { param_types: [GObject.TYPE_STRING] },
         },
     },
     class ToolPropsMenu extends PopupMenu {
         _init(params = {}) {
             const { extensionPath = '', ...rest } = params;
             this._extensionPath = extensionPath;
-            this._currentTool = null;
-            this._currentColor = null;
-            this._currentSize = 4;
-            this._currentMode = 'brush';
-            this._currentBlockSize = 16;
+            this._controls = new Map();
+            this._seps = [];
             this._updating = false;
             super._init('gradia-tool-props-menu', rest);
         }
 
-        showForTool(toolId, props = {}) {
-            this.destroy_all_children();
-            this._sizeSliderSetValue = null;
-            this._blockSliderSetValue = null;
-            this._currentTool = toolId;
-
-            if (toolId !== 'blur') {
-                this._buildColorSwatches(props.color ?? '#000000');
-                this._currentColor = props.color ?? '#000000';
-                if (!this._isSolidRect(toolId)) {
-                    this._addSep();
-                    this._buildSizeSlider(props.size ?? 4, SIZE_MIN, SIZE_MAX, N_('Size'));
-                    this._currentSize = props.size ?? 4;
-                }
-            } else {
-                this._currentMode = props.mode ?? 'brush';
-                this._currentSize = props.size ?? 4;
-                this._currentBlockSize = props.blockSize ?? 16;
-                this._buildModeToggle(this._currentMode);
-                if (this._currentMode === 'brush') {
-                    this._addSep();
-                    this._buildSizeSlider(this._currentSize, SIZE_MIN, BLUR_SIZE_MAX, N_('Brush Size'));
-                    this._addSep();
-                    this._buildBlockSizeSlider(this._currentBlockSize);
-                } else {
-                    this._addSep();
-                    this._buildBlockSizeSlider(this._currentBlockSize);
-                }
+        render(items) {
+            const visible = [];
+            for (const item of items) {
+                const control = this._ensureControl(item);
+                control.update(item);
+                control.group.show();
+                visible.push(control.group);
             }
+            for (const [key, control] of this._controls) {
+                if (!items.some((i) => i.key === key)) control.group.hide();
+            }
+            this._layout(visible);
         }
 
-        _isSolidRect(toolId) {
-            return toolId === 'solid-rectangle';
+        setValue(key, value) {
+            const control = this._controls.get(key);
+            if (control?.setValue) control.setValue(value);
         }
 
-        _buildColorSwatches(selectedHex) {
+        _emit(key, value) {
+            this.emit('property-changed', JSON.stringify({ key, value }));
+        }
+
+        _ensureControl(item) {
+            let control = this._controls.get(item.key);
+            if (!control) {
+                if (item.kind === MENU_KIND.COLOR) control = this._makeColor(item);
+                else if (item.kind === MENU_KIND.SLIDER) control = this._makeSlider(item);
+                else if (item.kind === MENU_KIND.TOGGLE) control = this._makeToggle(item);
+                this._controls.set(item.key, control);
+                this.add_child(control.group);
+            }
+            return control;
+        }
+
+        _layout(groups) {
+            const needed = Math.max(0, groups.length - 1);
+            while (this._seps.length < needed) {
+                const sep = new St.Widget({ style_class: 'gradia-separator', y_expand: true });
+                this._seps.push(sep);
+                this.add_child(sep);
+            }
+            for (let i = 0; i < this._seps.length; i++) {
+                if (i < needed) this._seps[i].show();
+                else this._seps[i].hide();
+            }
+            const ordered = [];
+            groups.forEach((g, i) => {
+                if (i > 0) ordered.push(this._seps[i - 1]);
+                ordered.push(g);
+            });
+            ordered.forEach((child, idx) => this.set_child_at_index(child, idx));
+        }
+
+        _makeColor(item) {
+            const group = new St.BoxLayout({ style_class: 'gradia-menu-group' });
+            const rings = [];
+            const setSelected = (hex) => {
+                for (const r of rings) r.style = `border-color: ${r._colorHex === hex ? r._colorHex : 'transparent'};`;
+            };
             for (const col of COLORS) {
                 const ring = new St.Button({
                     style_class: 'screenshot-ui-type-button gradia-option-button',
-                    style: `border-color: ${col.hex === selectedHex ? col.hex : 'transparent'};`,
+                    style: 'border-color: transparent;',
                     y_align: Clutter.ActorAlign.CENTER,
                     layout_manager: new Clutter.BinLayout(),
                 });
-                const swatch = new St.Widget({
-                    style_class: 'gradia-swatch',
-                    style: `background-color: ${col.hex};`,
-                    y_align: Clutter.ActorAlign.CENTER,
-                });
                 ring._colorHex = col.hex;
-                ring.add_child(swatch);
+                ring.add_child(
+                    new St.Widget({
+                        style_class: 'gradia-swatch',
+                        style: `background-color: ${col.hex};`,
+                        y_align: Clutter.ActorAlign.CENTER,
+                    }),
+                );
                 ring.connect('clicked', () => {
-                    this._currentColor = col.hex;
-                    for (const child of this.get_children()) {
-                        if (child._colorHex !== undefined)
-                            child.style = `border-color: ${child._colorHex === col.hex ? col.hex : 'transparent'};`;
-                    }
-                    this.emit('color-changed', col.hex);
+                    setSelected(col.hex);
+                    this._emit(item.key, col.hex);
                 });
-                this.add_child(ring);
+                group.add_child(ring);
                 attachTooltip(ring, col.name);
+                rings.push(ring);
             }
+            return { group, update: (it) => setSelected(it.value), setValue: setSelected };
         }
 
-        _buildSizeSlider(value, min, max, tooltip = '') {
-            const slider = new Slider((value - min) / (max - min));
+        _makeSlider(item) {
+            const group = new St.BoxLayout({ style_class: 'gradia-menu-group' });
+            const isSquare = item.variant === 'square';
+            const slider = isSquare ? new SquareSlider(0) : new Slider(0);
             slider.style = 'width: 60px;';
             slider.y_align = Clutter.ActorAlign.CENTER;
+
+            const state = { min: item.min, max: item.max, step: item.step ?? 1, current: item.value };
+
+            const setValue = (value) => {
+                state.current = value;
+                this._updating = true;
+                slider.value = (value - state.min) / (state.max - state.min);
+                this._updating = false;
+            };
+
             slider.connect('notify::value', () => {
                 if (this._updating) return;
-                const v = min + Math.round(slider.value * (max - min));
-                if (v === this._currentSize) return;
-                this._currentSize = v;
-                this.emit('size-changed', v);
+                const raw = state.min + slider.value * (state.max - state.min);
+                const v = state.step > 1 ? Math.round(raw / state.step) * state.step : Math.round(raw);
+                if (v === state.current) return;
+                state.current = v;
+                this._emit(item.key, v);
             });
-            this.add_child(slider);
-            if (tooltip) attachTooltip(slider, tooltip);
-            this._sizeSlider = slider;
-            this._sizeSliderSetValue = (v) => {
-                this._updating = true;
-                slider.value = (v - min) / (max - min);
-                this._updating = false;
+
+            group.add_child(slider);
+            const tooltip = item.label ? attachTooltip(slider, item.label) : null;
+
+            return {
+                group,
+                setValue,
+                update: (it) => {
+                    state.min = it.min;
+                    state.max = it.max;
+                    state.step = it.step ?? 1;
+                    if (tooltip && it.label) tooltip.text = _(it.label);
+                    setValue(it.value);
+                },
             };
         }
 
-        _buildBlockSizeSlider(value) {
-            const min = BLOCK_SIZE_MIN,
-                max = BLOCK_SIZE_MAX;
-            const slider = new SquareSlider((value - min) / (max - min));
-            slider.style = 'width: 60px;';
-            slider.y_align = Clutter.ActorAlign.CENTER;
-            slider.connect('notify::value', () => {
-                if (this._updating) return;
-                const size = min + Math.round((slider.value * (max - min)) / 2) * 2;
-                if (size === this._currentBlockSize) return;
-                this._currentBlockSize = size;
-                this.emit('block-size-changed', size);
-            });
-            this.add_child(slider);
-            attachTooltip(slider, N_('Block Size'));
-            this._blockSlider = slider;
-            this._blockSliderSetValue = (v) => {
-                this._updating = true;
-                slider.value = (v - min) / (max - min);
-                this._updating = false;
+        _makeToggle(item) {
+            const group = new St.BoxLayout({ style_class: 'gradia-menu-group' });
+            const btns = [];
+            const setSelected = (value) => {
+                for (const b of btns) b.checked = b._optValue === value;
             };
-        }
-
-        _buildModeToggle(currentMode) {
-            for (const mode of BLUR_MODES) {
-                const child =
-                    mode === 'brush'
-                        ? new St.Widget({ style_class: 'gradia-swatch', style: 'background-color: #ffffff;' })
-                        : new St.Icon({
-                              gicon: Gio.Icon.new_for_string(
-                                  `${this._extensionPath}/icons/selection-opaque-3-symbolic.svg`,
-                              ),
-                              style: 'icon-size: 16px;',
-                          });
+            for (const opt of item.options) {
+                const child = opt.swatch
+                    ? new St.Widget({ style_class: 'gradia-swatch', style: `background-color: ${opt.swatch};` })
+                    : new St.Icon({
+                          gicon: Gio.Icon.new_for_string(`${this._extensionPath}/${opt.icon}`),
+                          style: 'icon-size: 16px;',
+                      });
                 const btn = new St.Button({
                     style_class: 'screenshot-ui-type-button gradia-option-button',
                     style: 'border-color: transparent;',
                     y_align: Clutter.ActorAlign.CENTER,
                     layout_manager: new Clutter.BinLayout(),
                     toggle_mode: true,
-                    checked: mode === currentMode,
+                    checked: opt.value === item.value,
                     child,
                 });
-                btn.connect('clicked', () => this.emit('mode-changed', mode));
-                this.add_child(btn);
-                attachTooltip(btn, mode === 'brush' ? N_('Brush') : N_('Selection'));
+                btn._optValue = opt.value;
+                btn.connect('clicked', () => this._emit(item.key, opt.value));
+                group.add_child(btn);
+                if (opt.label) attachTooltip(btn, opt.label);
+                btns.push(btn);
             }
-        }
-
-        updateWhenModeChanged(toolId, props) {
-            this.showForTool(toolId, props);
-        }
-        _addSep() {
-            this.add_child(new St.Widget({ style_class: 'gradia-separator', y_expand: true }));
+            return { group, update: (it) => setSelected(it.value), setValue: setSelected };
         }
     },
 );
