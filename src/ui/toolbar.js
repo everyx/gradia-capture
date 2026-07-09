@@ -3,7 +3,7 @@ import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
 
-import { TOOLS, DrawingTool, getToolDef } from '../annotation/tools/index.js';
+import { TOOLS, getToolDef } from '../annotation/tools/index.js';
 import { attachTooltip } from '../platform/tooltip.js';
 import { _ } from '../platform/i18n.js';
 import { ToolPropsMenu, SIZE_MIN, SIZE_MAX, BLUR_SIZE_MAX } from './toolPropsMenu.js';
@@ -56,7 +56,7 @@ export const Toolbar = GObject.registerClass(
             if (gradiaSettings) {
                 const changed = (key, value) => this.emit('tool-property-changed', JSON.stringify({ [key]: value }));
                 for (const t of TOOLS) {
-                    if (t instanceof DrawingTool) {
+                    if (t.isDrawing) {
                         t._attach(gradiaSettings, changed);
                         t.load();
                     }
@@ -158,7 +158,7 @@ export const Toolbar = GObject.registerClass(
         }
 
         _isDrawingTool(id) {
-            return getToolDef(id) instanceof DrawingTool;
+            return getToolDef(id)?.isDrawing ?? false;
         }
 
         _emitLoadedProps() {
@@ -186,7 +186,7 @@ export const Toolbar = GObject.registerClass(
 
         syncToStroke(stroke) {
             const tool = getToolDef(stroke.toolId);
-            if (!(tool instanceof DrawingTool)) return;
+            if (!tool?.isDrawing) return;
 
             tool.set('color', stroke.color, { silent: true });
             if (stroke.strokeWidth !== undefined) tool.set('size', stroke.strokeWidth, { silent: true });
