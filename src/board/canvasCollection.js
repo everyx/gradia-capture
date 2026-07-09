@@ -6,6 +6,7 @@ export class CanvasCollection {
         this._canvasList = [];
         this._overlays = [];
         this._bins = [];
+        this._toolbar = null;
         addEmitter(this);
 
         if (bus) {
@@ -18,6 +19,34 @@ export class CanvasCollection {
                 });
             });
         }
+    }
+
+    setToolbar(toolbar, { skipLastStroke } = {}) {
+        this._toolbar = toolbar;
+        this._skipLastStroke = skipLastStroke ?? (() => false);
+        toolbar.connect('tool-property-changed', (_t, payload) => {
+            const props = JSON.parse(payload);
+            const STROKE_KEY_MAP = { size: 'strokeWidth' };
+
+            this.forEachCanvas((c) => c.applyProps(props));
+
+            if (!this._skipLastStroke()) {
+                for (const [key, value] of Object.entries(props)) {
+                    if (value === undefined || key === 'mode') continue;
+                    const toolId = toolbar.activePropsToolId ?? toolbar.selectedTool;
+                    this.applyToLastStroke(toolId, STROKE_KEY_MAP[key] || key, value);
+                }
+            }
+
+            const sel = this.selected;
+            if (sel) {
+                for (const [key, value] of Object.entries(props)) {
+                    if (value === undefined || key === 'mode') continue;
+                    sel.stroke[STROKE_KEY_MAP[key] || key] = value;
+                }
+                sel.canvas.queue_repaint();
+            }
+        });
     }
 
     get canvases() {

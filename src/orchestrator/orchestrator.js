@@ -115,6 +115,9 @@ export class Orchestrator {
             hasSelection: () => !!this._canvases.selected,
             hasVisibleCanvas: () => this._canvases?.allCanvasesVisible() ?? true,
         });
+        this._canvases.setToolbar(this._toolbar, {
+            skipLastStroke: () => this._textEntryManager?.shouldSkipLastStroke() ?? false,
+        });
         this._textEntryManager = new TextEntryManager(this._toolbar, this._canvases, { bus: this._bus });
         this._screenshotCapture = new ScreenshotCapture({
             canvases: this._canvases,
@@ -507,28 +510,9 @@ export class Orchestrator {
 
         this._toolbar.connect('tool-property-changed', (_toolbar, payload) => {
             const props = JSON.parse(payload);
-            const STROKE_KEY_MAP = { size: 'strokeWidth' };
-
-            this._canvases.forEachCanvas((c) => c.applyProps(props));
-
-            for (const [key, value] of Object.entries(props)) {
-                if (value === undefined || key === 'mode') continue;
-                const skip = key === 'size' && this._textEntryManager?.shouldSkipLastStroke();
-                if (!skip)
-                    this._canvases.applyToLastStroke(
-                        this._toolbar.activePropsToolId ?? this._toolbar.selectedTool,
-                        STROKE_KEY_MAP[key] || key,
-                        value,
-                    );
-            }
 
             const sel = this._canvases.selected;
-            if (sel) {
-                for (const [key, value] of Object.entries(props)) {
-                    if (value === undefined || key === 'mode') continue;
-                    sel.stroke[STROKE_KEY_MAP[key] || key] = value;
-                }
-                sel.canvas.queue_repaint();
+            if (sel && !this._textEntryManager?.shouldSkipLastStroke()) {
                 this._dragTool?.refresh();
             }
 
