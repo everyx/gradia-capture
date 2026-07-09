@@ -1,4 +1,3 @@
-import Cairo from 'gi://cairo';
 import Clutter from 'gi://Clutter';
 
 import { N_ } from '../../platform/i18n.js';

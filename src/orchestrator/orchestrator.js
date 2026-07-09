@@ -15,7 +15,6 @@ import { OcrSelector } from '../utilities/ocr/ocrSelector.js';
 import { isRapidOcrAvailable } from '../utilities/ocr/backend.js';
 import { createSettingsButton } from '../platform/gradiaApp.js';
 import { BlurSelector } from '../annotation/tools/blur/engine.js';
-import { SelectionClearer } from '../ui/adapters/selectionClearPatch.js';
 import { ShortcutDispatcher } from './shortcutDispatcher.js';
 
 export class Orchestrator {
@@ -137,7 +136,7 @@ export class Orchestrator {
             forEachCanvas: (fn) => this._canvases.forEachCanvas(fn),
             ensureCache: () => this._screenshotCapture.ensureCache(),
             onBlockSizeChanged: (size) => this._toolbar?._onBlurBlockSizeChanged(size),
-            onModeChanged: (mode) => this._blurSelector.refreshCursor(this._toolbar?.selectedTool, this._toolbar?.size),
+            onModeChanged: () => this._blurSelector.refreshCursor(this._toolbar?.selectedTool, this._toolbar?.size),
         });
         this._toolbar.setBlurSelector(this._blurSelector);
 

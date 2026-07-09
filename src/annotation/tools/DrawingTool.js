@@ -1,5 +1,3 @@
-import Cairo from 'gi://cairo';
-
 export class DrawingTool {
     constructor() {
         this._props = {};
