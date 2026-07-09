@@ -2,23 +2,26 @@
 
 本文件定义 gradia-capture 的核心概念与协作方式。各 bounded context 的目录划分与依赖约束见 [`../CONTEXT.md`](../CONTEXT.md)，此处只讲"概念是什么、怎么协作"。
 
-## 四个核心概念
+## 核心概念
+
+系统由**协调中枢**、**组件**、**画板**三类角色构成。组件是各 bounded context 的统称（capture / annotation / utilities / ui / platform）。
 
 | 概念 | 本质 | 职责 |
 |---|---|---|
-| **协调中枢 Orchestrator** | 唯一装配者 + 事件路由表 | 创建组件 / 画板 / 交互，订阅信号，把事件派发到 handler |
+| **协调中枢 Orchestrator** | 唯一装配者 + 事件路由表 | 创建组件 / 画板，订阅信号，把事件派发到 handler |
 | **组件 Components** | 独立功能模块（capture / annotation / utilities / ui / platform） | 各自边界内功能，只经事件 + 端口通信 |
 | **画板 Board** | 绘制载体 + 数据模型 | 多屏画布集合、Stroke 原子存储、渲染 / 命中 / 撤销 / 聚合 |
-| **交互 Interaction** | 输入 → 命令翻译器（dragTool / textEntryManager 等） | 把用户输入翻译成对画板 / 组件的命令，不认识具体工具 |
+
+> 标注工具的输入翻译（drag / text）属于 **annotation** 内部（`annotation/input/`），不是独立概念；ui 的按钮语义分组（select / annotate / utility）对应 capture / annotation / utilities 三个组件。
 
 ```
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  协调中枢     │  │   组件        │  │   画板        │  │   交互        │
-│ Orchestrator │  │ Components   │  │   Board      │  │ Interaction  │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │ 事件路由         │ emit 事件        │ Stroke 原子     │ 输入→命令
-       ▼                 ▼                 ▼                 ▼
-  事件→handler 映射   独立功能模块      多屏画布+聚合      翻译用户输入
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│  协调中枢     │  │   组件        │  │   画板        │
+│ Orchestrator │  │ Components   │  │   Board      │
+└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+       │ 事件路由         │ emit 事件        │ Stroke 原子
+       ▼                 ▼                 ▼
+  事件→handler 映射   独立功能模块      多屏画布+聚合
 ```
 
 ## 统一事件流（概念层）
@@ -56,19 +59,19 @@
 - `phase` 由工具在产生 Stroke 时声明；画板渲染与 capture 合成均按 `phase` 排序，**不再有 `toolId === 'blur'` 特判**。
 - `overlay` 指"批注覆盖层"（画在截图之上、彼此自由交错）；`underlay` 指"衬底层"（blur 像素化 / ocr 识别，作用在截图本身、固定前置）。二者对称。
 - OCR 激活时置灰 annotate 组，本质是"当前 phase 切到 underlay，overlay 不可用"，与 blur 的底层约束同源。
-- `InputCatcher`（`board/inputCatcher.js`，原 `DrawingInputOverlay`）是**画板的事件入口壳**：仅把原始鼠标/触摸/滚动事件透明转发给 `DrawingCanvas.vfunc_*`，**不做输入→命令翻译**（翻译由 Interaction 层的 `_inputRegistry` / `dragTool` / `textEntryManager` 完成）。它属画板内部，与概念 `overlay`（批注覆盖层）无关。
+- `InputCatcher`（`board/inputCatcher.js`，原 `DrawingInputOverlay`）是**画板的事件入口壳**：仅把原始鼠标/触摸/滚动事件透明转发给 `DrawingCanvas.vfunc_*`，**不做输入→命令翻译**（翻译由 annotation 的 `dragTool` / `textEntryManager` 完成）。它属画板内部，与概念 `overlay`（批注覆盖层）无关。
 
 ## 通用约定
 
 1. 数据（Stroke）随身带能力（`paintTo`）与 `phase`，组件消费能力 / 属性，不消费类型。
-2. 交互层只翻译输入 → 画板 / 组件命令，不认识具体工具。
+2. 标注工具的输入翻译（drag / text）在 `annotation/input/`，属 annotation 内部，不认识具体工具（经 `stroke.hitBounds` 等能力）。
 3. 组件间只经事件 + 端口通信，不认识具体类。
 4. 依赖约束维持 [`CONTEXT.md`](../CONTEXT.md)：annotation 不反向依赖 capture / utilities / ui；utilities 之间互不依赖且不依赖 annotation；ocr 仅依赖 capture；组件不反向依赖 orchestrator；全部可依赖 platform。
 
 ## 边界决议（历史模糊点）
 
 - **Blur**：`BlurTool` 是 tool，留在 `annotation/tools/`（与其他工具同级）；其像素化后端引擎作内部实现置于 `tools/blur/engine.js`（不与之平级）。`ScreenshotCapture` 不再持有 `blurSelector`，改为遍历 `strokes[].paintTo(...)`（blur 的 `paintTo` 内部调 `composeBlurStrokes`）。消除 capture → annotation 的反向依赖。
-- **DragTool / TextEntryManager**：归入 **Interaction** 概念（`src/interaction/`），从 `ui/` 拆出；`ui/` 拆为 `adapters/`（原生 UI 适配）与 `widgets/`（展示构件）。
+- **DragTool / TextEntryManager**：归入 **annotation**（`src/annotation/input/`，标注工具的输入翻译层），不是独立概念；`interaction` 概念取消，概念模型回到 5 组件 + board + orchestrator。
 - **`DrawingInputOverlay` → `InputCatcher` 改名**：已完成，避免与概念 `overlay`（批注覆盖层）撞义；现留 `board/`，属画板内部事件入口。
 - **协调中枢 Orchestrator**：`src/orchestrator/` 是 `execute(intent)` 的实现者（装配 + 信号编排 + 意图分发）；`extension.js` 仅做 GNOME 生命周期壳与装配委托，不再含业务。
 
