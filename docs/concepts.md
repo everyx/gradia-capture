@@ -64,7 +64,17 @@
 1. 数据（Stroke）随身带能力（`paintTo`）与 `phase`，组件消费能力 / 属性，不消费类型。
 2. 标注工具的输入翻译（drag / text）在 `annotation/input/`，属 annotation 内部，不认识具体工具（经 `stroke.hitBounds` 等能力）。
 3. 组件间只经事件 + 端口通信，不认识具体类。
-4. 依赖约束维持 [`CONTEXT.md`](../CONTEXT.md)：annotation 不反向依赖 capture / utilities / ui；utilities 之间互不依赖且不依赖 annotation；ocr 仅依赖 capture；组件不反向依赖 orchestrator；全部可依赖 platform。
+4. 属性菜单由 provider 出**数据**（`getMenuItems()`），ui 出**渲染**；契约在 `platform/menuSchema.js`。详见「属性菜单（两个维度）」。
+5. 依赖约束维持 [`CONTEXT.md`](../CONTEXT.md)：annotation 不反向依赖 capture / utilities / ui；utilities 之间互不依赖且不依赖 annotation；ocr 仅依赖 capture；组件不反向依赖 orchestrator；全部可依赖 platform。
+
+## 属性菜单（两个维度）
+
+工具栏的二级属性菜单按两个正交维度拆分：
+
+- **UI 维度（`ui`）**：弹层壳 + 通用渲染器 + widget 原语（color-grid / slider / toggle，未来可加 dropdown）。唯一含 UI 逻辑处；原语建一次、持久复用（切换只 show/hide + 更新值 + 动态分隔符，不销毁重建）。
+- **Provider 维度（`annotation` tool / `utilities`）**：每个可配置对象经 `getMenuItems()` 声明自己的菜单（**纯数据**：`{kind,key,params,value}` 有序数组，条件项是当前值的纯函数），并实现 `set(key,value)`。零 UI 逻辑、零 ui 依赖。
+
+契约（kind 词汇 + 量程常量）在 `platform/menuSchema.js`，三方共享。"专有"控件（blur 的 mode/blockSize）本质是 slider/toggle 的**参数差异**,非独立控件类型；真正 bespoke 时再往 ui 原语词汇加一个（一处），provider 声明对应 kind 即可。菜单变更经单一 `property-changed(key,value)` 回写 provider,ui 无工具专有分支。
 
 ## 边界决议（历史模糊点）
 
