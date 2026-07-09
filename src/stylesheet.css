@@ -80,6 +80,51 @@
     spacing: 2px;
 }
 
+.gradia-select-group {
+    spacing: 2px;
+}
+
+.gradia-dropdown {
+    spacing: 2px;
+}
+
+.gradia-dropdown-button {
+    min-height: 24px;
+    max-height: 24px;
+    padding: 0 8px;
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    color: rgba(255, 255, 255, 0.9);
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.gradia-dropdown-button:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.gradia-dropdown-scroll {
+    max-height: 240px;
+    padding: 2px;
+    background-color: rgba(0, 0, 0, 0.75);
+    border-radius: 8px;
+}
+
+.gradia-dropdown-item {
+    padding: 4px 8px;
+    border-radius: 4px;
+    border-width: 0;
+    background-color: transparent;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.gradia-dropdown-item:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.gradia-dropdown-item:checked {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
 .gradia-text-entry {
     background-color: transparent;
     border: 1.5px solid -st-accent-color;
@@ -173,4 +218,3 @@
     border: 1.5px solid st-transparentize(-st-accent-color, 0.3);
     border-radius: 2px;
 }
-

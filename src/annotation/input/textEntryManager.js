@@ -79,6 +79,7 @@ export class TextEntryManager {
             color: this._toolbar.selectedColor,
             toolId: 'text',
             strokeWidth: this._toolbar.size,
+            font: getToolDef('text')?.get('font') ?? 'Sans',
             stagePoints: [{ x: stageX, y: stageY }],
             text: '',
         };
@@ -194,9 +195,17 @@ export class TextEntryManager {
         }
     }
 
+    updateFont(family) {
+        if (this._pendingStroke) {
+            this._pendingStroke.font = family;
+            this._updateStyle();
+        }
+    }
+
     onPropertyChanged(props) {
         if (props.color !== undefined) this.updateColor(props.color);
         if (props.size !== undefined) this.updateSize(props.size);
+        if (props.font !== undefined) this.updateFont(props.font);
     }
 
     destroy() {
@@ -237,11 +246,12 @@ export class TextEntryManager {
         if (!this._entry) return;
         const fs = Math.max(8, Math.round(this._toolbar.size * 3));
         const col = this._toolbar.selectedColor;
+        const fam = this._pendingStroke?.font ?? 'Sans';
         this._entry.style = `
             color: ${col};
             caret-color: ${col};
             font-size: ${fs}px;
-            font-family: "Sans";
+            font-family: "${fam}";
         `;
         if (this._resizeIdle) {
             GLib.source_remove(this._resizeIdle);

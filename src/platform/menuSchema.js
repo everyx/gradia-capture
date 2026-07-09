@@ -2,6 +2,7 @@ export const MENU_KIND = {
     COLOR: 'color',
     SLIDER: 'slider',
     TOGGLE: 'toggle',
+    SELECT: 'select',
 };
 
 export const SIZE_MIN = 1;

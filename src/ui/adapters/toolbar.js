@@ -151,6 +151,7 @@ export const Toolbar = GObject.registerClass(
 
             tool.set('color', stroke.color, { silent: true });
             if (stroke.strokeWidth !== undefined) tool.set('size', stroke.strokeWidth, { silent: true });
+            if (stroke.font !== undefined) tool.set('font', stroke.font, { silent: true });
 
             if (this._isDrawingTool(stroke.toolId)) {
                 this._activeTool = tool;

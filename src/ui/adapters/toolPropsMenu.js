@@ -6,6 +6,7 @@ import St from 'gi://St';
 import { Slider } from 'resource:///org/gnome/shell/ui/slider.js';
 
 import { SquareSlider } from '../widgets/squareSlider.js';
+import { Dropdown } from '../widgets/dropdown.js';
 
 import { attachTooltip } from '../../platform/tooltip.js';
 import { PopupMenu } from './popupMenu.js';
@@ -68,6 +69,7 @@ export const ToolPropsMenu = GObject.registerClass(
                 if (item.kind === MENU_KIND.COLOR) control = this._makeColor(item);
                 else if (item.kind === MENU_KIND.SLIDER) control = this._makeSlider(item);
                 else if (item.kind === MENU_KIND.TOGGLE) control = this._makeToggle(item);
+                else if (item.kind === MENU_KIND.SELECT) control = this._makeSelect(item);
                 this._controls.set(item.key, control);
                 this.add_child(control.group);
             }
@@ -195,6 +197,27 @@ export const ToolPropsMenu = GObject.registerClass(
                 btns.push(btn);
             }
             return { group, update: (it) => setSelected(it.value), setValue: setSelected };
+        }
+
+        _makeSelect(item) {
+            const group = new St.BoxLayout({
+                vertical: true,
+                style_class: 'gradia-menu-group gradia-select-group',
+            });
+
+            const dropdown = new Dropdown({ options: item.options, current: item.value });
+            dropdown.connect('selected', (_d, value) => this._emit(item.key, value));
+            group.add_child(dropdown);
+            if (item.label) attachTooltip(dropdown.triggerButton, item.label);
+
+            return {
+                group,
+                setValue: (v) => dropdown.setCurrent(v),
+                update: (it) => {
+                    dropdown.setOptions(it.options);
+                    dropdown.setCurrent(it.value);
+                },
+            };
         }
     },
 );
