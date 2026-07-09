@@ -93,7 +93,7 @@ export class Orchestrator {
 
                 overlay.connect('motion-event', (_actor, event) => {
                     const [stageX, stageY] = event.get_coords();
-                    this._blurSelector.handleHoverMotion(this._toolbar?.selectedTool, stageX, stageY);
+                    this._bus.emit('hover', stageX, stageY);
                     return this._activeInput?.onMotion?.(stageX, stageY) ?? Clutter.EVENT_PROPAGATE;
                 });
 
@@ -141,9 +141,13 @@ export class Orchestrator {
             toolbar: this._toolbar,
             bus: this._bus,
             onBlockSizeChanged: (size) => this._toolbar?._onBlurBlockSizeChanged(size),
-            onModeChanged: () => this._blurSelector.refreshCursor(this._toolbar?.selectedTool, this._toolbar?.size),
         });
-        this._toolbar.setBlurSelector(this._blurSelector);
+        const blurTool = getToolDef('blur');
+        if (blurTool)
+            this._blurSelector.restoreState({
+                blurMode: blurTool.get('mode') ?? 'brush',
+                blockSize: blurTool.get('blockSize') ?? 16,
+            });
 
         this._ocrSelector = new OcrSelector({
             toolbar: this._toolbar,
@@ -193,7 +197,6 @@ export class Orchestrator {
         this._canvases.forEachCanvas((c) => {
             c.applyProps({ color: this._toolbar.selectedColor, size: this._toolbar.size });
             c.setTool(this._toolbar.selectedTool);
-            this._blurSelector.registerCanvas(c);
         });
 
         this._primaryBin = primaryBin;
@@ -530,7 +533,6 @@ export class Orchestrator {
             }
 
             this._textEntryManager?.onPropertyChanged(props);
-            this._blurSelector.onPropertyChanged(props, this._toolbar?.selectedTool, this._toolbar?.size);
         });
 
         this._toolbar.connect('undo', () => {

@@ -438,6 +438,8 @@ export class BlurSelector {
         this._blockSize = 16;
         this._previewCache = { pixbuf: null };
 
+        this._forEachCanvas((c) => this.registerCanvas(c));
+
         if (bus) {
             bus.connect('tool-changed', (id) => {
                 if (id === 'blur') {
@@ -445,7 +447,16 @@ export class BlurSelector {
                     this.refreshCursor(id, this._toolbar?.size);
                 }
             });
+            bus.connect('tool-property-changed', (payload) => {
+                const props = JSON.parse(payload);
+                this.onPropertyChanged(props, this._toolbar?.selectedTool, this._toolbar?.size);
+            });
+            bus.connect('hover', (stageX, stageY) => {
+                this.handleHoverMotion(this._toolbar?.selectedTool, stageX, stageY);
+            });
         }
+
+        this._onModeChanged = () => this.refreshCursor(this._toolbar?.selectedTool, this._toolbar?.size);
     }
 
     get mode() {

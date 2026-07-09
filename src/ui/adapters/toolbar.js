@@ -104,7 +104,7 @@ export const Toolbar = GObject.registerClass(
             });
 
             conn('block-size-changed', (_m, size) => {
-                if (this._blurSelector) this._blurSelector.setBlockSize(size);
+                this.emit('tool-property-changed', JSON.stringify({ blockSize: size }));
                 if (this._activeTool) {
                     this._activeTool.set('blockSize', size);
                     this._activeTool.save();
@@ -112,7 +112,7 @@ export const Toolbar = GObject.registerClass(
             });
 
             conn('mode-changed', (_m, mode) => {
-                if (this._blurSelector) this._blurSelector.setMode(mode);
+                this.emit('tool-property-changed', JSON.stringify({ mode }));
                 if (this._activeTool) {
                     this._activeTool.set('mode', mode);
                     this._activeTool.save();
@@ -172,16 +172,6 @@ export const Toolbar = GObject.registerClass(
         _blurPropsForMenu() {
             const t = getToolDef('blur');
             return { mode: t?.get('mode') ?? 'brush', size: t?.get('size') ?? 4, blockSize: t?.get('blockSize') ?? 16 };
-        }
-
-        setBlurSelector(blurSelector) {
-            this._blurSelector = blurSelector;
-            const t = getToolDef('blur');
-            if (!t) return;
-            blurSelector.restoreState({
-                blurMode: t.get('mode') ?? 'brush',
-                blockSize: t.get('blockSize') ?? 16,
-            });
         }
 
         syncToStroke(stroke) {
