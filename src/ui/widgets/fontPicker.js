@@ -40,7 +40,7 @@ export const FontPicker = GObject.registerClass(
             this._btn.add_child(this._btnLabel);
             this.add_child(this._btn);
 
-            this._menu = new ShellPopupMenu.PopupMenu(this._btn, 0, St.Side.BOTTOM);
+            this._menu = new ShellPopupMenu(this._btn, 0, St.Side.BOTTOM);
             this._menuManager = new PopupMenuManager(this._btn);
             this._menuManager.addMenu(this._menu);
 
