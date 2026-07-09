@@ -461,6 +461,8 @@ export class BlurSelector {
         }
 
         this._onModeChanged = () => this.refreshCursor(this._toolbar?.selectedTool, this._toolbar?.size);
+
+        if (this._toolbar) this.restoreState(this._toolbar.blurInitialState);
     }
 
     get mode() {

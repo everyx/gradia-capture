@@ -429,6 +429,13 @@ export const Toolbar = GObject.registerClass(
         get activePropsToolId() {
             return this._activePropsTool;
         }
+        get blurInitialState() {
+            const t = getToolDef('blur');
+            return {
+                blurMode: t?.get('mode') ?? 'brush',
+                blockSize: t?.get('blockSize') ?? 16,
+            };
+        }
         get selectedColor() {
             return this._activeTool?.get('color') ?? '#000000';
         }

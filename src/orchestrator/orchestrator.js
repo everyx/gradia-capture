@@ -145,12 +145,6 @@ export class Orchestrator {
             bus: this._bus,
             onBlockSizeChanged: (size) => this._toolbar?._onBlurBlockSizeChanged(size),
         });
-        const blurTool = getToolDef('blur');
-        if (blurTool)
-            this._blurSelector.restoreState({
-                blurMode: blurTool.get('mode') ?? 'brush',
-                blockSize: blurTool.get('blockSize') ?? 16,
-            });
 
         this._ocrSelector = new OcrSelector({
             toolbar: this._toolbar,
