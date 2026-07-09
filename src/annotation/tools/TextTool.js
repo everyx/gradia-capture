@@ -5,7 +5,7 @@ import Clutter from 'gi://Clutter';
 
 import { N_ } from '../../platform/i18n.js';
 import { DrawingTool } from './DrawingTool.js';
-import { SELECTION_PADDING, hexToRgb, rectHit } from './shared.js';
+import { SELECTION_PADDING, hexToRgb, rectHit } from '../shared.js';
 
 export class TextTool extends DrawingTool {
     get id() {

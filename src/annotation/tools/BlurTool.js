@@ -3,8 +3,8 @@ import Clutter from 'gi://Clutter';
 
 import { N_ } from '../../platform/i18n.js';
 import { DrawingTool } from './DrawingTool.js';
-import { SELECTION_PADDING, createPixelatePattern, standardHitTest, rectBounds } from './shared.js';
-import { composeBlurStrokes } from '../blur/engine.js';
+import { SELECTION_PADDING, createPixelatePattern, standardHitTest, rectBounds } from '../shared.js';
+import { composeBlurStrokes } from './blur/engine.js';
 
 export class BlurTool extends DrawingTool {
     get id() {

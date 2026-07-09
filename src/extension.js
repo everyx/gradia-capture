@@ -6,7 +6,7 @@ import St from 'gi://St';
 import { initI18n } from './platform/i18n.js';
 import { Toolbar } from './ui/toolbar.js';
 import { getToolDef } from './annotation/tools/index.js';
-import { DrawingCanvas, InputCatcher } from './canvas/drawingCanvas.js';
+import { DrawingCanvas, InputCatcher } from './board/drawingCanvas.js';
 import { GradiaSettings } from './platform/settings.js';
 import { ResolutionOverlay } from './ui/resolutionOverlay.js';
 import { ScreenshotCapture } from './capture/screenshotCapture.js';
@@ -16,9 +16,9 @@ import { isRapidOcrAvailable } from './utilities/ocr/backend.js';
 import { createSettingsButton } from './platform/gradiaApp.js';
 import { OcrSelector } from './utilities/ocr/ocrSelector.js';
 import { TextEntryManager } from './interaction/textEntryManager.js';
-import { CanvasCollection } from './canvas/canvasCollection.js';
+import { CanvasCollection } from './board/canvasCollection.js';
 import { destroyActiveToast } from './platform/screenshotToast.js';
-import { BlurSelector } from './annotation/blur/engine.js';
+import { BlurSelector } from './annotation/tools/blur/engine.js';
 import { SelectionClearer } from './ui/selectionClearPatch.js';
 
 export default class GradiaCompanion extends Extension {

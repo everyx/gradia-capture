@@ -3,7 +3,7 @@ import Clutter from 'gi://Clutter';
 
 import { N_ } from '../../platform/i18n.js';
 import { DrawingTool } from './DrawingTool.js';
-import { SELECTION_PADDING, hexToRgb, rectBounds, standardHitTest } from './shared.js';
+import { SELECTION_PADDING, hexToRgb, rectBounds, standardHitTest } from '../shared.js';
 
 export class FreehandTool extends DrawingTool {
     get id() {
