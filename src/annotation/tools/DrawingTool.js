@@ -1,8 +1,14 @@
+import Cairo from 'gi://cairo';
+
 export class DrawingTool {
     constructor() {
         this._props = {};
         this._settings = null;
         this._onChanged = null;
+    }
+
+    get phase() {
+        return 'overlay';
     }
 
     get propSchema() {
@@ -70,4 +76,34 @@ export class DrawingTool {
         return false;
     }
     render(_cr, _stroke, _size) {}
+
+    bindCapabilities(stroke) {
+        stroke.phase = this.phase;
+        stroke.hitBounds = () => this.bounds(stroke);
+        stroke.paintTo = (cr, ctx) => {
+            if (!cr || !this.render) return;
+            const { selX, selY, selW, selH, stageScale } = ctx;
+            if (selW <= 0 || selH <= 0) return;
+            const imgW = cr.getTarget()?.getWidth?.() ?? 0;
+            const scaleX = selW > 0 ? imgW / selW : 1;
+            const scaleY = selH > 0 ? (cr.getTarget()?.getHeight?.() ?? 0) / selH : 1;
+            const converted = stroke.stagePoints.map((p) => ({
+                x: (p.x / stageScale - selX) * scaleX,
+                y: (p.y / stageScale - selY) * scaleY,
+            }));
+            const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
+            this.render(
+                cr,
+                {
+                    color: stroke.color,
+                    points: converted,
+                    counter: stroke.toolId === 'stamp' ? stroke.counter : stroke.counter,
+                    text: stroke.text,
+                    blurMode: stroke.blurMode,
+                    blockSize: stroke.blockSize,
+                },
+                lw,
+            );
+        };
+    }
 }

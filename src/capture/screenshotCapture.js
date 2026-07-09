@@ -5,7 +5,6 @@ import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
-import { getToolDef } from '../annotation/tools/index.js';
 import { getCaptureContext } from './captureContext.js';
 
 export class ScreenshotCapture {
@@ -19,7 +18,6 @@ export class ScreenshotCapture {
         this._capturePromise = null;
         this.captureGeometry = null;
         this.captureScale = 1;
-        this.blurSelector = null;
     }
 
     async capture({ copyOnly = false, ocr = false, externalSave = false, portalMode = false } = {}) {
@@ -337,74 +335,52 @@ export class ScreenshotCapture {
         const { selX, selY, selW, selH, strokes, stageScale } = data;
         if (selW <= 0 || selH <= 0) return null;
 
-        const imgWidth = pixbuf.get_width();
-        const imgHeight = pixbuf.get_height();
-        const scaleX = imgWidth / selW;
-        const scaleY = imgHeight / selH;
+        const ctx = { selX, selY, selW, selH, stageScale };
 
-        const blurStrokes = [];
-        const annotStrokes = [];
-        for (const stroke of strokes) {
-            const tool = getToolDef(stroke.toolId);
-            if (!tool) continue;
-            if (stroke.toolId === 'blur') blurStrokes.push(stroke);
-            else annotStrokes.push(stroke);
+        const ordered = strokes
+            .map((s, i) => ({ s, i }))
+            .sort((a, b) => (a.s.phase === 'underlay' ? 0 : 1) - (b.s.phase === 'underlay' ? 0 : 1) || a.i - b.i)
+            .map((o) => o.s);
+
+        let out = pixbuf;
+        for (const s of ordered) {
+            if (s.phase === 'underlay') {
+                out = s.paintTo(out, ctx);
+                if (!out) return null;
+            }
         }
 
-        let basePixbuf = pixbuf;
-        if (blurStrokes.length > 0 && this.blurSelector) {
-            basePixbuf = this.blurSelector.composeOutput(basePixbuf, blurStrokes, {
-                stageScale,
-                selX,
-                selY,
-                selW,
-                selH,
-            });
-            if (!basePixbuf) return null;
-        }
-
-        if (annotStrokes.length === 0) return { pixbuf: basePixbuf };
+        const underlaid = out;
 
         let surface = null;
         let cr = null;
-        for (const stroke of annotStrokes) {
-            const tool = getToolDef(stroke.toolId);
-            if (!tool || !tool.render) continue;
-
-            const converted = stroke.stagePoints.map((p) => ({
-                x: (p.x / stageScale - selX) * scaleX,
-                y: (p.y / stageScale - selY) * scaleY,
-            }));
-            const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
-
+        for (const s of ordered) {
+            if (s.phase !== 'overlay') continue;
             if (!cr) {
-                surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, imgWidth, imgHeight);
+                const imgW = underlaid.get_width();
+                const imgH = underlaid.get_height();
+                surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, imgW, imgH);
                 cr = new Cairo.Context(surface);
-                imports.gi.Gdk.cairo_set_source_pixbuf(cr, basePixbuf, 0, 0);
+                imports.gi.Gdk.cairo_set_source_pixbuf(cr, underlaid, 0, 0);
                 cr.paint();
             }
-
-            tool.render(
-                cr,
-                {
-                    color: stroke.color,
-                    points: converted,
-                    counter: stroke.counter,
-                    text: stroke.text,
-                },
-                lw,
-            );
+            s.paintTo(cr, ctx);
         }
 
         if (cr) {
             cr.$dispose();
-            cr = null;
-            const result = imports.gi.Gdk.pixbuf_get_from_surface(surface, 0, 0, imgWidth, imgHeight);
+            const result = imports.gi.Gdk.pixbuf_get_from_surface(
+                surface,
+                0,
+                0,
+                surface.get_width(),
+                surface.get_height(),
+            );
             surface = null;
             if (result) return { pixbuf: result };
         }
 
-        return { pixbuf: basePixbuf };
+        return { pixbuf: underlaid };
     }
 
     _buildStrokeData() {

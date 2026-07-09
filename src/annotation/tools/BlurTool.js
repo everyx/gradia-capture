@@ -4,10 +4,14 @@ import Clutter from 'gi://Clutter';
 import { N_ } from '../../platform/i18n.js';
 import { DrawingTool } from './DrawingTool.js';
 import { SELECTION_PADDING, createPixelatePattern, standardHitTest, rectBounds } from './shared.js';
+import { composeBlurStrokes } from '../blur/engine.js';
 
 export class BlurTool extends DrawingTool {
     get id() {
         return 'blur';
+    }
+    get phase() {
+        return 'underlay';
     }
     get name() {
         return N_('Blur');
@@ -51,5 +55,14 @@ export class BlurTool extends DrawingTool {
             cr.stroke();
         }
         cr.restore();
+    }
+
+    bindCapabilities(stroke) {
+        stroke.phase = this.phase;
+        stroke.hitBounds = () => this.bounds(stroke);
+        stroke.paintTo = (pixbuf, ctx) => {
+            if (!pixbuf) return pixbuf;
+            return composeBlurStrokes(pixbuf, [stroke], ctx);
+        };
     }
 }

@@ -756,59 +756,55 @@ export class BlurSelector {
         }
     }
 
-    composeOutput(basePixbuf, strokes, { stageScale, selX, selY, selW, selH }) {
-        const imgWidth = basePixbuf.get_width();
-        const imgHeight = basePixbuf.get_height();
-        const scaleX = imgWidth / selW;
-        const scaleY = imgHeight / selH;
+    composeOutput(basePixbuf, strokes, ctx) {
+        return composeBlurStrokes(basePixbuf, strokes, ctx);
+    }
+}
 
-        let result = basePixbuf;
-        for (const stroke of strokes) {
-            const sp = stroke.stagePoints;
-            if (sp.length < 2) continue;
-            const pointsAbs = sp.map((p) => ({
-                x: (p.x / stageScale - selX) * scaleX,
-                y: (p.y / stageScale - selY) * scaleY,
-            }));
-            const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
-            const blockSize = stroke.blockSize || 16;
-            const regionAbs = {
-                x: 0,
-                y: 0,
-                w: result.get_width(),
-                h: result.get_height(),
-            };
-            const originAbs = {
-                x: Math.round((sp[0].x / stageScale - selX) * scaleX),
-                y: Math.round((sp[0].y / stageScale - selY) * scaleY),
-            };
+export function composeBlurStrokes(basePixbuf, strokes, { stageScale, selX, selY, selW, selH }) {
+    const imgWidth = basePixbuf.get_width();
+    const imgHeight = basePixbuf.get_height();
+    const scaleX = imgWidth / selW;
+    const scaleY = imgHeight / selH;
 
-            if ((stroke.blurMode || 'brush') === 'selection') {
-                if (pointsAbs.length >= 2) {
-                    result = _pixelatePixbufRect(
-                        result,
-                        regionAbs,
-                        pointsAbs[0],
-                        pointsAbs[pointsAbs.length - 1],
-                        blockSize,
-                        originAbs.x,
-                        originAbs.y,
-                    );
-                }
-            } else {
-                result = _pixelatePixbufAlongStroke(
+    let result = basePixbuf;
+    for (const stroke of strokes) {
+        const sp = stroke.stagePoints;
+        if (sp.length < 2) continue;
+        const pointsAbs = sp.map((p) => ({
+            x: (p.x / stageScale - selX) * scaleX,
+            y: (p.y / stageScale - selY) * scaleY,
+        }));
+        const lw = stroke.strokeWidth * ((scaleX + scaleY) / 2);
+        const blockSize = stroke.blockSize || 16;
+        const regionAbs = {
+            x: 0,
+            y: 0,
+            w: result.get_width(),
+            h: result.get_height(),
+        };
+        const originAbs = {
+            x: Math.round((sp[0].x / stageScale - selX) * scaleX),
+            y: Math.round((sp[0].y / stageScale - selY) * scaleY),
+        };
+
+        if ((stroke.blurMode || 'brush') === 'selection') {
+            if (pointsAbs.length >= 2) {
+                result = _pixelatePixbufRect(
                     result,
                     regionAbs,
-                    pointsAbs,
-                    lw,
+                    pointsAbs[0],
+                    pointsAbs[pointsAbs.length - 1],
                     blockSize,
                     originAbs.x,
                     originAbs.y,
                 );
             }
-
-            if (!result) return null;
+        } else {
+            result = _pixelatePixbufAlongStroke(result, regionAbs, pointsAbs, lw, blockSize, originAbs.x, originAbs.y);
         }
-        return result;
+
+        if (!result) return null;
     }
+    return result;
 }

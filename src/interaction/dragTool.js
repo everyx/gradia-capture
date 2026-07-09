@@ -1,7 +1,6 @@
 import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import { getToolDef } from '../annotation/tools/index.js';
 
 const TRASH_RADIUS = 16;
 
@@ -108,7 +107,7 @@ export class DragTool {
             return;
         }
 
-        const bounds = getToolDef(sel.stroke.toolId)?.bounds?.(sel.stroke);
+        const bounds = sel.stroke.hitBounds?.();
         if (!bounds) {
             this._hideTrash();
             return;

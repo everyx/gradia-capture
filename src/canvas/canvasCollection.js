@@ -1,3 +1,5 @@
+import { getToolDef } from '../annotation/tools/index.js';
+
 export class CanvasCollection {
     constructor() {
         this._canvasList = [];
@@ -85,7 +87,7 @@ export class CanvasCollection {
         const strokes = [];
         this.forEachCanvas((c) => {
             for (const s of c.strokes) {
-                strokes.push({
+                const copy = {
                     color: s.color,
                     toolId: s.toolId,
                     counter: s.counter,
@@ -94,7 +96,9 @@ export class CanvasCollection {
                     blurMode: s.blurMode,
                     blockSize: s.blockSize,
                     stagePoints: s.stagePoints.map((p) => ({ x: p.x, y: p.y })),
-                });
+                };
+                getToolDef(s.toolId)?.bindCapabilities?.(copy);
+                strokes.push(copy);
             }
         });
         return strokes;

@@ -3,6 +3,7 @@ import GLib from 'gi://GLib';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import { getToolDef } from '../annotation/tools/index.js';
 
 const MIN_WIDTH_CHARS = 4;
 
@@ -73,6 +74,7 @@ export class TextEntryManager {
             stagePoints: [{ x: stageX, y: stageY }],
             text: '',
         };
+        getToolDef('text')?.bindCapabilities?.(this._pendingStroke);
 
         const entry = new St.Entry({
             style_class: 'gradia-text-entry',

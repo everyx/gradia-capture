@@ -117,6 +117,7 @@ export const DrawingCanvas = GObject.registerClass(
         selectStrokeAt(stageX, stageY) {
             for (let i = this._strokes.length - 1; i >= 0; i--) {
                 const stroke = this._strokes[i];
+                if (stroke.phase === 'underlay') continue;
                 const tool = getToolDef(stroke.toolId);
                 if (tool?.hitTest?.(stroke, stageX, stageY)) {
                     this._selectedStroke = stroke;
@@ -196,6 +197,8 @@ export const DrawingCanvas = GObject.registerClass(
                 this._currentStroke.blurMode = state.mode;
                 this._currentStroke.blockSize = state.blockSize;
             }
+
+            tool.bindCapabilities?.(this._currentStroke);
 
             if (tool.isStamp) {
                 this._currentStroke.counter = this._stampCounter;
@@ -340,19 +343,20 @@ export const DrawingCanvas = GObject.registerClass(
 
             const ss = global.stage.scale_factor || 1;
 
-            if (this._onRenderBlurStroke) {
-                for (const stroke of allStrokes) {
-                    if (stroke.toolId !== 'blur') continue;
-                    this._onRenderBlurStroke(cr, stroke, ss, this);
-                }
-            }
+            const ranked = [...allStrokes].sort(
+                (a, b) => (a.phase === 'underlay' ? 0 : 1) - (b.phase === 'underlay' ? 0 : 1),
+            );
 
             let stampCounter = 1;
 
-            for (const stroke of allStrokes) {
+            for (const stroke of ranked) {
+                if (stroke.phase === 'underlay') {
+                    if (this._onRenderBlurStroke) this._onRenderBlurStroke(cr, stroke, ss, this);
+                    continue;
+                }
+
                 const tool = getToolDef(stroke.toolId);
                 if (!tool?.render) continue;
-                if (stroke.toolId === 'blur') continue;
 
                 const localPoints = stroke.stagePoints
                     .map((sp) => this._stageToLocal(sp.x, sp.y))
@@ -373,8 +377,7 @@ export const DrawingCanvas = GObject.registerClass(
             }
 
             if (this._selectedStroke) {
-                const tool = getToolDef(this._selectedStroke.toolId);
-                const bounds = tool?.bounds?.(this._selectedStroke);
+                const bounds = this._selectedStroke.hitBounds?.();
                 if (bounds) {
                     const tl = this._stageToLocal(bounds.minX, bounds.minY);
                     const br = this._stageToLocal(bounds.maxX, bounds.maxY);
@@ -411,8 +414,8 @@ export const DrawingCanvas = GObject.registerClass(
     },
 );
 
-export const DrawingInputOverlay = GObject.registerClass(
-    class DrawingInputOverlay extends St.Widget {
+export const InputCatcher = GObject.registerClass(
+    class InputCatcher extends St.Widget {
         _init(canvas, params) {
             super._init({
                 reactive: false,
