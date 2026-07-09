@@ -4,6 +4,9 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+const ROW_HEIGHT = 28;
+const MAX_HEIGHT = 240;
+
 export const Dropdown = GObject.registerClass(
     {
         Signals: {
@@ -26,8 +29,7 @@ export const Dropdown = GObject.registerClass(
             this._btns = [];
             this._activeIndex = -1;
             this._stageId = 0;
-
-            this.can_focus = true;
+            this._keyId = 0;
 
             this._btn = new St.Button({
                 style_class: 'gradia-dropdown-button',
@@ -53,9 +55,11 @@ export const Dropdown = GObject.registerClass(
                 else this.open();
             });
 
-            this.connect('key-press-event', (_actor, event) => this._onKey(event));
             this.connect('hide', () => this.close());
-            this.connect('destroy', () => this._disconnectStage());
+            this.connect('destroy', () => {
+                this._disconnectStage();
+                this._disconnectKey();
+            });
 
             this._build();
         }
@@ -118,13 +122,14 @@ export const Dropdown = GObject.registerClass(
             const [bx, by] = this._btn.get_transformed_position();
             const [, bw] = this._btn.get_transformed_size();
             const [, bh] = this._btn.get_transformed_size();
-            this._scroll.set_size(Math.max(bw, 180), -1);
+            const height = Math.min(this._btns.length * ROW_HEIGHT + 8, MAX_HEIGHT);
+            this._scroll.set_size(Math.max(bw, 200), height);
             this._scroll.set_position(Math.round(bx), Math.round(by + bh + 2));
             this._overlayParent.add_child(this._scroll);
             this._scroll.show();
 
-            this.grab_key_focus();
             this._connectStage();
+            this._connectKey();
             this.emit('open-state-changed', true);
         }
 
@@ -133,6 +138,7 @@ export const Dropdown = GObject.registerClass(
             this._scroll.hide();
             this._overlayParent.remove_child(this._scroll);
             this._disconnectStage();
+            this._disconnectKey();
             this.emit('open-state-changed', false);
         }
 
@@ -183,10 +189,22 @@ export const Dropdown = GObject.registerClass(
             });
         }
 
+        _connectKey() {
+            if (this._keyId) return;
+            this._keyId = global.stage.connect('key-press-event', (_stage, event) => this._onKey(event));
+        }
+
         _disconnectStage() {
             if (this._stageId) {
                 global.stage.disconnect(this._stageId);
                 this._stageId = 0;
+            }
+        }
+
+        _disconnectKey() {
+            if (this._keyId) {
+                global.stage.disconnect(this._keyId);
+                this._keyId = 0;
             }
         }
     },
