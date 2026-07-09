@@ -7,6 +7,52 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { captureAndStoreScreenshot } from './screenshotStore.js';
 import { getCaptureContext } from './captureContext.js';
 
+function pixbufRegionCopy(full, stageRect, scale) {
+    const cx = Math.round(stageRect.x * scale);
+    const cy = Math.round(stageRect.y * scale);
+    const cw = Math.round(stageRect.w * scale);
+    const ch = Math.round(stageRect.h * scale);
+
+    const fw = full.get_width();
+    const fh = full.get_height();
+    if (cx >= fw || cy >= fh || cx + cw <= 0 || cy + ch <= 0) return null;
+    const cx2 = Math.max(0, Math.min(cx, fw - 1));
+    const cy2 = Math.max(0, Math.min(cy, fh - 1));
+    const cw2 = Math.min(cw, fw - cx2);
+    const ch2 = Math.min(ch, fh - cy2);
+    if (cw2 <= 0 || ch2 <= 0) return null;
+
+    const fullPixels = full.get_pixels();
+    const fullRstride = full.get_rowstride();
+    const nch = full.get_n_channels();
+    const correctStride = cw2 * nch;
+    const newData = new Uint8Array(cw2 * ch2 * nch);
+
+    for (let y = 0; y < ch2; y++) {
+        const srcBase = (cy2 + y) * fullRstride + cx2 * nch;
+        const dstBase = y * correctStride;
+        for (let x = 0; x < cw2; x++) {
+            const si = srcBase + x * nch;
+            const di = dstBase + x * nch;
+            newData[di] = fullPixels[si];
+            newData[di + 1] = fullPixels[si + 1];
+            newData[di + 2] = fullPixels[si + 2];
+            if (nch >= 4) newData[di + 3] = fullPixels[si + 3];
+        }
+    }
+
+    const bytes = GLib.Bytes.new(newData);
+    return GdkPixbuf.Pixbuf.new_from_bytes(
+        bytes,
+        GdkPixbuf.Colorspace.RGB,
+        nch >= 4,
+        full.get_bits_per_sample(),
+        cw2,
+        ch2,
+        correctStride,
+    );
+}
+
 export class ScreenshotCapture {
     constructor({ canvases, textEntryManager, toolbar, settings, isRecordingMode }) {
         this._canvases = canvases;
@@ -220,109 +266,16 @@ export class ScreenshotCapture {
     }
 
     async captureRegion(stageRect) {
-        const ui = Main.screenshotUI;
         if (!this._cachedFullPixbuf) {
             const ok = await this._ensureFullCapture();
             if (!ok) return null;
         }
-
-        const ds = ui._scale || 1;
-        const cx = Math.round(stageRect.x * ds);
-        const cy = Math.round(stageRect.y * ds);
-        const cw = Math.round(stageRect.w * ds);
-        const ch = Math.round(stageRect.h * ds);
-
-        const fw = this._cachedFullPixbuf.get_width();
-        const fh = this._cachedFullPixbuf.get_height();
-        if (cx >= fw || cy >= fh || cx + cw <= 0 || cy + ch <= 0) return null;
-        const cx2 = Math.max(0, Math.min(cx, fw - 1));
-        const cy2 = Math.max(0, Math.min(cy, fh - 1));
-        const cw2 = Math.min(cw, fw - cx2);
-        const ch2 = Math.min(ch, fh - cy2);
-        if (cw2 <= 0 || ch2 <= 0) return null;
-
-        const full = this._cachedFullPixbuf;
-        const fullPixels = full.get_pixels();
-        const fullRstride = full.get_rowstride();
-        const nch = full.get_n_channels();
-        const correctStride = cw2 * nch;
-        const newData = new Uint8Array(cw2 * ch2 * nch);
-
-        for (let y = 0; y < ch2; y++) {
-            const srcBase = (cy2 + y) * fullRstride + cx2 * nch;
-            const dstBase = y * correctStride;
-            for (let x = 0; x < cw2; x++) {
-                const si = srcBase + x * nch;
-                const di = dstBase + x * nch;
-                newData[di] = fullPixels[si];
-                newData[di + 1] = fullPixels[si + 1];
-                newData[di + 2] = fullPixels[si + 2];
-                if (nch >= 4) newData[di + 3] = fullPixels[si + 3];
-            }
-        }
-
-        const bytes = GLib.Bytes.new(newData);
-        const region = GdkPixbuf.Pixbuf.new_from_bytes(
-            bytes,
-            GdkPixbuf.Colorspace.RGB,
-            nch >= 4,
-            full.get_bits_per_sample(),
-            cw2,
-            ch2,
-            correctStride,
-        );
-        return region;
+        return pixbufRegionCopy(this._cachedFullPixbuf, stageRect, Main.screenshotUI._scale || 1);
     }
 
     getRegionSync(stageRect) {
         if (!this._cachedFullPixbuf) return null;
-
-        const ui = Main.screenshotUI;
-        const ds = ui._scale || 1;
-        const cx = Math.round(stageRect.x * ds);
-        const cy = Math.round(stageRect.y * ds);
-        const cw = Math.round(stageRect.w * ds);
-        const ch = Math.round(stageRect.h * ds);
-
-        const full = this._cachedFullPixbuf;
-        const fw = full.get_width();
-        const fh = full.get_height();
-        if (cx >= fw || cy >= fh || cx + cw <= 0 || cy + ch <= 0) return null;
-        const cx2 = Math.max(0, Math.min(cx, fw - 1));
-        const cy2 = Math.max(0, Math.min(cy, fh - 1));
-        const cw2 = Math.min(cw, fw - cx2);
-        const ch2 = Math.min(ch, fh - cy2);
-        if (cw2 <= 0 || ch2 <= 0) return null;
-
-        const fullPixels = full.get_pixels();
-        const fullRstride = full.get_rowstride();
-        const nch = full.get_n_channels();
-        const correctStride = cw2 * nch;
-        const newData = new Uint8Array(cw2 * ch2 * nch);
-
-        for (let y = 0; y < ch2; y++) {
-            const srcBase = (cy2 + y) * fullRstride + cx2 * nch;
-            const dstBase = y * correctStride;
-            for (let x = 0; x < cw2; x++) {
-                const si = srcBase + x * nch;
-                const di = dstBase + x * nch;
-                newData[di] = fullPixels[si];
-                newData[di + 1] = fullPixels[si + 1];
-                newData[di + 2] = fullPixels[si + 2];
-                if (nch >= 4) newData[di + 3] = fullPixels[si + 3];
-            }
-        }
-
-        const bytes = GLib.Bytes.new(newData);
-        return GdkPixbuf.Pixbuf.new_from_bytes(
-            bytes,
-            GdkPixbuf.Colorspace.RGB,
-            nch >= 4,
-            full.get_bits_per_sample(),
-            cw2,
-            ch2,
-            correctStride,
-        );
+        return pixbufRegionCopy(this._cachedFullPixbuf, stageRect, Main.screenshotUI._scale || 1);
     }
 
     async ensureCache() {
