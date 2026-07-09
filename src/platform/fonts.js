@@ -1,4 +1,4 @@
-import Pango from 'gi://Pango';
+import PangoCairo from 'gi://PangoCairo';
 
 let _families = null;
 
@@ -8,7 +8,7 @@ export function listFontFamilies() {
     if (_families) return _families;
     let families = [];
     try {
-        const map = Pango.font_map_get_default();
+        const map = PangoCairo.font_map_get_default();
         families = map.list_families().map((f) => f.get_name());
     } catch {
         families = [];

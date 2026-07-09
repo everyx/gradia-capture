@@ -115,7 +115,10 @@ export const Toolbar = GObject.registerClass(
                 popup,
                 global.stage.connect('button-press-event', (_stage, event) => {
                     const target = event.get_source();
-                    if (target && (popup.contains(target) || triggerBtn?.contains(target)))
+                    if (
+                        target &&
+                        (popup.contains(target) || popup.containsExtra?.(target) || triggerBtn?.contains(target))
+                    )
                         return Clutter.EVENT_PROPAGATE;
                     this._hidePopup(popup);
                     return Clutter.EVENT_STOP;

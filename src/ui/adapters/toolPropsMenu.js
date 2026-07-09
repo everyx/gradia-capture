@@ -37,7 +37,15 @@ export const ToolPropsMenu = GObject.registerClass(
             this._controls = new Map();
             this._seps = [];
             this._updating = false;
+            this._containmentExtras = new Set();
             super._init('gradia-tool-props-menu', rest);
+        }
+
+        containsExtra(target) {
+            for (const actor of this._containmentExtras) {
+                if (actor.contains(target)) return true;
+            }
+            return false;
         }
 
         render(items) {
@@ -207,6 +215,13 @@ export const ToolPropsMenu = GObject.registerClass(
 
             const dropdown = new Dropdown({ options: item.options, current: item.value });
             dropdown.connect('selected', (_d, value) => this._emit(item.key, value));
+            dropdown.connect('open-state-changed', (_d, open) => {
+                if (open) this._containmentExtras.add(dropdown.listActor);
+                else this._containmentExtras.delete(dropdown.listActor);
+            });
+            this.connect('hide', () => {
+                this._containmentExtras.delete(dropdown.listActor);
+            });
             group.add_child(dropdown);
             if (item.label) attachTooltip(dropdown.triggerButton, item.label);
 
