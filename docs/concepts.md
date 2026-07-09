@@ -8,8 +8,8 @@
 
 | 概念 | 本质 | 职责 |
 |---|---|---|
-| **协调中枢 Orchestrator** | 唯一装配者 + 事件路由表 | 创建组件 / 画板，订阅信号，把事件派发到 handler |
-| **组件 Components** | 独立功能模块（capture / annotation / utilities / ui / platform） | 各自边界内功能，只经事件 + 端口通信 |
+| **协调中枢 Orchestrator** | 唯一装配者 + 注入端口 | 创建组件 / 画板，经 `emitter` 广播事件，不调用组件内部 |
+| **组件 Components** | 独立功能模块（capture / annotation / utilities / ui / platform） | 各自边界内功能，订阅端口自行响应 |
 | **画板 Board** | 绘制载体 + 数据模型 | 多屏画布集合、Stroke 原子存储、渲染 / 命中 / 撤销 / 聚合 |
 
 > 标注工具的输入翻译（drag / text）属于 **annotation** 内部（`annotation/input/`），不是独立概念；ui 的按钮语义分组（select / annotate / utility）对应 capture / annotation / utilities 三个组件。
@@ -26,16 +26,14 @@
 
 ## 统一事件流（概念层）
 
-所有跨概念通信在概念上都建模为**事件流**：事件源 emit 事件，协调中枢查"事件 → handler"映射并派发，handler 落在组件或画板。
+跨概念通信统一建模为**事件流**：事件经注入端口（`emitter`）广播，订阅者自行响应，不认识对方具体类。
 
 ```
-组件 emit 事件 ─┐
-输入 emit 事件 ─┼─▶ 协调中枢(事件→handler 映射) ─▶ 派发 ─┬─▶ 组件(算/取)
-快捷键 emit ───┘                                        └─▶ 画板(画/聚)
-                唯一交汇点 · 只认事件与端口，不认具体类
+组件/输入/快捷键 ──emit──▶ 注入端口(emitter) ──▶ 订阅者(组件/画板)自行响应
+                            只认事件与端口，不认具体类
 ```
 
-> 现状代码里"三种通道"——GNOME 原生信号（`toolbar.connect('tool-changed')`）、输入回调表（`_inputRegistry`）、工具激活回调（`_contextActivate`）、会话命令（`execute(intent)`）——在概念上**都是"事件 → handler 映射"**。本次重构**不抽独立 EventBus**，代码机制保持原生信号 + 直接回调；文档仅在概念层统一描述为事件驱动。
+> 跨概念通信统一为**事件 → handler 映射**，落在 `src/platform/emitter.js`（`addEmitter`，注入式实例，非全局类）。组件构造时订阅、自行响应（如 `tool-changed`），协调中枢只 emit、不再调用组件内部。**禁止抽独立全局 EventBus 类**——保持"经注入端口通信"，组件不反向依赖 orchestrator。
 
 ## Stroke（画板数据原子）
 
