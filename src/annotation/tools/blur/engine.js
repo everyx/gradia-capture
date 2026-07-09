@@ -419,7 +419,6 @@ export class BlurSelector {
         getRegionSync,
         stageScale,
         onBlockSizeChanged,
-        onModeChanged,
         forEachCanvas,
         ensureCache,
         toolbar,
@@ -429,7 +428,6 @@ export class BlurSelector {
         this._getRegionSync = getRegionSync;
         this._stageScale = stageScale ?? 1;
         this._onBlockSizeChanged = onBlockSizeChanged ?? (() => {});
-        this._onModeChanged = onModeChanged ?? (() => {});
         this._forEachCanvas = forEachCanvas ?? (() => {});
         this._ensureCache = ensureCache ?? (() => {});
         this._toolbar = toolbar ?? null;

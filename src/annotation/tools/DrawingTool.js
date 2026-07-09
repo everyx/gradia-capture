@@ -123,7 +123,7 @@ export class DrawingTool {
                 {
                     color: stroke.color,
                     points: converted,
-                    counter: stroke.toolId === 'stamp' ? stroke.counter : stroke.counter,
+                    counter: stroke.counter,
                     text: stroke.text,
                     blurMode: stroke.blurMode,
                     blockSize: stroke.blockSize,
