@@ -56,20 +56,21 @@
 - `phase` 由工具在产生 Stroke 时声明；画板渲染与 capture 合成均按 `phase` 排序，**不再有 `toolId === 'blur'` 特判**。
 - `overlay` 指"批注覆盖层"（画在截图之上、彼此自由交错）；`underlay` 指"衬底层"（blur 像素化 / ocr 识别，作用在截图本身、固定前置）。二者对称。
 - OCR 激活时置灰 annotate 组，本质是"当前 phase 切到 underlay，overlay 不可用"，与 blur 的底层约束同源。
-- 代码中的 `InputCatcher`（原 `DrawingInputOverlay`，输入事件捕获层）与概念上的 `overlay`（批注覆盖层）无关；`overlay` 一词专指批注覆盖层。
+- `InputCatcher`（`board/inputCatcher.js`，原 `DrawingInputOverlay`）是**画板的事件入口壳**：仅把原始鼠标/触摸/滚动事件透明转发给 `DrawingCanvas.vfunc_*`，**不做输入→命令翻译**（翻译由 Interaction 层的 `_inputRegistry` / `dragTool` / `textEntryManager` 完成）。它属画板内部，与概念 `overlay`（批注覆盖层）无关。
 
 ## 通用约定
 
-1. 数据（Stroke）随身带能力（`renderTo`）与 `phase`，组件消费能力 / 属性，不消费类型。
+1. 数据（Stroke）随身带能力（`paintTo`）与 `phase`，组件消费能力 / 属性，不消费类型。
 2. 交互层只翻译输入 → 画板 / 组件命令，不认识具体工具。
 3. 组件间只经事件 + 端口通信，不认识具体类。
-4. 依赖约束维持 [`CONTEXT.md`](../CONTEXT.md)：annotation 不反向依赖 capture / utilities / ui；utilities 之间互不依赖且不依赖 annotation；ocr 仅依赖 capture；全部可依赖 platform。
+4. 依赖约束维持 [`CONTEXT.md`](../CONTEXT.md)：annotation 不反向依赖 capture / utilities / ui；utilities 之间互不依赖且不依赖 annotation；ocr 仅依赖 capture；组件不反向依赖 orchestrator；全部可依赖 platform。
 
 ## 边界决议（历史模糊点）
 
-- **Blur**：像素化引擎留 `annotation/blur/`，但 `ScreenshotCapture` 不再持有 `blurSelector`，改为遍历 `strokes[].renderTo(pixbuf)`（blur 的 `renderTo` 内部调 `composeOutput`）。消除 capture → annotation 的反向依赖。
-- **DragTool / TextEntryManager**：归入 **Interaction** 概念，从 `ui/` 拆出；`ui/` 只保留纯 GNOME 原生 UI 适配（toolbar / popupMenu / toolPropsMenu / resolutionOverlay / widgets）。
-- **`DrawingInputOverlay` → `InputCatcher` 改名**：已完成，避免与概念 `overlay`（批注覆盖层）撞义。
+- **Blur**：`BlurTool` 是 tool，留在 `annotation/tools/`（与其他工具同级）；其像素化后端引擎作内部实现置于 `tools/blur/engine.js`（不与之平级）。`ScreenshotCapture` 不再持有 `blurSelector`，改为遍历 `strokes[].paintTo(...)`（blur 的 `paintTo` 内部调 `composeBlurStrokes`）。消除 capture → annotation 的反向依赖。
+- **DragTool / TextEntryManager**：归入 **Interaction** 概念（`src/interaction/`），从 `ui/` 拆出；`ui/` 拆为 `adapters/`（原生 UI 适配）与 `widgets/`（展示构件）。
+- **`DrawingInputOverlay` → `InputCatcher` 改名**：已完成，避免与概念 `overlay`（批注覆盖层）撞义；现留 `board/`，属画板内部事件入口。
+- **协调中枢 Orchestrator**：`src/orchestrator/` 是 `execute(intent)` 的实现者（装配 + 信号编排 + 意图分发）；`extension.js` 仅做 GNOME 生命周期壳与装配委托，不再含业务。
 
 ## 关键约束图
 
