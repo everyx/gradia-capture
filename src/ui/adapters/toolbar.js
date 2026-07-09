@@ -395,10 +395,6 @@ export const Toolbar = GObject.registerClass(
             return this._selectedTool === 'blur' ? BLUR_SIZE_MAX : SIZE_MAX;
         }
 
-        hideColorMenu() {
-            this._hidePopup(this._toolPropsMenu);
-        }
-
         hidePropsPopup() {
             this._hidePopup(this._toolPropsMenu);
         }
