@@ -5,7 +5,7 @@ import St from 'gi://St';
 
 import { Slider } from 'resource:///org/gnome/shell/ui/slider.js';
 
-import { SquareSlider } from './widgets/squareSlider.js';
+import { SquareSlider } from '../widgets/squareSlider.js';
 
 import { attachTooltip } from '../platform/tooltip.js';
 import { PopupMenu } from './popupMenu.js';

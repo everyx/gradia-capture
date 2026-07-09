@@ -4,7 +4,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { initI18n } from './platform/i18n.js';
 import { GradiaSettings } from './platform/settings.js';
 import { destroyActiveToast } from './platform/screenshotToast.js';
-import { SelectionClearer } from './ui/selectionClearPatch.js';
+import { SelectionClearer } from './ui/adapters/selectionClearPatch.js';
 import { Orchestrator } from './orchestrator/orchestrator.js';
 
 export default class GradiaCompanion extends Extension {

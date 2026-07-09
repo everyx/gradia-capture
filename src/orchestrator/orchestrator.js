@@ -3,10 +3,11 @@ import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 
 import { getToolDef } from '../annotation/tools/index.js';
-import { DrawingCanvas, InputCatcher } from '../board/drawingCanvas.js';
+import { DrawingCanvas } from '../board/drawingCanvas.js';
+import { InputCatcher } from '../board/inputCatcher.js';
 import { CanvasCollection } from '../board/canvasCollection.js';
-import { Toolbar } from '../ui/toolbar.js';
-import { ResolutionOverlay } from '../ui/resolutionOverlay.js';
+import { Toolbar } from '../ui/adapters/toolbar.js';
+import { ResolutionOverlay } from '../ui/adapters/resolutionOverlay.js';
 import { ScreenshotCapture } from '../capture/screenshotCapture.js';
 import { DragTool } from '../interaction/dragTool.js';
 import { TextEntryManager } from '../interaction/textEntryManager.js';
@@ -14,7 +15,7 @@ import { OcrSelector } from '../utilities/ocr/ocrSelector.js';
 import { isRapidOcrAvailable } from '../utilities/ocr/backend.js';
 import { createSettingsButton } from '../platform/gradiaApp.js';
 import { BlurSelector } from '../annotation/tools/blur/engine.js';
-import { SelectionClearer } from '../ui/selectionClearPatch.js';
+import { SelectionClearer } from '../ui/adapters/selectionClearPatch.js';
 import { ShortcutDispatcher } from './shortcutDispatcher.js';
 
 export class Orchestrator {
