@@ -458,8 +458,6 @@ export class Orchestrator {
         this._ocrSelector?.clearCache();
 
         const ui = Main.screenshotUI;
-        const monitors = Main.layoutManager.monitors;
-        if (!monitors || monitors.length === 0) return;
 
         const selectionMode = ui._selectionButton?.checked ?? false;
         const windowMode = this._isWindowMode();
@@ -470,43 +468,7 @@ export class Orchestrator {
             return;
         }
 
-        let selectionRect = null;
-        if (selectionMode && ui._areaSelector) {
-            const [x, y, w, h] = ui._areaSelector.getGeometry();
-            if (w > 2 && h > 2) {
-                selectionRect = { x, y, width: w, height: h };
-            }
-        }
-
-        if (selectionMode && !selectionRect) {
-            this._toolbar.visible = false;
-            return;
-        }
-
-        this._toolbar.visible = true;
-
-        let targetMonitor = monitors[0];
-        if (selectionRect) {
-            const cx = selectionRect.x + selectionRect.width / 2;
-            const cy = selectionRect.y + selectionRect.height / 2;
-            for (let i = 0; i < monitors.length; i++) {
-                const m = monitors[i];
-                if (cx >= m.x && cx < m.x + m.width && cy >= m.y && cy < m.y + m.height) {
-                    targetMonitor = m;
-                    break;
-                }
-            }
-        }
-
-        this._toolbar.reposition({
-            selectionRect,
-            monitorRect: {
-                x: targetMonitor.x,
-                y: targetMonitor.y,
-                width: targetMonitor.width,
-                height: targetMonitor.height,
-            },
-        });
+        this._toolbar.reposition(selectionMode);
     }
 
     _wireSignals() {
