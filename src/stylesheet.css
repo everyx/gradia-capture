@@ -68,12 +68,20 @@
     margin: 4px 4px;
 }
 
+.gradia-popover {
+    -arrow-rise: 0;
+    -arrow-base: 0;
+    -arrow-border-width: 0;
+    -arrow-background-color: transparent;
+    -arrow-border-radius: 0;
+    -boxpointer-gap: 4px;
+}
+
 .gradia-tool-props-menu {
+    margin: 0;
     spacing: 2px;
     padding: 2px;
     border-radius: 9999px;
-    margin-top: 2px;
-    margin-bottom: 2px;
 }
 
 .gradia-menu-group {
@@ -173,4 +181,3 @@
     border: 1.5px solid st-transparentize(-st-accent-color, 0.3);
     border-radius: 2px;
 }
-

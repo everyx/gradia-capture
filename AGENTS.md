@@ -10,9 +10,8 @@ GNOME Shell extension（GJS），为截图工具加标注，可选集成 Gradia 
 
 ## 参考
 
-确认 GNOME Shell 行为时可查源码与 API 文档：
-- GNOME Shell 源码：https://github.com/gnome/gnome-shell
-- GJS API 文档：https://gjs-docs.gnome.org/
+- GNOME Shell 源码位置：./repos/gnome-shell
+- GJS 源码位置：./repos/gjs
 
 ## St 组件坑
 
