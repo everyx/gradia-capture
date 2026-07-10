@@ -6,6 +6,7 @@ import St from 'gi://St';
 import { TOOLS, getToolDef } from '../../annotation/tools/index.js';
 import { attachTooltip } from '../../platform/tooltip.js';
 import { _ } from '../../platform/i18n.js';
+import { clampToMonitor, getSelectionRect, monitorForRect } from '../geometry.js';
 import { ToolPropsMenu } from './toolPropsMenu.js';
 import { SIZE_MIN, SIZE_MAX, BLUR_SIZE_MAX } from '../../platform/menuSchema.js';
 import { TOOLBAR_GROUPS, SEP } from './toolbarLayout.js';
@@ -343,10 +344,20 @@ export const Toolbar = GObject.registerClass(
             this._hidePopup(this._toolPropsMenu);
         }
 
-        reposition({ selectionRect, monitorRect }) {
+        reposition(selectionMode) {
             const [, natW] = this.get_preferred_width(-1);
             const natH = this.get_preferred_height(-1)[1];
             if (natW <= 0 || natH <= 0) return;
+
+            const selectionRect = getSelectionRect();
+            if (selectionMode && !selectionRect) {
+                this.visible = false;
+                return;
+            }
+            this.visible = true;
+
+            const monitorRect = monitorForRect(selectionRect);
+            if (!monitorRect) return;
 
             const localMonCX = monitorRect.x + monitorRect.width / 2;
             let targetX, targetY;
@@ -355,8 +366,7 @@ export const Toolbar = GObject.registerClass(
                 const selTop = selectionRect.y,
                     selHeight = selectionRect.height,
                     selRight = selectionRect.x + selectionRect.width;
-                const localMonBottom = monitorRect.y + monitorRect.height,
-                    localMonRight = monitorRect.x + monitorRect.width;
+                const localMonBottom = monitorRect.y + monitorRect.height;
                 const yAbove = Math.round(selTop - natH),
                     yBelow = Math.round(selTop + selHeight);
                 const spaceAbove = Math.round(selTop),
@@ -365,13 +375,13 @@ export const Toolbar = GObject.registerClass(
                 else if (spaceBelow >= natH) targetY = yBelow;
                 else targetY = 0;
                 targetX = Math.round(selRight - natW);
-                targetX = Math.max(0, Math.min(targetX, Math.round(localMonRight - natW)));
             } else {
                 targetX = Math.round(localMonCX - natW / 2);
                 targetY = 0;
             }
 
-            this.set_position(targetX, targetY);
+            const clamped = clampToMonitor(targetX, targetY, natW, natH, monitorRect);
+            this.set_position(clamped.x, targetY);
             if (this._toolPropsMenu?.isOpen && this._propsToolBtn)
                 this._repositionPopup(this._toolPropsMenu, this._propsToolBtn);
         }

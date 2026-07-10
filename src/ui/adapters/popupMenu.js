@@ -5,6 +5,8 @@ import St from 'gi://St';
 import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import { clampToMonitor, getSelectionRect } from '../geometry.js';
+
 // A BoxPointer that anchors the panel to the leading edge of the source
 // actor (left-aligned in LTR).  The arrow is disabled (-arrow-rise: 0) so
 // the border is a plain rounded rect.  Positioning on the source-opposite
@@ -15,7 +17,6 @@ const PropsBoxPointer = GObject.registerClass(
             const [, , natWidth, natHeight] = this.get_preferred_size();
             const themeNode = this.get_theme_node();
             const gap = themeNode.get_length('-boxpointer-gap');
-            const padding = themeNode.get_length('-arrow-rise');
 
             if (!this._sourceActor) return;
 
@@ -49,12 +50,10 @@ const PropsBoxPointer = GObject.registerClass(
                     resY = sourceBottomRight.y + gap;
             }
 
-            const workarea = this._workArea;
-            if (workarea) {
-                resX = Math.max(resX, workarea.x + padding);
-                resX = Math.min(resX, workarea.x + workarea.width - (padding + natWidth));
-                resY = Math.max(resY, workarea.y + padding);
-                resY = Math.min(resY, workarea.y + workarea.height - (padding + natHeight));
+            if (this._workArea) {
+                const c = clampToMonitor(resX, resY, natWidth, natHeight, this._workArea);
+                resX = c.x;
+                resY = c.y;
             }
 
             let parent = this.get_parent();
@@ -102,12 +101,7 @@ export const PopupMenu = GObject.registerClass(
         }
 
         _getSelectionRect() {
-            const ui = Main.screenshotUI;
-            const area = ui?._areaSelector;
-            if (!area) return null;
-            const [x, y, w, h] = area.getGeometry();
-            if (w <= 2 || h <= 2) return null;
-            return { x, y, width: w, height: h };
+            return getSelectionRect();
         }
 
         add_child(child) {
