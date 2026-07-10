@@ -1,3 +1,4 @@
+import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
@@ -36,7 +37,10 @@ export const ToolPropsMenu = GObject.registerClass(
             this._controls = new Map();
             this._seps = [];
             this._updating = false;
-            super._init('gradia-tool-props-menu', rest);
+            super._init('screenshot-ui-panel gradia-tool-props-menu', rest);
+
+            this.accessible_role = Atk.Role.MENU;
+            this.accessible_name = _('Tool properties');
         }
 
         render(items) {
@@ -78,6 +82,7 @@ export const ToolPropsMenu = GObject.registerClass(
             const needed = Math.max(0, groups.length - 1);
             while (this._seps.length < needed) {
                 const sep = new St.Widget({ style_class: 'gradia-separator', y_expand: true });
+                sep.accessible_role = Atk.Role.SEPARATOR;
                 this._seps.push(sep);
                 this.add_child(sep);
             }
@@ -97,7 +102,12 @@ export const ToolPropsMenu = GObject.registerClass(
             const group = new St.BoxLayout({ style_class: 'gradia-menu-group' });
             const rings = [];
             const setSelected = (hex) => {
-                for (const r of rings) r.style = `border-color: ${r._colorHex === hex ? r._colorHex : 'transparent'};`;
+                for (const r of rings) {
+                    const selected = r._colorHex === hex;
+                    r.style = `border-color: ${selected ? r._colorHex : 'transparent'};`;
+                    if (selected) r.add_accessible_state(Atk.StateType.CHECKED);
+                    else r.remove_accessible_state(Atk.StateType.CHECKED);
+                }
             };
             for (const col of COLORS) {
                 const ring = new St.Button({
@@ -107,6 +117,8 @@ export const ToolPropsMenu = GObject.registerClass(
                     layout_manager: new Clutter.BinLayout(),
                 });
                 ring._colorHex = col.hex;
+                ring.accessible_role = Atk.Role.RADIO_BUTTON;
+                ring.accessible_name = col.name;
                 ring.add_child(
                     new St.Widget({
                         style_class: 'gradia-swatch',
@@ -130,6 +142,7 @@ export const ToolPropsMenu = GObject.registerClass(
             const isSquare = item.variant === 'square';
             const slider = isSquare ? new SquareSlider(0) : new Slider(0);
             slider.style = 'width: 60px;';
+            if (item.label) slider.accessible_name = _(item.label);
             slider.y_align = Clutter.ActorAlign.CENTER;
 
             const state = { min: item.min, max: item.max, step: item.step ?? 1, current: item.value };
@@ -170,7 +183,12 @@ export const ToolPropsMenu = GObject.registerClass(
             const group = new St.BoxLayout({ style_class: 'gradia-menu-group' });
             const btns = [];
             const setSelected = (value) => {
-                for (const b of btns) b.checked = b._optValue === value;
+                for (const b of btns) {
+                    const selected = b._optValue === value;
+                    b.checked = selected;
+                    if (selected) b.add_accessible_state(Atk.StateType.CHECKED);
+                    else b.remove_accessible_state(Atk.StateType.CHECKED);
+                }
             };
             for (const opt of item.options) {
                 const child = opt.swatch
@@ -189,6 +207,8 @@ export const ToolPropsMenu = GObject.registerClass(
                     child,
                 });
                 btn._optValue = opt.value;
+                btn.accessible_role = Atk.Role.CHECK_MENU_ITEM;
+                if (opt.label) btn.accessible_name = opt.label;
                 btn.connect('clicked', () => this._emit(item.key, opt.value));
                 group.add_child(btn);
                 if (opt.label) attachTooltip(btn, opt.label);

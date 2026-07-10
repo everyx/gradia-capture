@@ -32,7 +32,6 @@ export const Toolbar = GObject.registerClass(
         _init(params = {}) {
             const { extensionPath = '', gradiaSettings = null, hasSelection, hasVisibleCanvas, ...rest } = params;
             this._extensionPath = extensionPath;
-            this._lastReposition = null;
 
             super._init({
                 style_class: 'screenshot-ui-panel gradia-toolbar',
@@ -94,7 +93,7 @@ export const Toolbar = GObject.registerClass(
                 if (!this._activeTool) return;
                 this._activeTool.set(key, value);
                 this._activeTool.save();
-                if (this._toolPropsMenu.visible) {
+                if (this._toolPropsMenu.isOpen) {
                     this._toolPropsMenu.render(this._activeTool.getMenuItems());
                     this._repositionPopup(this._toolPropsMenu, this._propsToolBtn);
                 }
@@ -102,14 +101,7 @@ export const Toolbar = GObject.registerClass(
         }
 
         _showPopup(popup, triggerBtn) {
-            popup.opacity = 0;
-            popup.show();
-            popup.reposition({ triggerBtn, toolbar: this, ...this._lastReposition });
-            popup.opacity = 255;
-            const cb = popup.connect('notify::allocation', () => {
-                popup.disconnect(cb);
-                popup.reposition({ triggerBtn, toolbar: this, ...this._lastReposition });
-            });
+            popup.open(triggerBtn, this);
             this._disconnectStagePress(popup);
             this._popupStagePressIds.set(
                 popup,
@@ -125,12 +117,12 @@ export const Toolbar = GObject.registerClass(
 
         _hidePopup(popup) {
             this._disconnectStagePress(popup);
-            if (popup.get_stage()) popup.hide();
+            if (popup.get_stage()) popup.close();
         }
 
         _repositionPopup(popup, triggerBtn) {
-            if (!popup?.visible || !this._lastReposition) return;
-            popup.reposition({ triggerBtn, toolbar: this, ...this._lastReposition });
+            if (!popup?.isOpen) return;
+            popup.repositionTo(triggerBtn, this);
         }
 
         _isDrawingTool(id) {
@@ -292,7 +284,7 @@ export const Toolbar = GObject.registerClass(
             if (this._isDrawingTool(id)) {
                 this._activePropsTool = id;
                 this._activeTool = getToolDef(id);
-                if (id === prevTool && this._toolPropsMenu.visible) {
+                if (id === prevTool && this._toolPropsMenu.isOpen) {
                     this._hidePopup(this._toolPropsMenu);
                 } else {
                     if (id !== prevTool) this._emitLoadedProps();
@@ -340,7 +332,7 @@ export const Toolbar = GObject.registerClass(
             if (limit === undefined || limit === oldSize) return;
             this._activeTool.set('size', limit);
             this._activeTool.save();
-            if (this._toolPropsMenu?.visible) this._toolPropsMenu.setValue('size', limit);
+            if (this._toolPropsMenu?.isOpen) this._toolPropsMenu.setValue('size', limit);
         }
 
         _sizeMax() {
@@ -380,8 +372,7 @@ export const Toolbar = GObject.registerClass(
             }
 
             this.set_position(targetX, targetY);
-            this._lastReposition = { selectionRect, monitorRect };
-            if (this._toolPropsMenu?.visible && this._propsToolBtn)
+            if (this._toolPropsMenu?.isOpen && this._propsToolBtn)
                 this._repositionPopup(this._toolPropsMenu, this._propsToolBtn);
         }
 

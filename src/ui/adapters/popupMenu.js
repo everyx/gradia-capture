@@ -1,79 +1,168 @@
+import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
-export const PopupMenu = GObject.registerClass(
-    {
-        Signals: {},
+import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+
+// A BoxPointer that anchors the panel to the leading edge of the source
+// actor (left-aligned in LTR).  The arrow is disabled (-arrow-rise: 0) so
+// the border is a plain rounded rect.  Positioning on the source-opposite
+// side and automatic flip (outside-first) are handled by the parent class.
+const PropsBoxPointer = GObject.registerClass(
+    class PropsBoxPointer extends BoxPointer.BoxPointer {
+        _reposition(allocationBox) {
+            const [, , natWidth, natHeight] = this.get_preferred_size();
+            const themeNode = this.get_theme_node();
+            const gap = themeNode.get_length('-boxpointer-gap');
+            const padding = themeNode.get_length('-arrow-rise');
+
+            if (!this._sourceActor) return;
+
+            const monitorIndex = Main.layoutManager.findIndexForActor(this._sourceActor);
+            this._sourceExtents = this._sourceActor.get_transformed_extents();
+            const monitor = Main.layoutManager.monitors[monitorIndex] ?? Main.layoutManager.primaryMonitor;
+            if (monitor) this._workArea = { x: monitor.x, y: monitor.y, width: monitor.width, height: monitor.height };
+
+            const sourceTopLeft = this._sourceExtents.get_top_left();
+            const sourceBottomRight = this._sourceExtents.get_bottom_right();
+
+            let resX;
+            if (this.text_direction === Clutter.TextDirection.RTL) resX = sourceBottomRight.x - natWidth;
+            else resX = sourceTopLeft.x;
+
+            let resY;
+            switch (this._arrowSide) {
+                case St.Side.TOP:
+                    resY = sourceBottomRight.y + gap;
+                    break;
+                case St.Side.BOTTOM:
+                    resY = sourceTopLeft.y - natHeight - gap;
+                    break;
+                case St.Side.LEFT:
+                    resY = sourceBottomRight.x + gap;
+                    break;
+                case St.Side.RIGHT:
+                    resY = sourceTopLeft.x - natWidth - gap;
+                    break;
+                default:
+                    resY = sourceBottomRight.y + gap;
+            }
+
+            const workarea = this._workArea;
+            if (workarea) {
+                resX = Math.max(resX, workarea.x + padding);
+                resX = Math.min(resX, workarea.x + workarea.width - (padding + natWidth));
+                resY = Math.max(resY, workarea.y + padding);
+                resY = Math.min(resY, workarea.y + workarea.height - (padding + natHeight));
+            }
+
+            let parent = this.get_parent();
+            let success, x, y;
+            while (!success) {
+                [success, x, y] = parent.transform_stage_point(resX, resY);
+                parent = parent.get_parent();
+            }
+
+            allocationBox.set_origin(Math.floor(x), Math.floor(y));
+        }
     },
-    class PopupMenu extends St.BoxLayout {
-        _init(style_class = '', params = {}) {
-            const classes = 'screenshot-ui-panel' + (style_class ? ` ${style_class}` : '');
+);
+
+// A popover wrapper around GNOME Shell's native BoxPointer.
+// - Horizontal: left-aligned to the trigger button (clamped to monitor).
+// - Vertical: prefers the "outside" side of the toolbar (away from the
+//   selection).  BoxPointer's built-in _updateFlip automatically flips to
+//   the "inside" side when there is not enough room outside.
+//   Uses full monitor bounds (not workarea) since the screenshot overlay
+//   covers the top panel.
+export const PopupMenu = GObject.registerClass(
+    class PopupMenu extends St.Widget {
+        _init(styleClass = '', params = {}) {
             super._init({
-                style_class: classes,
+                layout_manager: new Clutter.BinLayout(),
+                ...params,
+            });
+
+            this._boxPointer = new PropsBoxPointer(St.Side.TOP);
+            this._boxPointer.style_class = 'gradia-popover';
+            this._boxPointer.hide();
+
+            this._content = new St.BoxLayout({
+                style_class: styleClass,
                 x_expand: false,
                 y_expand: false,
                 reactive: true,
-                visible: false,
-                ...params,
             });
+            this._boxPointer.bin.set_child(this._content);
+
+            super.add_child(this._boxPointer);
+
+            this._toolbar = null;
         }
 
-        reposition({ triggerBtn, toolbar, selectionRect, monitorRect }) {
-            if (!this.visible) return;
-            if (!triggerBtn || !toolbar) return;
+        _getSelectionRect() {
+            const ui = Main.screenshotUI;
+            const area = ui?._areaSelector;
+            if (!area) return null;
+            const [x, y, w, h] = area.getGeometry();
+            if (w <= 2 || h <= 2) return null;
+            return { x, y, width: w, height: h };
+        }
 
-            const [btnSX, _btnSY] = triggerBtn.get_transformed_position();
-            const [tbSX, tbSY] = toolbar.get_transformed_position();
-            const [, tbH] = toolbar.get_size();
-            if (btnSX == null || tbSX == null) return;
+        add_child(child) {
+            this._content.add_child(child);
+        }
 
-            const [, menuW] = this.get_preferred_width(-1);
-            const [, menuH] = this.get_preferred_height(menuW);
-            if (menuW <= 0 || menuH <= 0) return;
+        set_child_at_index(child, index) {
+            this._content.set_child_at_index(child, index);
+        }
 
-            const localBtnX = btnSX;
-            const toolbarTop = tbSY;
-            const toolbarBottom = tbSY + tbH;
+        get isOpen() {
+            return this._boxPointer.visible;
+        }
 
-            const localMonLeft = monitorRect.x;
-            const localMonTop = monitorRect.y;
-            const localMonBottom = monitorRect.y + monitorRect.height;
-            const localMonRight = monitorRect.x + monitorRect.width;
+        contains(actor) {
+            return this._boxPointer.contains(actor);
+        }
 
-            let menuX = localBtnX;
-            if (menuX + menuW > localMonRight) menuX = localMonRight - menuW;
-            if (menuX < localMonLeft) menuX = localMonLeft;
-            menuX = Math.round(menuX);
+        get_stage() {
+            return this._boxPointer.get_stage();
+        }
 
-            let preferAbove = true;
-            if (selectionRect) {
-                const localSelTop = selectionRect.y;
-                const localSelBottom = selectionRect.y + selectionRect.height;
-                if (toolbarBottom <= localSelTop) preferAbove = true;
-                else if (toolbarTop >= localSelBottom) preferAbove = false;
-                else {
-                    const spaceAbove = toolbarTop - localMonTop;
-                    const spaceBelow = localMonBottom - toolbarBottom;
-                    preferAbove = spaceAbove >= spaceBelow;
-                }
+        open(triggerBtn, toolbar = null) {
+            if (toolbar) this._toolbar = toolbar;
+            if (triggerBtn) {
+                this._boxPointer.updateArrowSide(this._pickArrowSide());
+                this._boxPointer.setPosition(triggerBtn, 0);
             }
+            this._boxPointer.open(BoxPointer.PopupAnimation.FULL);
+        }
 
-            const yAbove = toolbarTop - menuH;
-            const yBelow = toolbarBottom;
-            const candidates = preferAbove ? [yAbove, yBelow] : [yBelow, yAbove];
+        close() {
+            this._boxPointer.close(BoxPointer.PopupAnimation.FULL);
+        }
 
-            let menuY = null;
-            for (const y of candidates) {
-                if (y >= localMonTop && y + menuH <= localMonBottom) {
-                    menuY = y;
-                    break;
-                }
+        repositionTo(triggerBtn, toolbar = null) {
+            if (toolbar) this._toolbar = toolbar;
+            if (triggerBtn) {
+                this._boxPointer.updateArrowSide(this._pickArrowSide());
+                this._boxPointer.setPosition(triggerBtn, 0);
             }
-            if (menuY === null)
-                menuY = Math.max(localMonTop, Math.min(preferAbove ? yAbove : yBelow, localMonBottom - menuH));
-            menuY = Math.round(menuY);
+        }
 
-            this.set_position(menuX, menuY);
+        _pickArrowSide() {
+            const sel = this._getSelectionRect();
+            if (!sel || !this._toolbar) return St.Side.TOP;
+
+            const [, tbY] = this._toolbar.get_transformed_position();
+            const [, tbH] = this._toolbar.get_size();
+            const tbCenterY = tbY + tbH / 2;
+            const selCenterY = sel.y + sel.height / 2;
+
+            // Prefer the "outside" (away from the selection).
+            // BoxPointer._updateFlip flips to the inside when needed.
+            return tbCenterY < selCenterY ? St.Side.BOTTOM : St.Side.TOP;
         }
     },
 );
