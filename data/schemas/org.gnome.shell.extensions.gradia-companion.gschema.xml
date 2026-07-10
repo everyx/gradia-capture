@@ -60,6 +60,7 @@
   <schema id="org.gnome.shell.extensions.gradia-companion.tool.text" path="/org/gnome/shell/extensions/gradia-companion/tool/text/">
     <key name="color" type="s"><default>'#000000'</default><summary>Text color</summary></key>
     <key name="size" type="d"><default>4.0</default><summary>Font size</summary></key>
+    <key name="font" type="s"><default>''</default><summary>Font family</summary></key>
   </schema>
 
   <schema id="org.gnome.shell.extensions.gradia-companion.tool.blur" path="/org/gnome/shell/extensions/gradia-companion/tool/blur/">

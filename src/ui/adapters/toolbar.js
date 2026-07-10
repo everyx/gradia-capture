@@ -117,6 +117,12 @@ export const Toolbar = GObject.registerClass(
         }
 
         _hidePopup(popup) {
+            // Reset font overlay state synchronously before the async close
+            // animation.  If we relied solely on _boxPointer.notify::visible
+            // (which fires 150ms later when the ease animation completes),
+            // a quick re-click or tool switch could leave `open = true`,
+            // making the font entry unresponsive on the next open.
+            if (popup._resetFontState) popup._resetFontState();
             this._disconnectStagePress(popup);
             if (popup.get_stage()) popup.close();
         }
@@ -404,6 +410,9 @@ export const Toolbar = GObject.registerClass(
         }
         get size() {
             return this._activeTool?.get('size') ?? 4;
+        }
+        get font() {
+            return this._activeTool?.get('font') ?? '';
         }
         get colorMenu() {
             return null;

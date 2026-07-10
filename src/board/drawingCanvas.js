@@ -371,6 +371,7 @@ export const DrawingCanvas = GObject.registerClass(
                         points: localPoints,
                         counter: stroke.toolId === 'stamp' ? stampCounter++ : stroke.counter,
                         text: stroke.text,
+                        font: stroke.font,
                         blurMode: stroke.blurMode,
                         blockSize: stroke.blockSize,
                     },
