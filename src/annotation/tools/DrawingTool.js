@@ -123,6 +123,7 @@ export class DrawingTool {
                     points: converted,
                     counter: stroke.counter,
                     text: stroke.text,
+                    font: stroke.font,
                     blurMode: stroke.blurMode,
                     blockSize: stroke.blockSize,
                 },

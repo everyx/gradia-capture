@@ -79,6 +79,7 @@ export class TextEntryManager {
             color: this._toolbar.selectedColor,
             toolId: 'text',
             strokeWidth: this._toolbar.size,
+            font: this._toolbar.font,
             stagePoints: [{ x: stageX, y: stageY }],
             text: '',
         };
@@ -194,9 +195,17 @@ export class TextEntryManager {
         }
     }
 
+    updateFont(family) {
+        if (this._pendingStroke) {
+            this._pendingStroke.font = family;
+            this._updateStyle();
+        }
+    }
+
     onPropertyChanged(props) {
         if (props.color !== undefined) this.updateColor(props.color);
         if (props.size !== undefined) this.updateSize(props.size);
+        if (props.font !== undefined) this.updateFont(props.font);
     }
 
     destroy() {
@@ -241,7 +250,7 @@ export class TextEntryManager {
             color: ${col};
             caret-color: ${col};
             font-size: ${fs}px;
-            font-family: "Sans";
+            font-family: "${this._pendingStroke?.font ?? 'Sans'}";
         `;
         if (this._resizeIdle) {
             GLib.source_remove(this._resizeIdle);

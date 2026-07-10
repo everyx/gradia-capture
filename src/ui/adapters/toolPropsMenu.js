@@ -7,6 +7,7 @@ import St from 'gi://St';
 import { Slider } from 'resource:///org/gnome/shell/ui/slider.js';
 
 import { SquareSlider } from '../widgets/squareSlider.js';
+import { ComboBox } from '../widgets/comboBox.js';
 
 import { attachTooltip } from '../../platform/tooltip.js';
 import { PopupMenu } from './popupMenu.js';
@@ -72,6 +73,7 @@ export const ToolPropsMenu = GObject.registerClass(
                 if (item.kind === MENU_KIND.COLOR) control = this._makeColor(item);
                 else if (item.kind === MENU_KIND.SLIDER) control = this._makeSlider(item);
                 else if (item.kind === MENU_KIND.TOGGLE) control = this._makeToggle(item);
+                else if (item.kind === MENU_KIND.FONT) control = this._makeFont(item);
                 this._controls.set(item.key, control);
                 this.add_child(control.group);
             }
@@ -215,6 +217,39 @@ export const ToolPropsMenu = GObject.registerClass(
                 btns.push(btn);
             }
             return { group, update: (it) => setSelected(it.value), setValue: setSelected };
+        }
+
+        _makeFont(item) {
+            const combo = new ComboBox({
+                options: item.options,
+                selected: item.value,
+                enableSearch: true,
+                getStyle: (opt) => `font-family: "${opt.value}";`,
+                onSelect: (value) => this._emit(item.key, value),
+                host: this,
+            });
+            // Exposed so Toolbar._hidePopup can reset font overlay state
+            // synchronously before the async close animation.
+            this._resetFontState = () => combo.close();
+
+            const group = new St.BoxLayout({ style_class: 'gradia-combo-control' });
+            group.add_child(combo.actor);
+
+            // Collapse when the control is hidden (tool switch)
+            // or the parent BoxPointer closes.
+            const closeOnHide = () => combo.close();
+            group.connect('notify::visible', () => {
+                if (!group.visible) closeOnHide();
+            });
+            this._boxPointer.connect('notify::visible', () => {
+                if (!this._boxPointer.visible) closeOnHide();
+            });
+
+            return {
+                group,
+                update: (it) => combo.select(it.value),
+                setValue: (v) => combo.select(v),
+            };
         }
     },
 );

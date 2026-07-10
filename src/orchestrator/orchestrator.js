@@ -15,6 +15,7 @@ import { OcrSelector } from '../utilities/ocr/ocrSelector.js';
 import { isRapidOcrAvailable } from '../utilities/ocr/backend.js';
 import { createSettingsButton } from '../platform/gradiaApp.js';
 import { BlurSelector } from '../annotation/tools/blur/engine.js';
+import { clearFontFamiliesCache, warmFontFamiliesCache } from '../annotation/fontFamilies.js';
 import { ShortcutDispatcher } from './shortcutDispatcher.js';
 import { addEmitter } from '../platform/emitter.js';
 
@@ -230,6 +231,8 @@ export class Orchestrator {
         if (this._toolbar.toolPropsMenu) ui.add_child(this._toolbar.toolPropsMenu);
         this._repositionToolbar();
 
+        warmFontFamiliesCache();
+
         this._resolutionOverlay = new ResolutionOverlay(primaryBin);
 
         if (this._settings.get_boolean('clear-selection')) {
@@ -315,6 +318,8 @@ export class Orchestrator {
             this._resolutionOverlay.destroy();
             this._resolutionOverlay = null;
         }
+
+        clearFontFamiliesCache();
     }
 
     capture(opts) {

@@ -6,6 +6,9 @@ import Clutter from 'gi://Clutter';
 import { N_ } from '../../platform/i18n.js';
 import { DrawingTool } from './DrawingTool.js';
 import { SELECTION_PADDING, hexToRgb } from '../shared.js';
+import { buildFontDescription } from '../fontName.js';
+import { getFontFamilies, getSystemFontFamily } from '../fontFamilies.js';
+import { MENU_KIND, SIZE_MIN, SIZE_MAX } from '../../platform/menuSchema.js';
 
 export class TextTool extends DrawingTool {
     get id() {
@@ -24,7 +27,27 @@ export class TextTool extends DrawingTool {
         return [
             { key: 'color', type: 's', default: '#000000' },
             { key: 'size', type: 'd', default: 4 },
+            { key: 'font', type: 's', default: '' },
         ];
+    }
+    getMenuItems() {
+        const items = [];
+        items.push({ kind: MENU_KIND.COLOR, key: 'color', value: this.get('color') });
+        items.push({
+            kind: MENU_KIND.SLIDER,
+            key: 'size',
+            min: SIZE_MIN,
+            max: SIZE_MAX,
+            label: N_('Size'),
+            value: this.get('size'),
+        });
+        items.push({
+            kind: MENU_KIND.FONT,
+            key: 'font',
+            value: this.get('font') || getSystemFontFamily(),
+            options: getFontFamilies().map((f) => ({ label: f, value: f })),
+        });
+        return items;
     }
     beginStroke() {
         return { text: '' };
@@ -42,7 +65,9 @@ export class TextTool extends DrawingTool {
         const surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, 1, 1);
         const cr = new Cairo.Context(surface);
         const layout = PangoCairo.create_layout(cr);
-        const desc = Pango.font_description_from_string(`Sans ${fontSize}px`);
+        const desc = Pango.font_description_from_string(
+            buildFontDescription(stroke.font || getSystemFontFamily(), fontSize),
+        );
         layout.set_font_description(desc);
         layout.set_text(stroke.text, -1);
         const [, extents] = layout.get_pixel_extents();
@@ -61,7 +86,9 @@ export class TextTool extends DrawingTool {
         const { r, g, b } = hexToRgb(stroke.color);
         const fontSize = Math.max(8, Math.round(lineWidth * 3));
         const layout = PangoCairo.create_layout(cr);
-        const desc = Pango.font_description_from_string(`Sans ${fontSize}px`);
+        const desc = Pango.font_description_from_string(
+            buildFontDescription(stroke.font || getSystemFontFamily(), fontSize),
+        );
         layout.set_font_description(desc);
         layout.set_text(stroke.text, -1);
         cr.setSourceRGBA(r, g, b, 1.0);

@@ -181,3 +181,60 @@
     border: 1.5px solid st-transparentize(-st-accent-color, 0.3);
     border-radius: 2px;
 }
+
+.gradia-font-entry,
+.gradia-combo-entry {
+    padding: 4px 8px;
+    font-size: 12px;
+    min-width: 80px;
+    background-color: transparent;
+    border: 1.5px solid transparent;
+    border-radius: 9999px;
+    box-shadow: none;
+    selection-background-color: rgba(255, 255, 255, 0.25);
+    text-align: start;
+}
+
+.gradia-font-entry:focus,
+.gradia-combo-entry:focus {
+    border-radius: 4px;
+    background-color: #48484b;
+    border-color: -st-accent-color;
+}
+
+.gradia-font-popup,
+.gradia-combo-popup {
+    background-color: #353538;
+    border-radius: 8px;
+    padding: 4px;
+    height: 208px;
+}
+
+.gradia-font-list,
+.gradia-combo-list {
+    background-color: transparent;
+}
+
+.gradia-font-list-inner,
+.gradia-combo-list-inner {
+    spacing: 0;
+}
+
+.gradia-font-item,
+.gradia-combo-item {
+    padding: 4px 12px;
+    min-height: 24px;
+    font-size: 12px;
+}
+
+.gradia-font-item:selected,
+.gradia-combo-item:selected {
+    background-color: -st-accent-color;
+}
+
+.gradia-font-loading,
+.gradia-combo-loading {
+    padding: 12px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+}
