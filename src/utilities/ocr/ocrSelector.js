@@ -350,10 +350,10 @@ export class OcrSelector {
         border.queue_repaint();
         this._selBorder = border;
 
-        this._showCopyBtn(uMaxX, uMinY, uMaxY, primaryBin);
+        this._showCopyBtn(uMaxX, uMinY, uMaxY, primaryBin, PAD);
     }
 
-    _showCopyBtn(uMaxX, uMinY, uMaxY, primaryBin) {
+    _showCopyBtn(uMaxX, uMinY, uMaxY, primaryBin, PAD) {
         if (!primaryBin) return;
         if (!this._cornerBtn) {
             this._cornerBtn = new SelectionCornerButton({
