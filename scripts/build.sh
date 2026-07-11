@@ -5,10 +5,7 @@
 #   data/     — static assets: icons, gettext .po, GSettings schemas
 #   src/      — source JS + metadata (tracked in git)
 #   dist/     — build output (gitignored); created from src/ + data/,
-#               then packed into a .zip by gnome-extensions pack
-#
-# gettext .mo files are auto-compiled from po/ by gnome-extensions pack
-# via its --podir / --gettext-domain flags; no manual msgfmt needed here.
+#               then packed into a .zip
 #
 # This Script is released under GPL v3 license
 # Copyright (C) 2020-2025 Javad Rahmatzadeh
@@ -28,22 +25,23 @@ cp LICENSE dist/ 2>/dev/null || true
 cp README.md dist/ 2>/dev/null || true
 
 echo "Packing extension..."
-gnome-extensions pack dist \
-    --force \
-    --podir=../data/po \
-    --gettext-domain=gradia-capture \
-    --schema="schemas/org.gnome.shell.extensions.gradia-companion.gschema.xml" \
-    --out-dir=dist \
-    --extra-source="icons" \
-    --extra-source="schemas" \
-    $(cd dist && find . -maxdepth 1 \( -name '*.js' -o -name '*.py' \) ! -name 'extension.js' ! -name 'prefs.js' -printf '--extra-source=%f ') \
-    $(cd dist && find . -mindepth 1 -maxdepth 1 -type d ! -name 'icons' ! -name 'schemas' -printf '--extra-source=%P ')
+# Compile gettext .po → .mo
+for po in data/po/*.po; do
+    [ -f "$po" ] || continue
+    lang=$(basename "$po" .po)
+    mkdir -p "dist/locale/$lang/LC_MESSAGES"
+    msgfmt "$po" -o "dist/locale/$lang/LC_MESSAGES/gradia-capture.mo" 2>/dev/null || true
+done
+# Pack into zip
+cd dist && zip -rq \
+    "gradia-integration@alexandervanhee.github.io.shell-extension.zip" \
+    . -x "*.shell-extension.zip" && cd ..
 echo "Packing Done!"
 
 while getopts i flag; do
     case $flag in
         i)  gnome-extensions install --force \
-                dist/gradia-integration@alexandervanhee.github.io.shell-extension.zip && \
+                "dist/gradia-integration@alexandervanhee.github.io.shell-extension.zip" && \
             echo "Extension is installed. Now restart the GNOME Shell." || \
             { echo "ERROR: Could not install the extension!"; exit 1; };;
         *)  echo "ERROR: Invalid flag!"
