@@ -20,9 +20,9 @@
 
 `captureContext` 维持为**普通的可注入纯函数**，不引入正式 port 接口或 stub adapter。
 
-依据 codebase-design 原则「一个 adapter 只是假想的 seam，两个才是真的」：当前只有单一
-真实 adapter、且无测试驱动，形式化 port 属于**没有消费者的推测性基础设施**，反而增加
-接口负担、降低 locality。现有 `ui` 默认参数已是恰当的 seam。
+依据 "一个 adapter 只是假想的 seam，两个才是真的"：当前只有单一真实 adapter、
+且无测试驱动，形式化 port 属于**没有消费者的推测性基础设施**，反而增加接口负担、
+降低 locality。现有 `ui` 默认参数已是恰当的 seam。
 
 ## 结果
 

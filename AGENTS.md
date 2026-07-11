@@ -1,45 +1,15 @@
-# AGENTS.md
+# 项目约束
 
-GNOME Shell extension（GJS），为截图工具加标注，可选集成 Gradia Flatpak 做 OCR。
+1. **硬边界**：
+   - 只读目录：`/docs/0_aim.md` 和 `/docs/1_specs/`（可提修改建议，不可代改）。
+   - 技术栈锁定：GJS，St 组件。
+2. **任务指针**：开始任何工作前，先读 `docs/3_now.md`。只做该文件中列出的当前唯一事项。
+3. **落地即剔除**：事项完成后，由我（人）手动从 `docs/3_now.md` 中删除该条目，你负责提醒。
 
-## 命令
+## 分支策略
 
-- `./dev.sh` — 推荐开发循环：build+install 后用 `dbus-run-session
-  gnome-shell --devkit --wayland` 起嵌套 shell，避开打扰当前会话，
-  日志（过滤过）落到 `./logs/`。
+禁止直接 push 到 `master` 分支。所有变更通过 PR 合并。
 
-## 参考
+## 提交规范
 
-- GNOME Shell 源码位置：./repos/gnome-shell
-- GJS 源码位置：./repos/gjs
-
-## St 组件坑
-
-- 光标：`set_cursor_type(TEXT)` 可用，`set_cursor()` 会破坏事件路由；St CSS 不支持 `cursor`。
-- 透明度：用 `st-transparentize(-st-accent-color, 0.7)`（运行时 CSS），`transparentize()` 是 SASS-only。
-- `St.BoxLayout` 构造器不支持 `{children: [...]}`，必须用 `add_child()`。
-- 虚线边框：用 `St.DrawingArea` + `repaint` 信号 + Cairo `setDash`，`Clutter.Canvas` 在 St 容器里不渲染。
-- 动画 opacity 需 `remove_all_transitions()` 防冲突。
-
-## OCR 开发
-
-- OCR 层（overlay）必须插在 `primaryBin` index 0（toolbar 下方）才能正确 z-order。
-- `activate()` 始终触发，点第二次直接 return；退出 OCR 靠切工具或 `deactivate()`。
-- `index_to_pos` 需要 UTF-8 字节偏移，不是 JS 字符索引 → `_toByteIdx` 辅助函数。
-- 隐藏标注双重保护：`canvas.hide()` 视觉层 + `!ocr` 跳过 `strokeData` 合成。
-- `transform_stage_point` 用于坐标转换（overlay 里 placement 按钮位置）。
-- `EVENT_STOP` 阻断事件穿透到工具层。
-
-## Agent skills
-
-### Issue tracker
-
-GitHub Issues（`gh` CLI），外部 PR 纳入 triage 队列。详见 `docs/agents/issue-tracker.md`。
-
-### Triage labels
-
-使用默认标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。详见 `docs/agents/triage-labels.md`。
-
-### Domain docs
-
-Single-context 布局：`CONTEXT.md` + `docs/adr/`。详见 `docs/agents/domain.md`。
+commit 格式见 [`docs/commits.md`](docs/commits.md)。
