@@ -1,6 +1,6 @@
 {
   "name": "gradia-capture",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "GNOME Shell extension for screenshot annotation with Gradia OCR integration",
   "type": "module",
   "scripts": {
